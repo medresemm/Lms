@@ -1,0 +1,46 @@
+modules = ["nodejs-24", "python-base-3.13", "postgresql-16"]
+
+[deployment]
+router = "application"
+deploymentTarget = "autoscale"
+
+[deployment.postBuild]
+args = ["pnpm", "store", "prune"]
+env = { "CI" = "true" }
+
+[workflows]
+runButton = "Project"
+
+[agent]
+stack = "PNPM_WORKSPACE"
+expertMode = true
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
+
+[nix]
+channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+SYSTEM_OWNER_EMAIL = "medinemedresesi2026@gmail.com"
+VITE_SYSTEM_OWNER_EMAIL = "medinemedresesi2026@gmail.com"
+SYSTEM_OWNER_NAME = "Fərman İsayev"
+VITE_SYSTEM_OWNER_NAME = "Fərman İsayev"
+
+[objectStorage]
+defaultBucketID = "replit-objstore-0befef51-e061-4465-aace-230ce9c25952"
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 80
+
+[[ports]]
+localPort = 25495
+externalPort = 3000

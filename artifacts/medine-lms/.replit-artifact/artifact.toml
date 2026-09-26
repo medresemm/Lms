@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Mədinə Tədris Akademiyası"
+description = "Azərbaycan dilində tələbələr üçün kursları, öyrənmə irəliləyişini və akademiya elanlarını göstərən minimalist LMS platforması."
+version = "1.0.0"
+id = "artifacts/medine-lms"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25495
+
+[services.development]
+run = "pnpm --filter @workspace/medine-lms run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/medine-lms", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/medine-lms/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25495"
+BASE_PATH = "/"

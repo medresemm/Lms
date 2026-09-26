@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "BASE_PATH=/ pnpm --filter @workspace/medine-lms run build && rm -rf public && src=$(find . -type f -path '*/dist/public/index.html' -print -quit) && test -n \"$src\" && cp -R \"$(dirname \"$src\")\" public",
+  "outputDirectory": "public",
+  "functions": {
+    "api/[...path].ts": {
+      "maxDuration": 10
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

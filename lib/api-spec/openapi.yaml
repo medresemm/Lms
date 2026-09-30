@@ -1,0 +1,3566 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: lms
+    description: Learning management operations
+  - name: applications
+    description: Student application operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [lms]
+      summary: Get student dashboard
+      responses:
+        "200":
+          description: Student dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+  /auth/resolve-student-number:
+    post:
+      operationId: resolveStudentNumber
+      tags: [lms]
+      summary: Resolve a student number to the student's email address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolveStudentNumberInput"
+      responses:
+        "200":
+          description: Student email address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolveStudentNumberResult"
+  /student/deletion-notice:
+    get:
+      operationId: getStudentDeletionNotice
+      tags: [applications]
+      summary: Get the current student's account deletion notice
+      responses:
+        "200":
+          description: Deletion notice, or null when the account is active
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/StudentDeletionNotice"
+                  - type: "null"
+  /courses:
+    get:
+      operationId: getCourses
+      tags: [lms]
+      summary: Get active courses
+      responses:
+        "200":
+          description: Active courses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Course"
+  /courses/{courseId}:
+    get:
+      operationId: getCourse
+      tags: [lms]
+      summary: Get course details
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "200":
+          description: Course details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseDetail"
+        "404":
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                required: [error]
+  /courses/{courseId}/pdf:
+    get:
+      operationId: getCoursePdf
+      tags: [lms]
+      summary: Download or view a course PDF
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "200":
+          description: Course PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+  /resources/{resourceId}/file:
+    get:
+      operationId: getResourceFile
+      tags: [lms]
+      summary: Download or view a learning resource PDF
+      parameters:
+        - name: resourceId
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "200":
+          description: Learning resource PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+  /announcements:
+    get:
+      operationId: getAnnouncements
+      tags: [lms]
+      summary: Get academy announcements
+      responses:
+        "200":
+          description: Recent announcements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Announcement"
+  /articles:
+    get:
+      operationId: getArticles
+      tags: [lms]
+      summary: Get public academy articles
+      responses:
+        "200":
+          description: Academy articles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Article"
+  /daily-benefit:
+    get:
+      operationId: getDailyBenefit
+      tags: [lms]
+      summary: Get the current daily benefit
+      responses:
+        "200":
+          description: Current daily benefit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyBenefit"
+  /resources:
+    get:
+      operationId: getResources
+      tags: [lms]
+      summary: Get learning resources for a semester
+      parameters:
+        - name: termNumber
+          in: query
+          required: true
+          schema: { type: number, minimum: 1, maximum: 8 }
+      responses:
+        "200":
+          description: Learning resources for the selected semester
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LearningResource"
+  /assignments:
+    get:
+      operationId: getStudentAssignments
+      tags: [lms]
+      summary: List assignments available to the signed-in student
+      parameters:
+        - { name: termNumber, in: query, required: true, schema: { type: number, minimum: 1, maximum: 8 } }
+      responses:
+        "200":
+          description: Student assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Assignment" }
+  /assignments/{assignmentId}:
+    get:
+      operationId: getStudentAssignment
+      tags: [lms]
+      summary: Get an assignment and the student's own submission
+      parameters:
+        - { name: assignmentId, in: path, required: true, schema: { type: number } }
+      responses:
+        "200":
+          description: Assignment details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assignment" }
+  /assignments/{assignmentId}/submission-upload-url:
+    post:
+      operationId: requestStudentAssignmentUploadUrl
+      tags: [lms]
+      summary: Request a private upload URL for a student submission attachment
+      parameters:
+        - { name: assignmentId, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignmentUploadInput" }
+      responses:
+        "200":
+          description: Upload URL
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadUrlResponse" }
+  /assignments/{assignmentId}/submissions:
+    post:
+      operationId: submitAssignment
+      tags: [lms]
+      summary: Submit or resubmit an assignment
+      parameters:
+        - { name: assignmentId, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignmentSubmissionInput" }
+      responses:
+        "200":
+          description: Saved assignment submission
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssignmentSubmission" }
+  /admin/assignment-upload-url:
+    post:
+      operationId: requestAdminAssignmentUploadUrl
+      tags: [lms]
+      summary: Request a private upload URL for an assignment attachment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignmentUploadInput" }
+      responses:
+        "200":
+          description: Upload URL
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadUrlResponse" }
+  /admin/assignments:
+    get:
+      operationId: getAdminAssignments
+      tags: [lms]
+      summary: List assignments managed by the signed-in teacher
+      parameters:
+        - { name: termNumber, in: query, required: false, schema: { type: number, minimum: 1, maximum: 8 } }
+      responses:
+        "200":
+          description: Teacher assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminAssignment" }
+    post:
+      operationId: createAssignment
+      tags: [lms]
+      summary: Create an assignment for a teacher group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignmentInput" }
+      responses:
+        "201":
+          description: Created assignment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAssignment" }
+  /admin/assignments/{assignmentId}:
+    patch:
+      operationId: updateAssignment
+      tags: [lms]
+      parameters:
+        - { name: assignmentId, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignmentUpdate" }
+      responses:
+        "200":
+          description: Updated assignment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminAssignment" }
+  /admin/assignments/{assignmentId}/submissions:
+    get:
+      operationId: getAssignmentSubmissions
+      tags: [lms]
+      summary: List submissions for a teacher's assignment
+      parameters:
+        - { name: assignmentId, in: path, required: true, schema: { type: number } }
+      responses:
+        "200":
+          description: Assignment submissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminAssignmentSubmission" }
+  /admin/assignments/{assignmentId}/submissions/{submissionId}/grade:
+    post:
+      operationId: gradeAssignmentSubmission
+      tags: [lms]
+      summary: Grade an assignment submission
+      parameters:
+        - { name: assignmentId, in: path, required: true, schema: { type: number } }
+        - { name: submissionId, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignmentGradeInput" }
+      responses:
+        "200":
+          description: Graded submission
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssignmentSubmission" }
+  /admin/assignments/{assignmentId}/submissions/{submissionId}/request-resubmission:
+    post:
+      operationId: requestAssignmentResubmission
+      tags: [lms]
+      parameters:
+        - { name: assignmentId, in: path, required: true, schema: { type: number } }
+        - { name: submissionId, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignmentFeedbackInput" }
+      responses:
+        "200":
+          description: Resubmission requested
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssignmentSubmission" }
+  /exams:
+    get:
+      operationId: getStudentExams
+      tags: [lms]
+      summary: List open tests available to the signed-in student
+      parameters:
+        - { name: termNumber, in: query, required: true, schema: { type: number, minimum: 1, maximum: 8 } }
+      responses:
+        "200":
+          description: Student tests
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Exam" }
+  /exams/{examId}:
+    get:
+      operationId: getStudentExam
+      tags: [lms]
+      summary: Get a test and the student's own submission
+      parameters:
+        - { name: examId, in: path, required: true, schema: { type: number } }
+      responses:
+        "200":
+          description: Test details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Exam" }
+  /exams/{examId}/submissions:
+    post:
+      operationId: submitExam
+      tags: [lms]
+      summary: Submit answers for a test
+      parameters:
+        - { name: examId, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExamSubmissionInput" }
+      responses:
+        "201":
+          description: Saved test submission
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExamSubmission" }
+  /admin/exams:
+    get:
+      operationId: getAdminExams
+      tags: [lms]
+      summary: List tests managed by the signed-in teacher
+      responses:
+        "200":
+          description: Teacher tests
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminExam" }
+    post:
+      operationId: createExam
+      tags: [lms]
+      summary: Create a test for a teacher group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExamInput" }
+      responses:
+        "201":
+          description: Created test
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminExam" }
+  /admin/exams/{examId}:
+    patch:
+      operationId: updateExam
+      tags: [lms]
+      summary: Update a teacher test
+      parameters:
+        - { name: examId, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExamUpdate" }
+      responses:
+        "200":
+          description: Updated test
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminExam" }
+    delete:
+      operationId: deleteExam
+      tags: [lms]
+      summary: Delete a teacher test and its related submissions
+      parameters:
+        - { name: examId, in: path, required: true, schema: { type: number } }
+      responses:
+        "204":
+          description: Test deleted
+  /admin/exams/{examId}/submissions:
+    get:
+      operationId: getExamSubmissions
+      tags: [lms]
+      summary: List submissions for a teacher test
+      parameters:
+        - { name: examId, in: path, required: true, schema: { type: number } }
+      responses:
+        "200":
+          description: Test submissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminExamSubmission" }
+  /admin/exams/{examId}/submissions/{profileId}/resend:
+    post:
+      operationId: resendExamToStudent
+      tags: [lms]
+      summary: Reset a student's test attempt so the teacher can resend it
+      parameters:
+        - { name: examId, in: path, required: true, schema: { type: number } }
+        - { name: profileId, in: path, required: true, schema: { type: number } }
+      responses:
+        "200":
+          description: Reset test attempt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExamResendResult" }
+  /admin/exams/{examId}/submissions/{profileId}/approve:
+    post:
+      operationId: approveExamSubmission
+      tags: [lms]
+      summary: Approve a student's onboarding test
+      parameters:
+        - { name: examId, in: path, required: true, schema: { type: number } }
+        - { name: profileId, in: path, required: true, schema: { type: number } }
+      responses:
+        "200":
+          description: Approved test submission
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExamReviewResult" }
+  /assignment-attachments/{attachmentId}:
+    get:
+      operationId: getAssignmentAttachment
+      tags: [lms]
+      summary: Stream an authorized assignment attachment
+      parameters:
+        - { name: attachmentId, in: path, required: true, schema: { type: number } }
+      responses:
+        "200":
+          description: Assignment attachment
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+  /student/lesson-joins:
+    post:
+      operationId: recordLessonJoin
+      tags: [lms]
+      summary: Record a server-timestamped join to today's scheduled live lesson
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LessonJoinInput" }
+      responses:
+        "201":
+          description: Recorded (or existing idempotent) join event
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LessonJoinEvent" }
+  /admin/lesson-attendance:
+    get:
+      operationId: getAdminLessonAttendance
+      tags: [lms]
+      summary: List live lesson joins and final attendance decisions
+      responses:
+        "200":
+          description: Lesson attendance
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LessonAttendance" }
+  /admin/lesson-attendance/{eventId}:
+    patch:
+      operationId: confirmLessonAttendance
+      tags: [lms]
+      summary: Confirm final attendance for a lesson join
+      parameters:
+        - { name: eventId, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LessonAttendanceDecisionInput" }
+      responses:
+        "200":
+          description: Confirmed attendance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LessonAttendance" }
+  /semester-subject-removal-requests:
+    get:
+      operationId: getStudentSubjectRemovalRequests
+      tags: [lms]
+      responses:
+        "200":
+          description: Student subject removal requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SubjectRemovalRequest" }
+    post:
+      operationId: createStudentSubjectRemovalRequest
+      tags: [lms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubjectRemovalRequestInput" }
+      responses:
+        "201":
+          description: Subject removal request created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubjectRemovalRequest" }
+  /semester-subjects/{courseId}/{termNumber}:
+    delete:
+      operationId: removeOptionalStudentSubject
+      tags: [lms]
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: number }
+        - name: termNumber
+          in: path
+          required: true
+          schema: { type: number, minimum: 1, maximum: 8 }
+      responses:
+        "204": { description: Subject removed }
+  /profile:
+    get:
+      operationId: getStudentAcademicProfile
+      tags: [lms]
+      summary: Get the signed-in student's academic profile and grades
+      responses:
+        "200":
+          description: Student academic profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcademicProfile"
+  /account/profile:
+    get:
+      operationId: getOwnUserProfile
+      tags: [lms]
+      summary: Get the signed-in user's editable profile
+      responses:
+        "200":
+          description: Editable profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserProfile"
+    patch:
+      operationId: updateOwnUserProfile
+      tags: [lms]
+      summary: Update the signed-in user's editable profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserProfileInput"
+      responses:
+        "200":
+          description: Updated editable profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserProfile"
+  /admin/courses:
+    post:
+      operationId: createCourse
+      tags: [lms]
+      summary: Create a course
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseInput"
+      responses:
+        "201":
+          description: Created course
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Course"
+  /admin/courses/upload-url:
+    post:
+      operationId: requestCourseUploadUrl
+      tags: [lms]
+      summary: Request a secure upload URL for a course PDF
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadUrlRequest"
+      responses:
+        "200":
+          description: Upload URL created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseUploadUrlResponse"
+  /admin/announcements:
+    get:
+      operationId: getAdminAnnouncements
+      tags: [lms]
+      summary: List academy announcements
+      responses:
+        "200":
+          description: Academy announcements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Announcement"
+    post:
+      operationId: createAnnouncement
+      tags: [lms]
+      summary: Create an announcement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnouncementInput"
+      responses:
+        "201":
+          description: Created announcement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Announcement"
+  /admin/announcements/{announcementId}:
+    patch:
+      operationId: updateAnnouncementById
+      tags: [lms]
+      parameters:
+        - name: announcementId
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnouncementInput"
+      responses:
+        "200":
+          description: Updated announcement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Announcement"
+    delete:
+      operationId: deleteAnnouncement
+      tags: [lms]
+      parameters:
+        - name: announcementId
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "204": { description: Announcement deleted }
+  /admin/articles:
+    get:
+      operationId: getAdminArticles
+      tags: [lms]
+      summary: List academy articles for teachers
+      responses:
+        "200":
+          description: Academy articles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Article"
+    post:
+      operationId: createArticle
+      tags: [lms]
+      summary: Publish an academy article
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArticleInput"
+      responses:
+        "201":
+          description: Published article
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Article"
+  /admin/articles/{articleId}:
+    patch:
+      operationId: updateArticle
+      tags: [lms]
+      parameters:
+        - name: articleId
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArticleInput"
+      responses:
+        "200":
+          description: Updated article
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Article"
+    delete:
+      operationId: deleteArticle
+      tags: [lms]
+      parameters:
+        - name: articleId
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "204":
+          description: Article deleted
+  /admin/daily-benefits:
+    get:
+      operationId: getAdminDailyBenefits
+      tags: [lms]
+      summary: List daily benefits for teachers
+      responses:
+        "200":
+          description: Daily benefits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DailyBenefit"
+    post:
+      operationId: createDailyBenefit
+      tags: [lms]
+      summary: Publish a daily benefit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DailyBenefitInput"
+      responses:
+        "201":
+          description: Published daily benefit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyBenefit"
+  /admin/daily-benefits/{dayOfWeek}:
+    delete:
+      operationId: deleteAdminDailyBenefit
+      tags: [daily-benefits]
+      summary: Clear a weekday's daily benefit
+      parameters:
+        - name: dayOfWeek
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+      responses:
+        "204":
+          description: Daily benefit cleared
+  /admin/selected-courses:
+    get:
+      operationId: getAdminSelectedCourses
+      tags: [lms]
+      summary: List courses selected for a semester
+      parameters:
+        - name: termNumber
+          in: query
+          required: true
+          schema: { type: number, minimum: 1, maximum: 8 }
+      responses:
+        "200":
+          description: Courses selected for the semester
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Course"
+  /admin/resources:
+    get:
+      operationId: getAdminResources
+      tags: [lms]
+      summary: List learning resources
+      responses:
+        "200":
+          description: Learning resources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LearningResource"
+    post:
+      operationId: createResource
+      tags: [lms]
+      summary: Create a learning resource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResourceInput"
+      responses:
+        "201":
+          description: Created learning resource
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LearningResource"
+  /admin/resources/{resourceId}:
+    patch:
+      operationId: updateResource
+      tags: [lms]
+      parameters:
+        - { name: resourceId, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResourceUpdate" }
+      responses:
+        "200":
+          description: Updated learning resource
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LearningResource" }
+    delete:
+      operationId: deleteResource
+      tags: [lms]
+      parameters:
+        - { name: resourceId, in: path, required: true, schema: { type: number } }
+      responses:
+        "204": { description: Learning resource deleted }
+  /admin/resources/{resourceId}/students:
+    get:
+      operationId: getResourceStudents
+      tags: [lms]
+      parameters:
+        - { name: resourceId, in: path, required: true, schema: { type: number } }
+      responses:
+        "200":
+          description: Students assigned to a learning resource
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceStudentAssignments"
+    put:
+      operationId: updateResourceStudents
+      tags: [lms]
+      parameters:
+        - { name: resourceId, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResourceStudentAssignmentsInput" }
+      responses:
+        "200":
+          description: Updated student assignments
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceStudentAssignmentsResult" }
+  /admin/semester-dates:
+    get:
+      operationId: getAdminSemesterDates
+      tags: [lms]
+      summary: List semester start and end dates
+      responses:
+        "200":
+          description: Semester dates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SemesterDate"
+  /admin/semester-dates/{termNumber}:
+    patch:
+      operationId: updateAdminSemesterDate
+      tags: [lms]
+      summary: Update a semester's start and end dates
+      parameters:
+        - name: termNumber
+          in: path
+          required: true
+          schema: { type: number, minimum: 1, maximum: 8 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SemesterDateInput"
+      responses:
+        "200":
+          description: Updated semester dates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SemesterDate"
+  /admin/course-activation:
+    get:
+      operationId: getAdminCourseActivation
+      tags: [lms]
+      summary: Get active course stages
+      responses:
+        "200":
+          description: Active course stages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseActivation"
+    patch:
+      operationId: updateAdminCourseActivation
+      tags: [lms]
+      summary: Activate or deactivate third and fourth course stages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseActivationInput"
+      responses:
+        "200":
+          description: Updated active course stages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseActivation"
+  /admin/teachers:
+    get:
+      operationId: getAdminTeachers
+      tags: [lms]
+      summary: List active teacher accounts
+      responses:
+        "200":
+          description: Active teachers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeacherOption"
+  /admin/teacher-schedule:
+    get:
+      operationId: getAdminTeacherSchedule
+      tags: [lms]
+      summary: Get the signed-in teacher's schedule
+      parameters:
+        - name: termNumber
+          in: query
+          required: true
+          schema: { type: number, minimum: 1, maximum: 8 }
+      responses:
+        "200":
+          description: Schedule resources assigned to the signed-in teacher
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LearningResource"
+  /student/schedule-access:
+    get:
+      operationId: getStudentScheduleAccess
+      tags: [lms]
+      summary: Get the current student's schedule access status
+      responses:
+        "200":
+          description: Schedule access status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduleAccess" }
+  /teachers:
+    get:
+      operationId: getTeachers
+      tags: [lms]
+      summary: List teachers available to students
+      responses:
+        "200":
+          description: Teacher options
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TeacherOption" }
+  /questions:
+    get:
+      operationId: getQuestions
+      tags: [lms]
+      responses:
+        "200":
+          description: Questions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Question" }
+    post:
+      operationId: createQuestion
+      tags: [lms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuestionInput" }
+      responses:
+        "201":
+          description: Created question
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Question" }
+  /questions/{id}/answer:
+    post:
+      operationId: answerQuestion
+      tags: [lms]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuestionAnswerInput" }
+      responses:
+        "200":
+          description: Answered question
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Question" }
+  /messages:
+    get:
+      operationId: getMessages
+      tags: [lms]
+      responses:
+        "200":
+          description: Messages visible to the signed-in user
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Message" }
+    post:
+      operationId: createMessage
+      tags: [lms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MessageInput" }
+      responses:
+        "201":
+          description: Created message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+  /messages/unread-count:
+    get:
+      operationId: getMessagesUnreadCount
+      tags: [lms]
+      responses:
+        "200":
+          description: Number of unread messages
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnreadCount" }
+  /messages/{id}:
+    patch:
+      operationId: updateMessage
+      tags: [lms]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MessageUpdate" }
+      responses:
+        "200":
+          description: Updated message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+    delete:
+      operationId: deleteMessage
+      tags: [lms]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: number } }
+      responses:
+        "204": { description: Message deleted }
+  /messages/{id}/read:
+    patch:
+      operationId: markMessageRead
+      tags: [lms]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: number } }
+      responses:
+        "200":
+          description: Read message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+  /messages/{id}/reply:
+    post:
+      operationId: replyToMessage
+      tags: [lms]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MessageReplyInput" }
+      responses:
+        "201":
+          description: Reply
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+  /admin/teacher-courses:
+    get:
+      operationId: getAdminTeacherCourses
+      tags: [lms]
+      parameters:
+        - name: termNumber
+          in: query
+          required: true
+          schema: { type: number, minimum: 1, maximum: 8 }
+      responses:
+        "200":
+          description: Courses assigned to the signed-in teacher
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Course" }
+  /applications/upload-url:
+    post:
+      operationId: requestApplicationUploadUrl
+      tags: [applications]
+      summary: Request a secure upload URL for an application letter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadUrlRequest"
+      responses:
+        "200":
+          description: Upload URL created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+  /application-window:
+    get:
+      operationId: getApplicationWindow
+      tags: [applications]
+      summary: Get the public application availability window
+      responses:
+        "200":
+          description: Application availability
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationWindow"
+  /system-statistics:
+    get:
+      operationId: getSystemStatistics
+      tags: [statistics]
+      summary: Get public academy statistics
+      responses:
+        "200":
+          description: Academy statistics and visibility
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemStatistics"
+  /applications:
+    post:
+      operationId: submitApplication
+      tags: [applications]
+      summary: Submit a student application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationInput"
+      responses:
+        "201":
+          description: Application accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+  /admin/applications:
+    get:
+      operationId: getAdminApplications
+      tags: [applications]
+      summary: List student applications
+      responses:
+        "200":
+          description: Student applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Application"
+  /admin/application-window:
+    get:
+      operationId: getAdminApplicationWindow
+      tags: [applications]
+      summary: Get the configured application availability window
+      responses:
+        "200":
+          description: Application availability configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationWindow"
+    patch:
+      operationId: updateAdminApplicationWindow
+      tags: [applications]
+      summary: Update the application availability window
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationWindowInput"
+      responses:
+        "200":
+          description: Updated application availability configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationWindow"
+  /admin/admission-mode:
+    get:
+      operationId: getAdminAdmissionMode
+      tags: [applications]
+      summary: Get the new student admission mode
+      responses:
+        "200":
+          description: New student admission mode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdmissionMode"
+    patch:
+      operationId: updateAdminAdmissionMode
+      tags: [applications]
+      summary: Set whether new students require an admission exam
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdmissionModeInput"
+      responses:
+        "200":
+          description: Updated new student admission mode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdmissionMode"
+  /admin/system-statistics:
+    get:
+      operationId: getAdminSystemStatistics
+      tags: [statistics]
+      summary: Get academy statistics configuration
+      responses:
+        "200":
+          description: Academy statistics and visibility
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemStatistics"
+    patch:
+      operationId: updateAdminSystemStatistics
+      tags: [statistics]
+      summary: Update academy statistics visibility
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SystemStatisticsVisibilityInput"
+      responses:
+        "200":
+          description: Updated academy statistics and visibility
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemStatistics"
+  /admin/students:
+    get:
+      operationId: getAdminStudents
+      tags: [applications]
+      summary: List approved students with details
+      responses:
+        "200":
+          description: Approved student directory
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminStudent"
+  /admin/search:
+    get:
+      operationId: searchAdminDirectory
+      tags: [applications]
+      summary: Search approved students, applications, and courses
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 120 }
+      responses:
+        "200":
+          description: Matching admin directory records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminSearchResult"
+  /admin/students/{profileId}:
+    delete:
+      operationId: deleteAdminStudent
+      tags: [applications]
+      summary: Deactivate an approved student account and record its deletion reason
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentDeletionInput"
+      responses:
+        "204":
+          description: Student account deactivated
+        "400":
+          description: A deletion reason is required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                required: [error]
+        "404":
+          description: Student not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                required: [error]
+  /admin/graduation-candidates:
+    get:
+      operationId: getGraduationCandidates
+      tags: [applications]
+      summary: List students eligible for graduation
+      responses:
+        "200":
+          description: Students eligible for graduation based on active semester pairs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraduationCandidates"
+  /admin/students/{profileId}/graduate:
+    post:
+      operationId: graduateStudent
+      tags: [applications]
+      summary: Mark an eligible student as graduated
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema: { type: number, minimum: 1 }
+      responses:
+        "200":
+          description: Graduated student
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraduatedStudent"
+        "409":
+          description: Student is not eligible for graduation
+  /admin/students/{profileId}/ungraduate:
+    post:
+      operationId: restoreGraduatedStudent
+      tags: [applications]
+      summary: Restore a graduated student to approved status
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema: { type: number, minimum: 1 }
+      responses:
+        "200":
+          description: Restored student
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestoredGraduatedStudent"
+        "409":
+          description: Graduation cannot be safely reversed
+  /admin/graduation-certificates:
+    get:
+      operationId: getAdminGraduationCertificates
+      tags: [applications]
+      summary: List graduated students and their certificates
+      responses:
+        "200":
+          description: Graduated students available for certificate management
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminGraduationCertificate"
+  /admin/students/{profileId}/certificate:
+    post:
+      operationId: createAdminGraduationCertificate
+      tags: [applications]
+      summary: Create or retrieve a certificate for a graduated student
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema: { type: number, minimum: 1 }
+      responses:
+        "200":
+          description: Graduation certificate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraduationCertificate"
+        "403":
+          description: Only owner and owner assistant can manage certificates
+        "409":
+          description: Student is not graduated
+    patch:
+      operationId: updateAdminGraduationCertificateStatus
+      tags: [applications]
+      summary: Revoke or restore a graduation certificate
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema: { type: number, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GraduationCertificateStatusInput"
+      responses:
+        "200":
+          description: Updated graduation certificate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraduationCertificate"
+        "403":
+          description: Only the system owner can change certificate status
+        "404":
+          description: Certificate not found
+        "409":
+          description: Certificate cannot be restored while the student is not graduated
+  /certificates/verify/{verificationToken}:
+    get:
+      operationId: verifyGraduationCertificate
+      tags: [applications]
+      summary: Verify a graduation certificate
+      parameters:
+        - name: verificationToken
+          in: path
+          required: true
+          schema: { type: string, minLength: 20, maxLength: 100 }
+      responses:
+        "200":
+          description: Certificate verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateVerification"
+  /admin/student-deletion-audit:
+    get:
+      operationId: getAdminStudentDeletionAudit
+      tags: [applications]
+      summary: List student deletion audit records
+      responses:
+        "200":
+          description: Student deletion audit records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudentDeletionAudit"
+  /admin/audit-events:
+    get:
+      operationId: getAdminAuditEvents
+      tags: [applications]
+      summary: List immutable audit events (owner only)
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: number, minimum: 1, maximum: 500, default: 200 }
+      responses:
+        "200":
+          description: Audit events
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEvent" }
+  /admin/users:
+    get:
+      operationId: getAdminUsers
+      tags: [applications]
+      summary: List registered users and their staff roles
+      responses:
+        "200":
+          description: Registered users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+  /admin/users/{userId}/role:
+    patch:
+      operationId: updateAdminUserRole
+      tags: [applications]
+      summary: Assign or remove a teacher or supervisor role
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRoleUpdateInput"
+      responses:
+        "200":
+          description: Updated user role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+  /admin/users/{userId}:
+    delete:
+      operationId: deleteAdminUser
+      tags: [lms]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: User deleted }
+  /admin/users/{userId}/profile:
+    get:
+      operationId: getAdminUserProfile
+      tags: [applications]
+      summary: Get editable user profile data
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Editable user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserProfile"
+    patch:
+      operationId: updateAdminUserProfile
+      tags: [applications]
+      summary: Update editable user profile data
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserProfileInput"
+      responses:
+        "200":
+          description: Updated user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserProfile"
+  /admin/users/{userId}/profile-history:
+    get:
+      operationId: getAdminUserProfileHistory
+      tags: [applications]
+      summary: Get the owner's history of user profile changes
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: User profile change history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserProfileHistoryEntry"
+  /admin/courses/{courseId}/students:
+    get:
+      operationId: getAdminCourseStudents
+      tags: [applications]
+      summary: List approved students for a course
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "200":
+          description: Approved students and their academic data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminCourseStudent"
+  /admin/courses/{courseId}:
+    delete:
+      operationId: deleteAdminCourse
+      tags: [courses]
+      summary: Delete a course and its related records
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "204":
+          description: Course deleted
+        "404":
+          description: Course not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                required: [error]
+  /admin/academic-profiles:
+    get:
+      operationId: getAdminAcademicProfiles
+      tags: [applications]
+      summary: List approved student academic profiles
+      responses:
+        "200":
+          description: Academic profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AcademicProfileSummary"
+  /admin/academic-profiles/{profileId}:
+    get:
+      operationId: getAdminAcademicProfile
+      tags: [applications]
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "200":
+          description: Academic profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcademicProfile"
+    patch:
+      operationId: updateAcademicProfile
+      tags: [applications]
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcademicProfileUpdate"
+      responses:
+        "200":
+          description: Updated academic profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcademicProfile"
+  /admin/academic-profiles/{profileId}/promote:
+    post:
+      operationId: promoteAcademicProfile
+      tags: [applications]
+      summary: Confirm a student's promotion to the next semester
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcademicProfilePromotionInput"
+      responses:
+        "200":
+          description: Promoted academic profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcademicProfile"
+        "409":
+          description: Student is already in the final semester
+  /admin/academic-profiles/bulk-promote:
+    post:
+      operationId: bulkPromoteAcademicProfiles
+      tags: [applications]
+      summary: Confirm promotion for multiple approved students
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkPromotionInput"
+      responses:
+        "200":
+          description: Promotion results, including partial failures
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkPromotionResponse"
+  /admin/student-notifications:
+    post:
+      operationId: createAdminStudentNotification
+      tags: [applications]
+      summary: Send a notification to selected students or semesters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminStudentNotificationInput"
+      responses:
+        "201":
+          description: Notification created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStudentNotification"
+  /admin/academic-profiles/{profileId}/demote:
+    post:
+      operationId: demoteAcademicProfile
+      tags: [applications]
+      parameters:
+        - { name: profileId, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcademicProfileDemotionInput"
+      responses:
+        "200":
+          description: Demoted academic profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AcademicProfile" }
+  /admin/academic-profiles/{profileId}/schedule-access:
+    get:
+      operationId: getAcademicProfileScheduleAccess
+      tags: [applications]
+      parameters:
+        - { name: profileId, in: path, required: true, schema: { type: number } }
+      responses:
+        "200":
+          description: Student schedule access status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduleAccess" }
+    post:
+      operationId: updateAcademicProfileScheduleAccess
+      tags: [applications]
+      parameters:
+        - { name: profileId, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScheduleAccessInput" }
+      responses:
+        "200":
+          description: Updated student schedule access status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduleAccess" }
+  /admin/academic-profiles/{profileId}/grades:
+    put:
+      operationId: updateAcademicProfileGrades
+      tags: [applications]
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcademicGradesUpdate"
+      responses:
+        "200":
+          description: Updated academic profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcademicProfile"
+  /admin/academic-profiles/{profileId}/attendance:
+    put:
+      operationId: updateAcademicProfileAttendance
+      tags: [applications]
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceUpdate"
+      responses:
+        "200":
+          description: Updated academic profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcademicProfile"
+  /attendance-excuses:
+    post:
+      operationId: createAttendanceExcuse
+      tags: [applications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceExcuseInput"
+      responses:
+        "201":
+          description: Attendance excuse submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceExcuse"
+  /admin/attendance-excuses:
+    get:
+      operationId: getAdminAttendanceExcuses
+      tags: [applications]
+      responses:
+        "200":
+          description: Attendance excuse requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttendanceExcuse"
+  /admin/attendance-excuses/{excuseId}:
+    delete:
+      operationId: deleteAttendanceExcuse
+      tags: [applications]
+      parameters:
+        - { name: excuseId, in: path, required: true, schema: { type: number } }
+      responses:
+        "204": { description: Attendance excuse deleted }
+  /admin/attendance-records/{recordId}:
+    delete:
+      operationId: deleteAttendanceRecord
+      tags: [applications]
+      parameters:
+        - { name: recordId, in: path, required: true, schema: { type: number } }
+      responses:
+        "204": { description: Attendance record deleted }
+  /admin/role-permissions:
+    get:
+      operationId: getRolePermissions
+      tags: [applications]
+      responses:
+        "200":
+          description: Configured staff role permissions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RolePermissions" }
+    patch:
+      operationId: updateRolePermissions
+      tags: [applications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RolePermissionsInput" }
+      responses:
+        "200":
+          description: Updated staff role permissions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RolePermissions" }
+  /student/teacher-choices:
+    get:
+      operationId: getStudentTeacherChoices
+      tags: [lms]
+      parameters:
+        - name: termNumber
+          in: query
+          required: true
+          schema: { type: number, minimum: 1, maximum: 8 }
+      responses:
+        "200":
+          description: Student teacher choices
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TeacherChoice" }
+    post:
+      operationId: createStudentTeacherChoice
+      tags: [lms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TeacherChoiceInput" }
+      responses:
+        "201":
+          description: Teacher choice submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TeacherChoice" }
+  /admin/teacher-choices:
+    get:
+      operationId: getAdminTeacherChoices
+      tags: [lms]
+      responses:
+        "200":
+          description: Teacher choice requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminTeacherChoice" }
+  /admin/teacher-choices/{choiceId}:
+    patch:
+      operationId: decideTeacherChoice
+      tags: [lms]
+      parameters:
+        - { name: choiceId, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TeacherChoiceDecisionInput" }
+      responses:
+        "200":
+          description: Updated teacher choice
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminTeacherChoice" }
+  /admin/semester-subject-removal-requests:
+    get:
+      operationId: getAdminSubjectRemovalRequests
+      tags: [lms]
+      responses:
+        "200":
+          description: Subject removal requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SubjectRemovalRequest" }
+  /admin/semester-subject-removal-requests/{requestId}:
+    patch:
+      operationId: decideSubjectRemovalRequest
+      tags: [lms]
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubjectRemovalDecisionInput" }
+      responses:
+        "200":
+          description: Updated request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubjectRemovalRequest" }
+  /admin/applications/{applicationId}/recommendations/{fileIndex}:
+    get:
+      operationId: getApplicationRecommendation
+      tags: [applications]
+      summary: Download an application recommendation letter
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema: { type: number }
+        - name: fileIndex
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "200":
+          description: Recommendation letter file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+  /admin/applications/{applicationId}/decision:
+    post:
+      operationId: decideApplication
+      tags: [applications]
+      summary: Approve or reject a student application
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationDecisionInput"
+      responses:
+        "200":
+          description: Updated application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+  /admin/applications/{applicationId}/teacher-role:
+    post:
+      operationId: assignApplicationTeacher
+      tags: [applications]
+      summary: Assign the applicant's account the teacher role
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "200":
+          description: Updated teacher account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+components:
+  schemas:
+    ResolveStudentNumberInput:
+      type: object
+      required: [identifier]
+      properties:
+        identifier: { type: string }
+    ResolveStudentNumberResult:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string }
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    Course:
+      type: object
+      required: [id, title, category, instructor, progress, completedLessons, totalLessons, color, credits, hours, lessonDays, lessonTime]
+      properties:
+        id: { type: number }
+        title: { type: string }
+        category: { type: string }
+        instructor: { type: string }
+        progress: { type: number, minimum: 0, maximum: 100 }
+        completedLessons: { type: number, minimum: 0 }
+        totalLessons: { type: number, minimum: 0 }
+        color: { type: string }
+        credits: { type: number, minimum: 0 }
+        hours: { type: number, minimum: 0 }
+        lessonDays:
+          type: array
+          items: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
+        lessonTime: { type: ["string", "null"], pattern: "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$" }
+        nextLesson: { type: ["string", "null"] }
+        pdfUrl: { type: ["string", "null"] }
+        telegramUrl: { type: ["string", "null"] }
+        zoomUrl: { type: ["string", "null"] }
+        googleMeetUrl: { type: ["string", "null"] }
+        lessonUrl: { type: ["string", "null"] }
+    CourseDetail:
+      allOf:
+        - $ref: "#/components/schemas/Course"
+        - type: object
+          required: [description, curriculum, lessonDescription, resources]
+          properties:
+            description: { type: string }
+            curriculum:
+              type: array
+              items: { type: string }
+            lessonDescription: { type: string }
+            resources:
+              type: array
+              items:
+                $ref: "#/components/schemas/LearningResource"
+    LearningResource:
+      type: object
+      required: [id, courseId, termNumber, kind, title, body, url, expiresAt, lessonDays, lessonTime, isMandatory, teacherClerkUserId, teacherName, studentCapacity]
+      properties:
+        id: { type: number }
+        courseId: { type: number }
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        kind: { type: string, enum: [material, text, pdf, telegram] }
+        title: { type: string }
+        body: { type: string }
+        url: { type: ["string", "null"] }
+        expiresAt: { type: ["string", "null"], format: date-time }
+        lessonDays:
+          type: array
+          items: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
+        lessonTime: { type: ["string", "null"] }
+        isMandatory: { type: boolean }
+        teacherClerkUserId: { type: ["string", "null"] }
+        teacherName: { type: ["string", "null"] }
+        studentCapacity: { type: number, minimum: 0 }
+    AssignmentAttachment:
+      type: object
+      required: [id, originalName, contentType, size, kind, downloadUrl]
+      properties:
+        id: { type: number }
+        originalName: { type: string }
+        contentType: { type: string }
+        size: { type: number, minimum: 1 }
+        kind: { type: string, enum: [assignment, submission] }
+        downloadUrl: { type: string }
+    AssignmentSubmission:
+      type: object
+      required: [id, assignmentId, profileId, answerText, status, submittedAt, score, feedback, reviewedAt, attachments]
+      properties:
+        id: { type: number }
+        assignmentId: { type: number }
+        profileId: { type: number }
+        answerText: { type: string }
+        status: { type: string, enum: [submitted, graded, resubmission_requested] }
+        submittedAt: { type: string, format: date-time }
+        score: { type: ["number", "null"], minimum: 0 }
+        feedback: { type: ["string", "null"] }
+        reviewedAt: { type: ["string", "null"], format: date-time }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/AssignmentAttachment" }
+    Assignment:
+      type: object
+      required: [id, courseId, resourceId, termNumber, courseTitle, teacherName, title, description, dueAt, maxScore, status, attachments, submission]
+      properties:
+        id: { type: number }
+        courseId: { type: number }
+        resourceId: { type: number }
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        courseTitle: { type: string }
+        teacherName: { type: string }
+        title: { type: string }
+        description: { type: string }
+        dueAt: { type: string, format: date-time }
+        maxScore: { type: number, minimum: 1 }
+        status: { type: string, enum: [open, closed] }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/AssignmentAttachment" }
+        submission:
+          oneOf:
+            - $ref: "#/components/schemas/AssignmentSubmission"
+            - type: "null"
+    AssignmentInput:
+      type: object
+      required: [courseId, resourceId, termNumber, title, description, dueAt, maxScore]
+      properties:
+        courseId: { type: number, minimum: 1 }
+        resourceId: { type: number, minimum: 1 }
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        teacherClerkUserId: { type: string }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 1, maxLength: 12000 }
+        dueAt: { type: string, format: date-time }
+        maxScore: { type: number, minimum: 1, maximum: 1000 }
+        attachmentIntentIds:
+          type: array
+          maxItems: 5
+          items: { type: number, minimum: 1 }
+    AssignmentUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 1, maxLength: 12000 }
+        dueAt: { type: string, format: date-time }
+        maxScore: { type: number, minimum: 1, maximum: 1000 }
+        status: { type: string, enum: [open, closed] }
+        attachmentIntentIds:
+          type: array
+          maxItems: 5
+          items: { type: number, minimum: 1 }
+    AssignmentUploadInput:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        size: { type: number, minimum: 1, maximum: 10485760 }
+        contentType: { type: string, enum: [application/pdf, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document, image/png, image/jpeg, text/plain] }
+    AssignmentSubmissionInput:
+      type: object
+      required: [answerText]
+      properties:
+        answerText: { type: string, maxLength: 12000 }
+        attachmentIntentIds:
+          type: array
+          maxItems: 5
+          items: { type: number, minimum: 1 }
+    AssignmentGradeInput:
+      type: object
+      required: [score, feedback]
+      properties:
+        score: { type: number, minimum: 0, maximum: 1000 }
+        feedback: { type: string, maxLength: 5000 }
+    AssignmentFeedbackInput:
+      type: object
+      required: [feedback]
+      properties:
+        feedback: { type: string, minLength: 1, maxLength: 5000 }
+    AdminAssignment:
+      allOf:
+        - $ref: "#/components/schemas/Assignment"
+        - type: object
+          required: [teacherClerkUserId, submissionCount, gradedCount]
+          properties:
+            teacherClerkUserId: { type: string }
+            submissionCount: { type: number, minimum: 0 }
+            gradedCount: { type: number, minimum: 0 }
+    AdminAssignmentSubmission:
+      allOf:
+        - $ref: "#/components/schemas/AssignmentSubmission"
+        - type: object
+          required: [studentName, studentNumber, email]
+          properties:
+            studentName: { type: string }
+            studentNumber: { type: number }
+            email: { type: string }
+    ExamOption:
+      type: object
+      required: [id, label, position]
+      properties:
+        id: { type: number }
+        label: { type: string }
+        position: { type: number, minimum: 0 }
+    ExamQuestion:
+      type: object
+      required: [id, prompt, position, options]
+      properties:
+        id: { type: number }
+        prompt: { type: string }
+        position: { type: number, minimum: 0 }
+        options:
+          type: array
+          minItems: 2
+          items: { $ref: "#/components/schemas/ExamOption" }
+    ExamResult:
+      type: object
+      required: [correctCount, totalQuestions, percentage]
+      properties:
+        correctCount: { type: number, minimum: 0 }
+        totalQuestions: { type: number, minimum: 0 }
+        percentage: { type: number, minimum: 0, maximum: 100 }
+    ExamSubmission:
+      type: object
+      required: [id, examId, profileId, answers, submittedAt, result]
+      properties:
+        id: { type: number }
+        examId: { type: number }
+        profileId: { type: number }
+        answers:
+          type: object
+          additionalProperties: { type: number }
+        submittedAt: { type: string, format: date-time }
+        result:
+          $ref: "#/components/schemas/ExamResult"
+    Exam:
+      type: object
+      required: [id, courseId, resourceId, termNumber, courseTitle, teacherName, title, description, status, isOnboarding, durationMinutes, startedAt, createdAt, updatedAt, questions, submission]
+      properties:
+        id: { type: number }
+        courseId: { type: number }
+        resourceId: { type: number }
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        courseTitle: { type: string }
+        teacherName: { type: string }
+        title: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [open, closed] }
+        isOnboarding: { type: boolean }
+        durationMinutes:
+          oneOf:
+            - { type: number, minimum: 1, maximum: 240 }
+            - { type: "null" }
+        startedAt:
+          oneOf:
+            - { type: string, format: date-time }
+            - { type: "null" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        questions:
+          type: array
+          items: { $ref: "#/components/schemas/ExamQuestion" }
+        submission:
+          oneOf:
+            - $ref: "#/components/schemas/ExamSubmission"
+            - type: "null"
+    ExamQuestionInput:
+      type: object
+      required: [prompt, options, correctOptionIndex]
+      properties:
+        prompt: { type: string, minLength: 1, maxLength: 2000 }
+        options:
+          type: array
+          minItems: 2
+          maxItems: 8
+          items: { type: string, minLength: 1, maxLength: 500 }
+        correctOptionIndex: { type: number, minimum: 0, maximum: 7 }
+    ExamInput:
+      type: object
+      required: [title, description, questions]
+      properties:
+        resourceId: { type: number, minimum: 1 }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 1, maxLength: 12000 }
+        status: { type: string, enum: [open, closed] }
+        isOnboarding: { type: boolean }
+        durationMinutes:
+          oneOf:
+            - { type: number, minimum: 1, maximum: 240 }
+            - { type: "null" }
+        questions:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { $ref: "#/components/schemas/ExamQuestionInput" }
+    ExamUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 1, maxLength: 12000 }
+        status: { type: string, enum: [open, closed] }
+        isOnboarding: { type: boolean }
+        durationMinutes:
+          oneOf:
+            - { type: number, minimum: 1, maximum: 240 }
+            - { type: "null" }
+        questions:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { $ref: "#/components/schemas/ExamQuestionInput" }
+    ExamSubmissionInput:
+      type: object
+      required: [answers]
+      properties:
+        answers:
+          type: object
+          additionalProperties: { type: number, minimum: 1 }
+    AdminExam:
+      allOf:
+        - $ref: "#/components/schemas/Exam"
+        - type: object
+          required: [teacherClerkUserId, submissionCount, questions]
+          properties:
+            teacherClerkUserId: { type: string }
+            submissionCount: { type: number, minimum: 0 }
+            questions:
+              type: array
+              items:
+                allOf:
+                  - $ref: "#/components/schemas/ExamQuestion"
+                  - type: object
+                    required: [correctOptionId]
+                    properties:
+                      correctOptionId:
+                        oneOf:
+                          - { type: number, minimum: 1 }
+                          - { type: "null" }
+    AdminExamSubmission:
+      allOf:
+        - $ref: "#/components/schemas/ExamSubmission"
+        - type: object
+          required: [studentName, studentNumber, email, answerLabels, reviewStatus]
+          properties:
+            studentName: { type: string }
+            studentNumber: { type: number }
+            email: { type: string }
+            reviewStatus: { type: string, enum: [pending, approved] }
+            answerLabels:
+              type: object
+              additionalProperties: { type: string }
+    ExamResendResult:
+      type: object
+      required: [examId, profileId, resent]
+      properties:
+        examId: { type: number }
+        profileId: { type: number }
+        resent: { type: boolean }
+    ExamReviewResult:
+      type: object
+      required: [examId, profileId, reviewStatus]
+      properties:
+        examId: { type: number }
+        profileId: { type: number }
+        reviewStatus: { type: string, enum: [approved] }
+    TeacherOption:
+      type: object
+      required: [clerkUserId, firstName, lastName, displayName]
+      properties:
+        clerkUserId: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        displayName: { type: string }
+    SubjectRemovalRequest:
+      type: object
+      required: [id, profileId, courseId, termNumber, courseTitle, studentName, reason, status, rejectionReason, createdAt, reviewedAt]
+      properties:
+        id: { type: number }
+        profileId: { type: number }
+        courseId: { type: number }
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        courseTitle: { type: string }
+        studentName: { type: string }
+        reason: { type: string }
+        status: { type: string, enum: [pending, approved, rejected] }
+        rejectionReason: { type: ["string", "null"], maxLength: 1000 }
+        createdAt: { type: string }
+        reviewedAt: { type: ["string", "null"] }
+    SubjectRemovalRequestInput:
+      type: object
+      required: [courseId, termNumber, reason]
+      properties:
+        courseId: { type: number }
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        reason: { type: string, minLength: 3, maxLength: 1000 }
+    SubjectRemovalDecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approved, rejected] }
+        rejectionReason: { type: ["string", "null"], maxLength: 1000 }
+    Announcement:
+      type: object
+      required: [id, title, body, date, type]
+      properties:
+        id: { type: number }
+        title: { type: string }
+        body: { type: string }
+        date: { type: string }
+        type: { type: string, enum: [important, info, event, lesson, book, announcement, news, admission] }
+    Article:
+      type: object
+      required: [id, title, excerpt, body, author, createdAt]
+      properties:
+        id: { type: number }
+        title: { type: string }
+        excerpt: { type: string }
+        body: { type: string }
+        author: { type: string }
+        createdAt: { type: string }
+    DailyBenefit:
+      type: object
+      required: [id, body, source, dayOfWeek, createdAt]
+      properties:
+        id: { type: number }
+        body: { type: string }
+        source: { type: string }
+        dayOfWeek: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
+        createdAt: { type: string }
+    Dashboard:
+      type: object
+      required: [studentName, greeting, courses, announcements, nextLesson]
+      properties:
+        studentName: { type: string }
+        greeting: { type: string }
+        courses:
+          type: array
+          items:
+            $ref: "#/components/schemas/Course"
+        announcements:
+          type: array
+          items:
+            $ref: "#/components/schemas/Announcement"
+        nextLesson:
+          type: ["string", "null"]
+    CourseInput:
+      type: object
+      required: [title, category, instructor, color, credits, hours, description, lessonDescription, lessonDays, lessonTime]
+      properties:
+        title: { type: string }
+        category: { type: string }
+        instructor: { type: string }
+        progress: { type: number, minimum: 0, maximum: 100 }
+        completedLessons: { type: number, minimum: 0 }
+        totalLessons: { type: number, minimum: 0 }
+        color: { type: string }
+        credits: { type: number, minimum: 0 }
+        hours: { type: number, minimum: 0 }
+        nextLesson: { type: ["string", "null"] }
+        pdfUrl: { type: ["string", "null"] }
+        telegramUrl: { type: ["string", "null"] }
+        zoomUrl: { type: ["string", "null"] }
+        googleMeetUrl: { type: ["string", "null"] }
+        lessonUrl: { type: ["string", "null"] }
+        description: { type: string }
+        curriculum:
+          type: array
+          items: { type: string }
+        lessonDescription: { type: string }
+        lessonDays:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
+        lessonTime: { type: string, pattern: "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$" }
+    AnnouncementInput:
+      type: object
+      required: [title, body, date, type]
+      properties:
+        title: { type: string }
+        body: { type: string }
+        date: { type: string }
+        type: { type: string, enum: [important, info, event, lesson, book, announcement, news, admission] }
+    ArticleInput:
+      type: object
+      required: [title, excerpt, body, author]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 160 }
+        excerpt: { type: string, minLength: 1, maxLength: 320 }
+        body: { type: string, minLength: 1, maxLength: 12000 }
+        author: { type: string, minLength: 1, maxLength: 120 }
+    DailyBenefitInput:
+      type: object
+      required: [body, source, dayOfWeek]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 2000 }
+        source: { type: string, minLength: 1, maxLength: 200 }
+        dayOfWeek: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
+    SemesterDate:
+      type: object
+      required: [termNumber, startDate, endDate]
+      properties:
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        startDate: { type: ["string", "null"], format: date }
+        endDate: { type: ["string", "null"], format: date }
+    SemesterDateInput:
+      type: object
+      required: [startDate, endDate]
+      properties:
+        startDate: { type: ["string", "null"], format: date }
+        endDate: { type: ["string", "null"], format: date }
+    CourseActivation:
+      type: object
+      required: [activeTermNumbers]
+      properties:
+        activeTermNumbers:
+          type: array
+          items: { type: number, minimum: 1, maximum: 8 }
+    CourseActivationInput:
+      type: object
+      required: [activeTermNumbers]
+      properties:
+        activeTermNumbers:
+          type: array
+          items: { type: number, minimum: 1, maximum: 8 }
+    ResourceInput:
+      type: object
+      required: [courseId, termNumber, kind, title, body, lessonDays, lessonTime, isMandatory, teacherClerkUserId, studentCapacity]
+      properties:
+        courseId: { type: number }
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        kind: { type: string, enum: [material, text, pdf, telegram] }
+        title: { type: string }
+        body: { type: string }
+        url: { type: ["string", "null"] }
+        lessonDays:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
+        lessonTime: { type: string, pattern: "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$" }
+        isMandatory: { type: boolean }
+        teacherClerkUserId: { type: string, minLength: 1 }
+        studentCapacity: { type: number, minimum: 0 }
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, minLength: 1 }
+        size: { type: number, minimum: 1 }
+        contentType: { type: string, minLength: 1 }
+    UploadUrlResponse:
+      type: object
+      required: [id, uploadURL, objectPath]
+      properties:
+        id: { type: number }
+        uploadURL: { type: string }
+        objectPath: { type: string }
+    CourseUploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL: { type: string }
+        objectPath: { type: string }
+    ApplicationWindowInput:
+      type: object
+      required: [opensAt, closesAt]
+      properties:
+        opensAt: { type: ["string", "null"], format: date-time }
+        closesAt: { type: ["string", "null"], format: date-time }
+    ApplicationWindow:
+      type: object
+      required: [opensAt, closesAt, isOpen, nextOpenAt, status]
+      properties:
+        opensAt: { type: ["string", "null"], format: date-time }
+        closesAt: { type: ["string", "null"], format: date-time }
+        isOpen: { type: boolean }
+        nextOpenAt: { type: ["string", "null"], format: date-time }
+        status: { type: string, enum: [open, not_started, ended, unscheduled] }
+    AdmissionModeInput:
+      type: object
+      required: [examRequired]
+      properties:
+        examRequired: { type: boolean }
+    AdmissionMode:
+      type: object
+      required: [examRequired]
+      properties:
+        examRequired: { type: boolean }
+    SystemStatisticsVisibilityInput:
+      type: object
+      required: [visible]
+      properties:
+        visible: { type: boolean }
+    SystemStatistics:
+      type: object
+      required: [teachers, currentStudents, graduatedStudents, visible]
+      properties:
+        teachers: { type: number, minimum: 0 }
+        currentStudents: { type: number, minimum: 0 }
+        graduatedStudents: { type: number, minimum: 0 }
+        visible: { type: boolean }
+    ApplicationInput:
+      type: object
+      required: [firstName, lastName, phone, email, birthDate, arabicLevel, recommendationPaths, recommendationNames]
+      properties:
+        firstName: { type: string, minLength: 1 }
+        lastName: { type: string, minLength: 1 }
+        username: { type: string, minLength: 1 }
+        phone: { type: string, pattern: '^\+994\d{9}$' }
+        email: { type: string }
+        birthDate: { type: string }
+        arabicLevel: { type: string, enum: [Zəif, Orta, Yaxşı, Əla] }
+        recommendationPaths:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { type: string }
+        recommendationNames:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { type: string }
+    Application:
+      allOf:
+        - $ref: "#/components/schemas/ApplicationInput"
+        - type: object
+          required: [id, status, createdAt, clerkUserId]
+          properties:
+            id: { type: number }
+            status: { type: string, enum: [pending, approved, rejected, graduated] }
+            createdAt: { type: string, format: date-time }
+            rejectionReason: { type: ["string", "null"] }
+            clerkUserId: { type: ["string", "null"] }
+    ApplicationDecisionInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [approved, rejected] }
+        rejectionReason: { type: string }
+    UserRoleUpdateInput:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [none, teacher, supervisor, owner_assistant] }
+        permissions:
+          type: array
+          items:
+            type: string
+            enum: [applications, students, grading, attendance, excuses, announcements, articles, dailyBenefits, schedule, assignments, teacherAssignment, userRoleManagement]
+    AdminUser:
+      type: object
+      required: [id, firstName, lastName, username, email, role]
+      properties:
+        id: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        username: { type: ["string", "null"] }
+        email: { type: string }
+        role: { type: string, enum: [none, owner, teacher, supervisor, owner_assistant, admin] }
+    AdminUserProfile:
+      type: object
+      required: [id, firstName, lastName, username, email, phone, birthDate, arabicLevel, role, rolePermissions]
+      properties:
+        id: { type: string }
+        firstName: { type: string, minLength: 1, maxLength: 100 }
+        lastName: { type: string, minLength: 1, maxLength: 100 }
+        username: { type: ["string", "null"], maxLength: 100 }
+        email: { type: string, pattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$', maxLength: 320 }
+        phone: { type: string, pattern: '^$|^\+994\d{9}$' }
+        birthDate: { type: string, maxLength: 20 }
+        arabicLevel: { type: string, enum: [Zəif, Orta, Yaxşı, Əla] }
+        role: { type: string, enum: [none, owner, teacher, supervisor, owner_assistant, admin] }
+        rolePermissions:
+          type: array
+          items: { type: string }
+    AdminUserProfileInput:
+      type: object
+      required: [firstName, lastName, username, email, phone, birthDate, arabicLevel]
+      properties:
+        firstName: { type: string, minLength: 1, maxLength: 100 }
+        lastName: { type: string, minLength: 1, maxLength: 100 }
+        username: { type: ["string", "null"], maxLength: 100 }
+        email: { type: string, pattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$', maxLength: 320 }
+        phone: { type: string, pattern: '^\+994\d{9}$' }
+        birthDate: { type: string, minLength: 1, maxLength: 20 }
+        arabicLevel: { type: string, enum: [Zəif, Orta, Yaxşı, Əla] }
+    UserProfileHistoryEntry:
+      type: object
+      required: [id, eventType, actorClerkUserId, actorName, changedFields, previousValues, newValues, createdAt]
+      properties:
+        id: { type: number }
+        eventType: { type: string }
+        actorClerkUserId: { type: string }
+        actorName: { type: string }
+        changedFields:
+          type: array
+          items: { type: string }
+        previousValues:
+          type: object
+          additionalProperties:
+            type: ["string", "null"]
+        newValues:
+          type: object
+          additionalProperties:
+            type: ["string", "null"]
+        createdAt: { type: string, format: date-time }
+    StudentDeletionInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 1000 }
+    StudentDeletionNotice:
+      type: object
+      required: [studentName, reason, deletedByName, deletedAt]
+      properties:
+        studentName: { type: string }
+        reason: { type: string }
+        deletedByName: { type: string }
+        deletedAt: { type: string, format: date-time }
+    StudentDeletionAudit:
+      type: object
+      required: [id, profileId, applicationId, studentName, email, reason, deletedByName, deletedAt]
+      properties:
+        id: { type: number }
+        profileId: { type: number }
+        applicationId: { type: number }
+        studentName: { type: string }
+        email: { type: string }
+        reason: { type: string }
+        deletedByName: { type: string }
+        deletedAt: { type: string, format: date-time }
+    AuditEvent:
+      type: object
+      required: [id, eventType, actorClerkUserId, targetType, details, createdAt]
+      properties:
+        id: { type: number }
+        eventType: { type: string }
+        actorClerkUserId: { type: string }
+        targetType: { type: string }
+        targetId: { type: ["string", "null"] }
+        details: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+    AcademicProfileSummary:
+      type: object
+      required: [id, studentNumber, applicationId, firstName, lastName, email, courseYear, semester, statusLabel, program]
+      properties:
+        id: { type: number }
+        studentNumber: { type: number, minimum: 1 }
+        applicationId: { type: number }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        courseYear: { type: number, minimum: 1, maximum: 4 }
+        semester: { type: number, minimum: 1, maximum: 2 }
+        statusLabel: { type: string }
+        program: { type: string, minLength: 1, maxLength: 160 }
+    AdminCourseStudent:
+      type: object
+      required: [profileId, studentNumber, firstName, lastName, username, email, phone, courseYear, semester, grades, attendance]
+      properties:
+        profileId: { type: number }
+        studentNumber: { type: number, minimum: 1 }
+        firstName: { type: string }
+        lastName: { type: string }
+        username: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        courseYear: { type: number, minimum: 1, maximum: 4 }
+        semester: { type: number, minimum: 1, maximum: 2 }
+        grades:
+          type: array
+          items:
+            type: object
+            required: [termNumber, grade]
+            properties:
+              termNumber: { type: number, minimum: 1, maximum: 8 }
+              grade: { type: number, minimum: 0, maximum: 5, nullable: true }
+        attendance:
+          type: array
+          items:
+            type: object
+            required: [termNumber, attendancePercent]
+            properties:
+              termNumber: { type: number, minimum: 1, maximum: 8 }
+              attendancePercent: { type: number, minimum: 0, maximum: 100, nullable: true }
+    AdminStudent:
+      type: object
+      required: [profileId, clerkUserId, studentNumber, applicationId, firstName, lastName, username, email, phone, registeredAt, courseYear, semester, currentTermNumber, deletedAt]
+      properties:
+        profileId: { type: number }
+        clerkUserId: { type: string }
+        studentNumber: { type: number, minimum: 1 }
+        applicationId: { type: number }
+        firstName: { type: string }
+        lastName: { type: string }
+        username: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        registeredAt: { type: string }
+        courseYear: { type: number, minimum: 1, maximum: 4 }
+        semester: { type: number, minimum: 1, maximum: 2 }
+        currentTermNumber: { type: number, minimum: 1, maximum: 8 }
+    AdminSearchResult:
+      type: object
+      required: [kind, id, title, subtitle]
+      properties:
+        kind: { type: string, enum: [student, application, course] }
+        id: { type: string }
+        title: { type: string }
+        subtitle: { type: string }
+        profileId: { type: number, nullable: true }
+    AcademicProfilePromotionInput:
+      type: object
+      required: [expectedTermNumber]
+      properties:
+        expectedTermNumber: { type: number, minimum: 1, maximum: 8 }
+    AcademicProfileDemotionInput:
+      type: object
+      required: [expectedTermNumber]
+      properties:
+        expectedTermNumber: { type: number, minimum: 1, maximum: 8 }
+    AcademicProfilePromotionExpectation:
+      type: object
+      required: [profileId, expectedTermNumber]
+      properties:
+        profileId: { type: number, minimum: 1 }
+        expectedTermNumber: { type: number, minimum: 1, maximum: 8 }
+    BulkPromotionInput:
+      type: object
+      required: [profileIds, expectedCurrentTerms]
+      properties:
+        profileIds:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { type: number, minimum: 1 }
+        expectedCurrentTerms:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/AcademicProfilePromotionExpectation"
+    BulkPromotionFailure:
+      type: object
+      required: [profileId, studentName, error]
+      properties:
+        profileId: { type: number }
+        studentName: { type: string }
+        error: { type: string }
+    BulkPromotionResponse:
+      type: object
+      required: [promotedProfileIds, failures]
+      properties:
+        promotedProfileIds:
+          type: array
+          items: { type: number }
+        failures:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkPromotionFailure"
+    AdminStudentNotificationInput:
+      type: object
+      required: [title, body]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 160 }
+        body: { type: string, minLength: 1, maxLength: 5000 }
+        targetTerms:
+          type: array
+          items: { type: number, minimum: 1, maximum: 8 }
+        targetProfileIds:
+          type: array
+          items: { type: number, minimum: 1 }
+        destination: { type: string, enum: [home, gmail, both] }
+    AdminStudentNotification:
+      type: object
+      required: [id, title, body, targetTerms, targetProfileIds, destination, createdAt]
+      properties:
+        id: { type: number }
+        title: { type: string }
+        body: { type: string }
+        targetTerms:
+          type: array
+          items: { type: number }
+        targetProfileIds:
+          type: array
+          items: { type: number }
+        destination: { type: string, enum: [home, gmail, both] }
+        createdAt: { type: string }
+        deletedAt: { type: ["string", "null"], format: date-time }
+    GraduationCandidates:
+      type: object
+      required: [graduationTerm, students]
+      properties:
+        graduationTerm: { type: number, minimum: 1, maximum: 8 }
+        students:
+          type: array
+          items:
+            $ref: "#/components/schemas/GraduationCandidate"
+    GraduationCandidate:
+      type: object
+      required: [profileId, studentNumber, firstName, lastName, username, email, currentTermNumber]
+      properties:
+        profileId: { type: number }
+        studentNumber: { type: number, minimum: 1 }
+        firstName: { type: string }
+        lastName: { type: string }
+        username: { type: string }
+        email: { type: string }
+        currentTermNumber: { type: number, minimum: 1, maximum: 8 }
+    GraduatedStudent:
+      type: object
+      required: [profileId, studentName, graduationTerm]
+      properties:
+        profileId: { type: number }
+        studentName: { type: string }
+        graduationTerm: { type: number, minimum: 1, maximum: 8 }
+    RestoredGraduatedStudent:
+      type: object
+      required: [profileId, studentName, status]
+      properties:
+        profileId: { type: number }
+        studentName: { type: string }
+        status: { type: string, enum: [approved] }
+    AdminGraduationCertificate:
+      type: object
+      required: [profileId, studentNumber, firstName, lastName, email, graduationTerm, certificate]
+      properties:
+        profileId: { type: number, minimum: 1 }
+        studentNumber: { type: number, minimum: 1 }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        graduationTerm: { type: number, minimum: 1, maximum: 8 }
+        certificate:
+          oneOf:
+            - $ref: "#/components/schemas/GraduationCertificate"
+            - type: "null"
+    GraduationCertificate:
+      type: object
+      required: [id, profileId, studentName, graduationTerm, gpa, graduationCategory, certificateNumber, verificationToken, issuedAt, revokedAt, verificationLocked, directorTitle, directorName, showDirector, showSeal, showGpa, showGraduationCategory, certificateTitle, bodyText, honorText]
+      properties:
+        id: { type: number, minimum: 1 }
+        profileId: { type: number, minimum: 1 }
+        studentName: { type: string }
+        graduationTerm: { type: number, minimum: 1, maximum: 8 }
+        gpa: { type: number, minimum: 0, maximum: 5 }
+        graduationCategory: { type: string, enum: [Zəif, Orta, Əla, Fərqlənmə ilə bitirən] }
+        certificateNumber: { type: string, pattern: "^CERT-[0-9]{4}-[0-9]{4,}$" }
+        verificationToken: { type: string, minLength: 20, maxLength: 100 }
+        issuedAt: { type: string, format: date-time }
+        revokedAt: { type: ["string", "null"], format: date-time }
+        verificationLocked: { type: boolean }
+        directorTitle: { type: string }
+        directorName: { type: string }
+        showDirector: { type: boolean }
+        showSeal: { type: boolean }
+        showGpa: { type: boolean }
+        showGraduationCategory: { type: boolean }
+        certificateTitle: { type: string }
+        bodyText: { type: string }
+        honorText: { type: string }
+    GraduationCertificateStatusInput:
+      type: object
+      properties:
+        revoked: { type: boolean }
+        verificationLocked: { type: boolean }
+        directorTitle: { type: string, minLength: 1, maxLength: 120 }
+        directorName: { type: string, minLength: 1, maxLength: 120 }
+        showDirector: { type: boolean }
+        showSeal: { type: boolean }
+        showGpa: { type: boolean }
+        showGraduationCategory: { type: boolean }
+        certificateTitle: { type: string, minLength: 1, maxLength: 120 }
+        bodyText: { type: string, minLength: 1, maxLength: 1000 }
+        honorText: { type: string, minLength: 1, maxLength: 1000 }
+    CertificateVerification:
+      type: object
+      required: [valid, certificateNumber, studentName, graduationTerm, graduationDate, academyName, gpa, graduationCategory, directorTitle, directorName]
+      properties:
+        valid: { type: boolean }
+        certificateNumber: { type: ["string", "null"] }
+        studentName: { type: ["string", "null"] }
+        graduationTerm: { type: ["number", "null"], minimum: 1, maximum: 8 }
+        graduationDate: { type: ["string", "null"], format: date-time }
+        academyName: { type: string }
+        gpa: { type: ["number", "null"], minimum: 0, maximum: 5 }
+        graduationCategory: { type: ["string", "null"], enum: [Zəif, Orta, Əla, Fərqlənmə ilə bitirən, null] }
+        directorTitle: { type: ["string", "null"] }
+        directorName: { type: ["string", "null"] }
+    AcademicSubject:
+      type: object
+      required: [courseId, title, instructor, grade, credits, hours, absenceCount, attendancePercent, isMandatory]
+      properties:
+        courseId: { type: number }
+        title: { type: string }
+        instructor: { type: string }
+        grade: { type: ["number", "null"], minimum: 0, maximum: 5 }
+        credits: { type: ["number", "null"], minimum: 0 }
+        hours: { type: ["number", "null"], minimum: 0 }
+        gradingComponents:
+          type: array
+          items:
+            type: object
+            required: [name, score]
+            properties:
+              name: { type: string }
+              score: { type: number, minimum: 0, maximum: 100, nullable: true }
+        absenceCount: { type: number, minimum: 0 }
+        attendancePercent: { type: ["number", "null"], minimum: 0, maximum: 100 }
+        isMandatory: { type: boolean }
+    AcademicSemester:
+      type: object
+      required: [termNumber, courseYear, semester, label, gpa, attendancePercent, subjects, attendanceRecords]
+      properties:
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        courseYear: { type: number, minimum: 1, maximum: 4 }
+        semester: { type: number, minimum: 1, maximum: 2 }
+        label: { type: string }
+        gpa: { type: ["number", "null"], minimum: 0, maximum: 5 }
+        attendancePercent: { type: ["number", "null"], minimum: 0, maximum: 100 }
+        subjects:
+          type: array
+          items:
+            $ref: "#/components/schemas/AcademicSubject"
+        attendanceRecords:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttendanceRecord"
+    AttendanceRecord:
+      type: object
+      required: [id, courseId, courseTitle, attendanceDate, status, teacherName]
+      properties:
+        id: { type: number }
+        courseId: { type: number }
+        courseTitle: { type: string }
+        attendanceDate: { type: string }
+        status: { type: string }
+        teacherName: { type: string }
+    AttendanceExcuse:
+      type: object
+      required: [id, attendanceRecordId, profileId, studentName, courseId, courseTitle, attendanceDate, teacherName, reason, status, createdAt]
+      properties:
+        id: { type: number }
+        attendanceRecordId: { type: number }
+        profileId: { type: number }
+        studentName: { type: string }
+        courseId: { type: number }
+        courseTitle: { type: string }
+        attendanceDate: { type: string }
+        teacherName: { type: string }
+        reason: { type: string }
+        status: { type: string, enum: [pending, reviewed] }
+        createdAt: { type: string }
+    AttendanceExcuseInput:
+      type: object
+      required: [attendanceRecordId, reason]
+      properties:
+        attendanceRecordId: { type: number, minimum: 1 }
+        reason: { type: string, minLength: 3, maxLength: 1000 }
+    AcademicProfile:
+      allOf:
+        - $ref: "#/components/schemas/AcademicProfileSummary"
+        - type: object
+          required: [username, phone, birthDate, arabicLevel, currentTermNumber, semesters]
+          properties:
+            username: { type: string }
+            phone: { type: string }
+            birthDate: { type: string }
+            arabicLevel: { type: string }
+            currentTermNumber: { type: number, minimum: 1, maximum: 8 }
+            promotionApprovedAt: { type: ["string", "null"], format: date-time }
+            promotionApprovedBy: { type: ["string", "null"] }
+            promotionFromTerm: { type: ["number", "null"], minimum: 1, maximum: 8 }
+            semesters:
+              type: array
+              minItems: 1
+              maxItems: 8
+              items:
+                $ref: "#/components/schemas/AcademicSemester"
+    AcademicProfileUpdate:
+      type: object
+      required: [courseYear, semester, program]
+      properties:
+        courseYear: { type: number, minimum: 1, maximum: 4 }
+        semester: { type: number, minimum: 1, maximum: 2 }
+        program: { type: string, minLength: 1, maxLength: 160 }
+    AcademicGradesUpdate:
+      type: object
+      required: [termNumber, grades]
+      properties:
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        grades:
+          type: array
+          items:
+            type: object
+            required: [courseId, grade]
+            properties:
+              courseId: { type: number }
+              grade: { type: ["number", "null"], minimum: 0, maximum: 100 }
+              componentNames:
+                type: array
+                items: { type: string, minLength: 1 }
+              componentGrades:
+                type: object
+                additionalProperties: { type: ["number", "null"], minimum: 0, maximum: 100 }
+    AttendanceUpdate:
+      type: object
+      required: [termNumber, courseId, attendanceDate, status]
+      properties:
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        courseId: { type: number, minimum: 1 }
+        attendanceDate: { type: string, minLength: 10, maxLength: 10, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        status: { type: string, enum: [present, absent, late, excused] }
+    LessonJoinInput:
+      type: object
+      required: [resourceId, termNumber]
+      properties:
+        resourceId: { type: number, minimum: 1 }
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+    LessonJoinEvent:
+      type: object
+      required: [id, resourceId, profileId, termNumber, sessionDate, joinedAt, punctuality]
+      properties:
+        id: { type: number }
+        resourceId: { type: number }
+        profileId: { type: number }
+        termNumber: { type: number }
+        sessionDate: { type: string }
+        joinedAt: { type: string, format: date-time }
+        punctuality: { type: string, enum: [on_time, late] }
+    LessonAttendance:
+      allOf:
+        - $ref: "#/components/schemas/LessonJoinEvent"
+        - type: object
+          required: [studentName, courseTitle, finalStatus]
+          properties:
+            studentName: { type: string }
+            courseTitle: { type: string }
+            finalStatus: { type: ["string", "null"], enum: [present, late, absent, null] }
+    LessonAttendanceDecisionInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [present, late, absent] }
+    ScheduleAccess:
+      type: object
+      required: [approved, onboardingRequired]
+      properties:
+        approved: { type: boolean }
+        onboardingRequired: { type: boolean }
+        onboardingExamId: { type: ["number", "null"] }
+        onboardingExamTitle: { type: ["string", "null"] }
+    ScheduleAccessInput:
+      type: object
+      properties:
+        approved: { type: boolean }
+    Question:
+      type: object
+      required: [id, title, body, answer, answeredByName, answeredAt, createdAt]
+      properties:
+        id: { type: number }
+        title: { type: string }
+        body: { type: string }
+        answer: { type: ["string", "null"] }
+        answeredByName: { type: ["string", "null"] }
+        answeredAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    QuestionInput:
+      type: object
+      required: [title, body]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 160 }
+        body: { type: string, minLength: 1, maxLength: 5000 }
+    QuestionAnswerInput:
+      type: object
+      required: [answer]
+      properties:
+        answer: { type: string, minLength: 1 }
+    Message:
+      type: object
+      required: [id, senderClerkUserId, recipientClerkUserId, senderName, senderEmail, senderPhone, senderUsername, senderStudentNumber, senderProgram, senderCourseYear, senderSemester, recipientName, subject, body, parentMessageId, readAt, createdAt]
+      properties:
+        id: { type: number }
+        senderClerkUserId: { type: string }
+        recipientClerkUserId: { type: string }
+        senderName: { type: string }
+        senderEmail: { type: string }
+        senderPhone: { type: string }
+        senderUsername: { type: ["string", "null"] }
+        senderStudentNumber: { type: ["number", "null"] }
+        senderProgram: { type: ["string", "null"] }
+        senderCourseYear: { type: ["number", "null"] }
+        senderSemester: { type: ["number", "null"] }
+        recipientName: { type: string }
+        subject: { type: string }
+        body: { type: string }
+        parentMessageId: { type: ["number", "null"] }
+        readAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    MessageInput:
+      type: object
+      required: [recipientClerkUserId, body]
+      properties:
+        recipientClerkUserId: { type: string, minLength: 1 }
+        subject: { type: string, maxLength: 160 }
+        body: { type: string, minLength: 1, maxLength: 5000 }
+    MessageUpdate:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 5000 }
+    MessageReplyInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 5000 }
+    UnreadCount:
+      type: object
+      required: [count]
+      properties:
+        count: { type: number, minimum: 0 }
+    ResourceUpdate:
+      type: object
+      required: [courseId, termNumber, kind, title, body, lessonDays, lessonTime, isMandatory, teacherClerkUserId, studentCapacity]
+      properties:
+        courseId: { type: number }
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        kind: { type: string, enum: [material, text, pdf, telegram] }
+        title: { type: string }
+        body: { type: string }
+        url: { type: ["string", "null"] }
+        lessonDays:
+          type: array
+          items: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
+        lessonTime: { type: string, pattern: "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$" }
+        isMandatory: { type: boolean }
+        teacherClerkUserId: { type: string }
+        studentCapacity: { type: number, minimum: 0 }
+    ResourceStudentAssignment:
+      type: object
+      required: [id, resourceId, courseId, termNumber, studentName, status, createdAt]
+      properties:
+        id: { type: number }
+        resourceId: { type: number }
+        courseId: { type: number }
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        studentName: { type: string }
+        status: { type: string, enum: [pending, approved, rejected] }
+        createdAt: { type: string, format: date-time }
+    ResourceStudentAssignments:
+      type: object
+      required: [students, selectedProfileIds]
+      properties:
+        students:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceStudent" }
+        selectedProfileIds:
+          type: array
+          items: { type: number }
+    ResourceStudentAssignmentsResult:
+      type: object
+      required: [selectedProfileIds]
+      properties:
+        selectedProfileIds:
+          type: array
+          items: { type: number }
+    ResourceStudent:
+      type: object
+      required: [profileId, studentNumber, firstName, lastName, username]
+      properties:
+        profileId: { type: number }
+        studentNumber: { type: number }
+        firstName: { type: string }
+        lastName: { type: string }
+        username: { type: ["string", "null"] }
+    ResourceStudentAssignmentsInput:
+      type: object
+      required: [profileIds]
+      properties:
+        profileIds:
+          type: array
+          items: { type: number, minimum: 1 }
+    TeacherChoice:
+      type: object
+      required: [resourceId, courseId, termNumber, courseTitle, teacherClerkUserId, teacherName, status, studentCapacity, activeChoiceCount, isFull]
+      properties:
+        resourceId: { type: number }
+        courseId: { type: number }
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        courseTitle: { type: string }
+        teacherClerkUserId: { type: string }
+        teacherName: { type: string }
+        status: { type: ["string", "null"], enum: [pending, approved, rejected, null] }
+        studentCapacity: { type: number, minimum: 0 }
+        activeChoiceCount: { type: number, minimum: 0 }
+        isFull: { type: boolean }
+    TeacherChoiceInput:
+      type: object
+      required: [resourceId]
+      properties:
+        resourceId: { type: number, minimum: 1 }
+    AdminTeacherChoice:
+      type: object
+      required: [id, resourceId, courseId, termNumber, teacherName, studentName, status, createdAt, studentCapacity, activeChoiceCount, isFull]
+      properties:
+        id: { type: number }
+        resourceId: { type: number }
+        courseId: { type: number }
+        termNumber: { type: number, minimum: 1, maximum: 8 }
+        teacherName: { type: string }
+        studentName: { type: string }
+        status: { type: string, enum: [pending, approved, rejected] }
+        createdAt: { type: string, format: date-time }
+        studentCapacity: { type: number, minimum: 0 }
+        activeChoiceCount: { type: number, minimum: 0 }
+        isFull: { type: boolean }
+    TeacherChoiceDecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approved, rejected] }
+    RolePermissions:
+      type: object
+      required: [teacher, supervisor, owner_assistant, available]
+      properties:
+        teacher: { type: array, items: { type: string } }
+        supervisor: { type: array, items: { type: string } }
+        owner_assistant: { type: array, items: { type: string } }
+        available: { type: array, items: { type: string } }
+    RolePermissionsInput:
+      type: object
+      required: [teacher, supervisor, owner_assistant]
+      properties:
+        teacher: { type: array, items: { type: string } }
+        supervisor: { type: array, items: { type: string } }
+        owner_assistant: { type: array, items: { type: string } }

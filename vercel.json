@@ -1,0 +1,19 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "npx --yes pnpm@10.17.1 install --no-frozen-lockfile",
+  "buildCommand": "sh scripts/vercel-build.sh",
+  "outputDirectory": "public",
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 30,
+      "includeFiles": "{artifacts/api-server/dist-vercel/**,artifacts/api-server/src/assets/**}"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

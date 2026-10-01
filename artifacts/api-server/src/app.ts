@@ -1,7 +1,8 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import { pinoHttp } from "pino-http";
-import { clerkMiddleware } from "@clerk/express";
+import { clerkClient, clerkMiddleware } from "@clerk/express";
+import { pool } from "@workspace/db";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
 import {
   CLERK_PROXY_PATH,
@@ -34,8 +35,61 @@ app.use(
 );
 // Clerk açarları yoxdursa clerkMiddleware hər sorğuda xəta verir; healthz onlardan əvvəl qeydə alınır ki,
 // Vercel Function-un özünün işlədiyini ayrıca yoxlamaq mümkün olsun.
-app.get("/api/healthz", (_req, res) => {
-  res.json({ status: "ok" });
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(Object.assign(new Error(`${ms}ms ərzində cavab gəlmədi`), { code: "TIMEOUT" })), ms),
+    ),
+  ]);
+}
+
+function describeDatabaseUrl(url: string | undefined) {
+  if (!url) return "yoxdur";
+  const host = url.replace(/^[a-z]+:\/\/[^@]*@/i, "").split(/[/?]/)[0] ?? "";
+  if (/\.pooler\.supabase\.com/i.test(host)) return `pooler (${host.split(":")[1] ?? "port yoxdur"})`;
+  if (/^db\.[a-z0-9]+\.supabase\.co/i.test(host)) return `birbaşa Supabase (${host.split(":")[1] ?? "port yoxdur"}) - Vercel üçün uyğun deyil, Transaction Pooler lazımdır`;
+  return `başqa host (${host.split(":")[1] ?? "port yoxdur"})`;
+}
+
+// Adi sorğu: {"status":"ok"}. `DEBUG_API_ERRORS=1` env dəyişəni təyin olunubsa və ?deep=1 verilibsə,
+// bazanın və Clerk-in əlçatanlığı yoxlanılır (parol/açar göstərilmir, yalnız bəli/xeyr və xəta kodu).
+app.get("/api/healthz", async (req, res) => {
+  if (req.query.deep !== "1" || process.env.DEBUG_API_ERRORS !== "1") {
+    res.json({ status: "ok" });
+    return;
+  }
+  const report: Record<string, unknown> = {
+    status: "ok",
+    env: {
+      DATABASE_URL: describeDatabaseUrl(process.env.DATABASE_URL),
+      CLERK_SECRET_KEY: Boolean(process.env.CLERK_SECRET_KEY),
+      CLERK_PUBLISHABLE_KEY: Boolean(process.env.CLERK_PUBLISHABLE_KEY),
+      SYSTEM_OWNER_EMAIL: Boolean(process.env.SYSTEM_OWNER_EMAIL),
+      RESEND_API_KEY: Boolean(process.env.RESEND_API_KEY),
+      SUPABASE_S3_ENDPOINT: Boolean(process.env.SUPABASE_S3_ENDPOINT),
+    },
+  };
+  const dbStarted = Date.now();
+  try {
+    const result = await withTimeout(
+      pool.query("select to_regclass('public.lms_applications') is not null as applications_table, (select count(*)::int from information_schema.tables where table_schema = 'public') as public_tables"),
+      8000,
+    );
+    report.db = { ok: true, ms: Date.now() - dbStarted, ...result.rows[0] };
+  } catch (error) {
+    const err = error as { code?: string; message?: string };
+    report.db = { ok: false, ms: Date.now() - dbStarted, code: err.code ?? "unknown", message: String(err.message ?? "").slice(0, 200) };
+  }
+  const clerkStarted = Date.now();
+  try {
+    await withTimeout(clerkClient.users.getUserList({ limit: 1 }), 8000);
+    report.clerk = { ok: true, ms: Date.now() - clerkStarted };
+  } catch (error) {
+    const err = error as { status?: number; code?: string; message?: string };
+    report.clerk = { ok: false, ms: Date.now() - clerkStarted, status: err.status, code: err.code, message: String(err.message ?? "").slice(0, 200) };
+  }
+  res.json(report);
 });
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use(cors({ credentials: true, origin: true }));

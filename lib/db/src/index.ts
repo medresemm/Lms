@@ -34,6 +34,8 @@ export const pool = new Pool({
   max: isServerless ? 3 : 10,
   idleTimeoutMillis: isServerless ? 10_000 : 30_000,
   connectionTimeoutMillis: 10_000,
+  // Asılı qalan sorğu Vercel Function-u 30 saniyə bloklamasın; tez xəta versin.
+  query_timeout: 20_000,
   ...(isLocalDatabase || process.env.DATABASE_SSL === "disable"
     ? {}
     : { ssl: { rejectUnauthorized: false } }),

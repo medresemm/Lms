@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="az">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Diaqnostika</title>
+<style>body{font:14px/1.5 monospace;padding:14px;background:#111;color:#eee}pre{white-space:pre-wrap;word-break:break-word}button{padding:10px 14px;margin-top:10px;font-size:15px}</style>
+</head>
+<body>
+<h3>Diaqnostika (müvəqqəti səhifə)</h3>
+<p>Əvvəlcə saytda giriş edin, sonra bu səhifəni açın.</p>
+<pre id="out">Yoxlanılır...</pre>
+<button onclick="location.reload()">Yenidən yoxla</button>
+<script>
+const out = document.getElementById('out');
+const lines = [];
+const log = (s) => { lines.push(s); out.textContent = lines.join('\n'); };
+async function probe(name, url) {
+  const started = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+  try {
+    const r = await fetch(url, { credentials: 'same-origin', redirect: 'manual', cache: 'no-store', signal: controller.signal });
+    let body = '';
+    try { body = (await r.text()).slice(0, 200).replace(/\s+/g, ' '); } catch (e) {}
+    log(name + ': HTTP ' + (r.status || '?') + ' | type=' + r.type + ' | ' + (Date.now() - started) + 'ms | ' + body);
+  } catch (e) {
+    log(name + ': XƏTA (' + (e && e.name) + ') ' + (Date.now() - started) + 'ms');
+  } finally { clearTimeout(timer); }
+}
+(async () => {
+  log('Vaxt: ' + new Date().toISOString());
+  const names = document.cookie.split(';').map((c) => c.trim().split('=')[0]).filter(Boolean);
+  log('Cookie adları: ' + (names.join(', ') || '(heç biri yoxdur)'));
+  await probe('healthz', '/api/healthz');
+  await probe('profile', '/api/account/profile');
+  await probe('questions', '/api/questions');
+  log('Bitdi.');
+})();
+</script>
+</body>
+</html>

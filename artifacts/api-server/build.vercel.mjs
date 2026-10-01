@@ -76,6 +76,9 @@ function vendorPackage(name, fromDir, rootNodeModules, placed, optional = false,
   }
 }
 
+const artifactDir = path.dirname(fileURLToPath(import.meta.url));
+const outDir = path.resolve(artifactDir, "dist-vercel");
+
 await rm(outDir, { recursive: true, force: true });
 
 await esbuild({

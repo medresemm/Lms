@@ -30,7 +30,7 @@ function findPackageDir(fromDir, name) {
   }
 }
 
-function vendorPackage(name, fromDir, targetNodeModules, placed, optional = false) {
+function vendorPackage(name, fromDir, rootNodeModules, placed, optional = false, parentDest = null) {
   const srcDir = findPackageDir(fromDir, name);
   if (!srcDir) {
     if (optional) return;
@@ -38,14 +38,27 @@ function vendorPackage(name, fromDir, targetNodeModules, placed, optional = fals
   }
   const pkg = JSON.parse(readFileSync(path.join(srcDir, "package.json"), "utf8"));
 
-  const already = placed.get(targetNodeModules) ?? new Map();
-  placed.set(targetNodeModules, already);
-  let nodeModulesDir = targetNodeModules;
-  if (already.has(name) && already.get(name) !== pkg.version) {
-    throw new Error(`Vercel bundle: "${name}" üçün fərqli versiyalar (${already.get(name)} və ${pkg.version})`);
+  const levelOf = (dir) => {
+    if (!placed.has(dir)) placed.set(dir, new Map());
+    return placed.get(dir);
+  };
+
+  // Əvvəlcə kökdəki node_modules-a (hoisted) qoymağa çalışırıq. Orada eyni adlı, FƏRQLİ versiyalı paket
+  // varsa, bu paketi onu tələb edən paketin öz node_modules qovluğuna (nested) qoyuruq — Node bunu düzgün tapır.
+  let nodeModulesDir = rootNodeModules;
+  const root = levelOf(rootNodeModules);
+  if (root.has(name)) {
+    if (root.get(name) === pkg.version) return;
+    if (!parentDest) {
+      throw new Error(`Vercel bundle: "${name}" üçün fərqli versiyalar (${root.get(name)} və ${pkg.version})`);
+    }
+    nodeModulesDir = path.join(parentDest, "node_modules");
+    const nested = levelOf(nodeModulesDir);
+    if (nested.get(name) === pkg.version) return;
+    nested.set(name, pkg.version);
+  } else {
+    root.set(name, pkg.version);
   }
-  if (already.get(name) === pkg.version) return;
-  already.set(name, pkg.version);
 
   const destDir = path.join(nodeModulesDir, ...name.split("/"));
   mkdirSync(path.dirname(destDir), { recursive: true });
@@ -56,15 +69,12 @@ function vendorPackage(name, fromDir, targetNodeModules, placed, optional = fals
   });
 
   for (const dep of Object.keys(pkg.dependencies ?? {})) {
-    vendorPackage(dep, srcDir, targetNodeModules, placed);
+    vendorPackage(dep, srcDir, rootNodeModules, placed, false, destDir);
   }
   for (const dep of Object.keys(pkg.optionalDependencies ?? {})) {
-    vendorPackage(dep, srcDir, targetNodeModules, placed, true);
+    vendorPackage(dep, srcDir, rootNodeModules, placed, true, destDir);
   }
 }
-
-const artifactDir = path.dirname(fileURLToPath(import.meta.url));
-const outDir = path.resolve(artifactDir, "dist-vercel");
 
 await rm(outDir, { recursive: true, force: true });
 
@@ -99,7 +109,7 @@ await esbuild({
 const vendorNodeModules = path.resolve(outDir, "node_modules");
 const placed = new Map();
 vendorPackage("pdfkit", artifactDir, vendorNodeModules, placed);
-console.log("Köçürülən paketlər:", [...(placed.get(vendorNodeModules)?.keys() ?? [])].join(", "));
+console.log("Köçürülən paketlər (kök):", [...(placed.get(vendorNodeModules)?.keys() ?? [])].join(", "));
 
 console.log(
   "Vercel API bundle hazırdır:",

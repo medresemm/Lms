@@ -37,7 +37,7 @@ function escapeHtml(value: string) {
 function emailHtml(text: string) {
   const logoUri = emailLogoDataUri();
   const logoImg = logoUri
-    ? `<img src="${logoUri}" alt="Mədinə Tədris Akademiyası" width="240" style="display:block;width:240px;max-width:100%;height:auto;">`
+    ? `<img src="https://madinahacademy.net/medine-logo-email.png" alt="Mədinə Tədris Akademiyası" width="240" style="display:block;width:240px;max-width:100%;height:auto;">`
     : `<strong style="font-size:18px;">Mədinə Tədris Akademiyası</strong>`;
   const paragraphs = text
     .split(/\n{2,}/)

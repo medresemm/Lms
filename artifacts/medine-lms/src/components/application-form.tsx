@@ -50,11 +50,10 @@ function apiUrl(path: string) {
 const applicationRouteUrl = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/sign-up`;
 
 function generateApplicationPassword() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
-  const values = new Uint32Array(12);
+  const alphabet = 'abcdefghijkmnopqrstuvwxyz23456789';
+  const values = new Uint32Array(10);
   crypto.getRandomValues(values);
-  const randomPart = Array.from(values, (value) => alphabet[value % alphabet.length]).join('');
-  return `M${randomPart}a7!`;
+  return Array.from(values, (value) => alphabet[value % alphabet.length]).join('');
 }
 
 function clerkErrorMessage(error: unknown) {

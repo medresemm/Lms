@@ -726,20 +726,22 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
       <header className="relative z-10 shrink-0 px-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:px-5 sm:pt-5 md:px-7">
         <div className="flex items-center justify-between gap-2 sm:gap-3">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            {backHref && (
-              <Link href={backHref} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#e3c27a]/30 px-2.5 py-2 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6] sm:px-3" data-testid="link-ai-back">
-                <ArrowLeft size={14} /> <span className="hidden sm:inline">{backLabel ?? 'Panelə qayıt'}</span><span className="sr-only sm:hidden">{backLabel ?? 'Panelə qayıt'}</span>
-              </Link>
-            )}
             <BrandTile size="sm" />
             <div className="min-w-0">
               <p className="font-serif text-lg leading-none text-[#f4ead5]">Mədinə <span style={{ color: gold }}>AI</span></p>
               <p className="mt-1 truncate text-[10px] uppercase tracking-[.14em] text-[#f4ead5]/55 sm:tracking-[.18em]">{isStaff ? 'Admin köməkçisi' : 'Tələbə köməkçisi'} · {external ? 'xarici' : 'daxili'}</p>
             </div>
           </div>
-          <button type="button" onClick={clearHistory} disabled={!hasChat || sending} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#e3c27a]/30 px-2.5 py-2 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6] disabled:cursor-not-allowed disabled:opacity-40 sm:px-3" aria-label="Tarixçəni təmizlə" data-testid="button-ai-clear-history">
-            <Trash2 size={13} /> <span className="hidden sm:inline">Tarixçəni təmizlə</span>
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button type="button" onClick={clearHistory} disabled={!hasChat || sending} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#e3c27a]/30 px-2.5 py-2 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6] disabled:cursor-not-allowed disabled:opacity-40 sm:px-3" aria-label="Tarixçəni təmizlə" data-testid="button-ai-clear-history">
+              <Trash2 size={13} /> <span className="hidden sm:inline">Tarixçəni təmizlə</span>
+            </button>
+            {backHref && (
+              <Link href={backHref} className="inline-flex shrink-0 items-center justify-center rounded-full border border-[#e3c27a]/30 p-2 text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6]" aria-label={backLabel ?? 'Panelə qayıt'} data-testid="link-ai-back">
+                <ArrowLeft size={14} />
+              </Link>
+            )}
+          </div>
         </div>
         {showSwitch && (
           <div className="mt-2.5 flex flex-wrap items-center gap-2 sm:mt-3">

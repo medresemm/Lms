@@ -327,6 +327,24 @@ export const GUIDE_TOPICS: GuideTopic[] = [
     related: ["Tələbələri harada idarə edim?", "Elanı necə yayımlayım?"],
   },
   {
+    id: "admin-research",
+    modes: ["admin"],
+    title: "Şamilə və Dorar-da mənbə axtarışı",
+    keywords: ["samile", "samilede", "shamela", "dorar", "hedis yoxla", "hedis axtar", "hadis ara", "kitablarda axtar", "menbe axtar", "hedis"],
+    standalone: ["samilede axtar", "shamela", "dorar", "hedis yoxla"],
+    steps: [
+      "Şamilə kitabxanasında axtarmaq üçün yazın: «Şamilədə axtar: إنما الأعمال بالنيات» (və ya «shamela …», «kitablarda axtar …», «الشاملة …»).",
+      "Hədisi Dorar (الدرر السنية) bazasında yoxlamaq üçün yazın: «Hədis yoxla: إنما الأعمال بالنيات» (və ya «dorar …», «hədis axtar …», «hadis ara …»).",
+      "Nəticələr Mədinə AI-ın içində göstərilir: Şamilədə kitab, müəllif, cild/səhifə və səhifə mətni; Dorar-da hədis mətni, ravi, mühəddis, mənbə, səhifə/nömrə və hökm.",
+      "Şamilə nəticəsində «Tam səhifə» düyməsi səhifəni burada açır; «Əvvəlki / Növbəti səhifə» ilə vərəqləyə bilərsiniz. «Kopyala» düyməsi mətni kopyalayır.",
+    ],
+    tips: [
+      "Ən yaxşı nəticə üçün ərəbcə açar sözlər yazın.",
+      "Axtarış hər dəfə canlı aparılır; saytda heç nə saxlanmır. Bu imkan yalnız heyət üzvləri üçündür.",
+    ],
+    related: ["Şamilədə axtar: إنما الأعمال بالنيات", "Hədis yoxla: إنما الأعمال بالنيات"],
+  },
+  {
     id: "admin-search",
     modes: ["admin"],
     title: "Qlobal axtarış",

@@ -4274,7 +4274,7 @@ export function AdminPanel() {
             </section>
           </div>
       </main>
-      {(owner || rolePermissions.has('students')) && <AiAssistantLauncher href="/ai" />}
+      <AiAssistantLauncher href="/ai" />
     </div>
   );
 }

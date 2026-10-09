@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { useUser } from '@clerk/react';
 import { useQueryClient } from '@tanstack/react-query';
+import { formatFullName } from '@/lib/utils';
 import { MedreseLibrary } from '@/components/medrese-library';
 import { createPortal } from 'react-dom';
 import type { AcademicProfile, Announcement, AssignmentAttachment, AssignmentUploadInput, Course, Dashboard, LearningResource } from '@workspace/api-client-react';
@@ -1339,6 +1340,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
              </div>
            </div>
          )}
+         {showTranscript && academicProfile && (
            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[hsl(var(--primary)/.5)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="transcript-title" data-testid="modal-student-transcript">
              <div className="relative max-h-[92dvh] w-full max-w-6xl overflow-y-auto rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 shadow-[var(--shadow-xl)] md:p-5">
                <button type="button" onClick={() => setShowTranscript(false)} className="focus-ring absolute right-5 top-5 z-10 rounded-full bg-[hsl(var(--card)/.9)] p-2 text-[hsl(var(--muted-foreground))] shadow-[var(--shadow-xs)] hover:bg-[hsl(var(--muted))]" aria-label="Nəticə kartını bağla" data-testid="button-close-student-transcript"><X size={18} /></button>

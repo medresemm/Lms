@@ -3,7 +3,9 @@
 // - POST /api/ai/student/chat — yalnız təsdiqlənmiş tələbə; istifadəçi kimliyi yalnız Clerk sessiyasından
 //   (getAuth) götürülür, sorğu gövdəsindən heç bir ID qəbul edilmir. Kontekst yalnız həmin tələbənin öz
 //   məlumatlarından qurulur.
-// - POST /api/ai/admin/chat — sahib və «students» icazəsi olan heyət üzvləri.
+// - POST /api/ai/admin/chat — sahib və bütün heyət rolları. LMS məlumatları üçün «students» icazəsi tələb
+//   olunur; Şamilə/Dorar mənbə axtarışı isə istənilən heyət üzvünə açıqdır.
+// - POST /api/ai/admin/shamela/page — Şamilə səhifəsini canlı açır (heyət üçün; heç nə saxlanmır).
 //
 // Server heç nə saxlamır: söhbət üçün cədvəl yoxdur, mesaj mətni log edilmir, bazaya yazılmır.
 // Söhbət tarixçəsi yalnız brauzerin localStorage-ində qalır.
@@ -75,6 +77,9 @@ import {
   type AiTeacher,
   type StudentAiContext,
 } from "../lib/ai/aiProvider.js";
+import { findGuideTopic, guideReply } from "../lib/ai/siteGuide.js";
+import { parse } from "../lib/ai/text.js";
+import { answerResearch, detectResearchIntent, openShamelaPage, ResearchUpstreamError, shamelaPageUrl } from "../lib/ai/research.js";
 
 const router: IRouter = Router();
 
@@ -805,10 +810,6 @@ const requireAiStaff: RequestHandler = async (req, res, next) => {
       return;
     }
     const permissions = await permissionsForClerkUser(clerkUser, role);
-    if (!permissions.includes("students")) {
-      res.status(403).json({ error: "Mədinə AI admin rejimi üçün «Tələbələr» icazəsi lazımdır." });
-      return;
-    }
     res.locals.aiPermissions = new Set<string>(permissions);
     res.locals.aiIsOwner = false;
     res.locals.aiRole = role;
@@ -864,9 +865,51 @@ router.post("/ai/admin/chat", noStore, requireAiStaff, rateLimit, async (req, re
       res.status(400).json({ error: `Mesaj boş olmamalı və ${MAX_MESSAGE_LENGTH} simvoldan uzun olmamalıdır.` });
       return;
     }
-    const context = buildAdminContext(res.locals.aiPermissions as ReadonlySet<string>, res.locals.aiIsOwner === true, String(res.locals.aiRole ?? ""));
+    const research = detectResearchIntent(input.message);
+    if (research) {
+      res.json(await answerResearch(research));
+      return;
+    }
+    const permissions = res.locals.aiPermissions as ReadonlySet<string>;
+    const isOwner = res.locals.aiIsOwner === true;
+    if (!isOwner && !permissions.has("students")) {
+      const topic = findGuideTopic(parse(input.message, true), "admin");
+      if (topic && (topic.id === "admin-research" || topic.id === "ai")) {
+        res.json(guideReply(topic));
+        return;
+      }
+      res.json({
+        reply: "Bağışlayın, LMS məlumatlarına (tələbələr, dərslər, qiymətlər və s.) baxmaq üçün «Tələbələr» icazəsi lazımdır. Bunun üçün idarəçiyə müraciət edin.\n\nBununla belə, Şamilə kitabxanasında və Dorar hədis bazasında axtarış edə bilərsiniz.",
+        suggestions: ["Şamilədə axtar: إنما الأعمال بالنيات", "Hədis yoxla: إنما الأعمال بالنيات"],
+      });
+      return;
+    }
+    const context = buildAdminContext(permissions, isOwner, String(res.locals.aiRole ?? ""));
     const result = await getAiProvider().answer(input, context);
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/ai/admin/shamela/page", noStore, requireAiStaff, rateLimit, async (req, res, next) => {
+  try {
+    const body = (req.body ?? {}) as { bookId?: unknown; pageId?: unknown };
+    const bookId = typeof body.bookId === "number" ? body.bookId : Number(body.bookId);
+    const pageId = typeof body.pageId === "number" ? body.pageId : Number(body.pageId);
+    if (!Number.isSafeInteger(bookId) || !Number.isSafeInteger(pageId) || bookId < 1 || pageId < 1) {
+      res.status(400).json({ error: "Kitab və səhifə nömrəsi düzgün deyil." });
+      return;
+    }
+    try {
+      res.json({ page: await openShamelaPage(bookId, pageId) });
+    } catch (error) {
+      if (!(error instanceof ResearchUpstreamError)) throw error;
+      res.status(502).json({
+        error: "Şamilə hal-hazırda cavab vermir. Bir az sonra yenidən cəhd edin.",
+        sourceUrl: shamelaPageUrl(bookId, pageId),
+      });
+    }
   } catch (error) {
     next(error);
   }

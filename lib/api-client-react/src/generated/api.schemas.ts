@@ -7,6 +7,7 @@
  */
 export interface ResolveStudentNumberInput {
   identifier: string;
+  password: string;
 }
 
 export interface ResolveStudentNumberResult {

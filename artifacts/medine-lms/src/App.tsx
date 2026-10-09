@@ -502,17 +502,12 @@ function SignInForm() {
         const resolveResponse = await fetch(apiUrl('/auth/resolve-student-number'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier: emailAddress }),
+          body: JSON.stringify({ identifier: emailAddress, password }),
         });
-        if (!resolveResponse.ok) {
+        const resolved = await resolveResponse.json().catch(() => ({})) as { email?: string; error?: string };
+        if (!resolveResponse.ok || !resolved.email) {
           setIsNoticeError(true);
-          setNotice('Tələbə nömrəsi tapılmadı.');
-          return;
-        }
-        const resolved = await resolveResponse.json() as { email?: string };
-        if (!resolved.email) {
-          setIsNoticeError(true);
-          setNotice('Tələbə nömrəsi ilə əlaqəli email tapılmadı.');
+          setNotice(resolveResponse.status === 429 && resolved.error ? resolved.error : 'Email və ya şifrə düzgün deyil.');
           return;
         }
         emailAddress = resolved.email;

@@ -202,7 +202,7 @@ const uploadAttempts = new Map<string, { count: number; resetAt: number }>();
 const decisionInProgress = new Set<number>();
 // One application needs two upload URLs. Leave room for a few legitimate retries
 // without allowing an IP to create an unbounded number of upload intents.
-const applicationUploadLimit = 20;
+const applicationUploadLimit = 8;
 const applicationUploadWindowMs = 15 * 60 * 1000;
 const maxApplicationFileSize = 3 * 1024 * 1024;
 const maxCoursePdfSize = 25 * 1024 * 1024;
@@ -633,8 +633,10 @@ function permissionForAdminRequest(path: string, method: string): RolePermission
   if (path.startsWith("/admin/student-notifications")) return "announcements";
   if (path.startsWith("/admin/articles")) return "articles";
   if (path.startsWith("/admin/daily-benefits")) return "dailyBenefits";
-  if (path.startsWith("/admin/assignments") || path === "/admin/assignment-upload-url") return "assignments";
-  if (path.startsWith("/admin/resources")) return "schedule";
+  if (path.startsWith("/admin/assignments") || path === "/admin/assignment-upload-url" || path.startsWith("/admin/exams")) return "assignments";
+  if (path.startsWith("/admin/resources") || path.startsWith("/admin/schedule-lessons") || path.startsWith("/admin/selected-courses") || path.startsWith("/admin/semester-dates")) return "schedule";
+  if (path.startsWith("/admin/lesson-attendance")) return "attendance";
+  if (path.startsWith("/admin/search")) return "students";
   if (path.startsWith("/admin/teacher-schedule") || path.startsWith("/admin/teachers")) return "schedule";
   return null;
 }
@@ -678,7 +680,16 @@ export const requireTeacher: RequestHandler = async (req, res, next) => {
       next();
       return;
     }
-    if (permissionRole && (!permission || (await permissionsForClerkUser(clerkUser!, permissionRole)).includes(permission))) {
+    if (req.path.startsWith("/admin/course-activation") && role !== "teacher" && permissionRole) {
+      next();
+      return;
+    }
+    const staffWidePath = req.path.startsWith("/questions") || req.path.startsWith("/messages");
+    if (permissionRole && staffWidePath) {
+      next();
+      return;
+    }
+    if (permissionRole && permission && (await permissionsForClerkUser(clerkUser!, permissionRole)).includes(permission)) {
       next();
       return;
     }
@@ -1526,22 +1537,79 @@ router.get("/daily-benefit", async (_req, res, next) => {
   }
 });
 
+const studentNumberAttempts = new Map<string, { count: number; resetAt: number }>();
+const studentNumberAttemptLimit = 8;
+const studentNumberAttemptWindowMs = 15 * 60 * 1000;
+
+function mayResolveStudentNumber(studentNumber: string) {
+  const now = Date.now();
+  if (studentNumberAttempts.size > 5000) {
+    for (const [key, value] of studentNumberAttempts) {
+      if (value.resetAt <= now) studentNumberAttempts.delete(key);
+    }
+  }
+  const state = studentNumberAttempts.get(studentNumber);
+  if (!state || state.resetAt <= now) return true;
+  return state.count < studentNumberAttemptLimit;
+}
+
+function recordStudentNumberFailure(studentNumber: string) {
+  const now = Date.now();
+  const state = studentNumberAttempts.get(studentNumber);
+  if (!state || state.resetAt <= now) {
+    studentNumberAttempts.set(studentNumber, { count: 1, resetAt: now + studentNumberAttemptWindowMs });
+    return;
+  }
+  state.count += 1;
+}
+
+async function clerkPasswordMatches(userId: string, password: string) {
+  const secret = process.env.CLERK_SECRET_KEY;
+  if (!secret) throw new Error("CLERK_SECRET_KEY təyin edilməyib.");
+  const response = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(userId)}/verify_password`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (response.status >= 500) throw new Error("Şifrə yoxlaması hazırda mümkün olmadı.");
+  if (!response.ok) return false;
+  const body = await response.json().catch(() => null) as { verified?: boolean } | null;
+  return body?.verified === true;
+}
+
+async function emailChangeConflict(email: string, userId: string) {
+  const normalized = normalizedEmail(email);
+  const ownerEmail = normalizedEmail(process.env.SYSTEM_OWNER_EMAIL);
+  if (ownerEmail && normalized === ownerEmail && !(await userIsSystemOwner(userId))) return "owner" as const;
+  const existing = await clerkClient.users.getUserList({ emailAddress: [email.trim()], limit: 5 });
+  if (existing.data.some((user) => user.id !== userId)) return "taken" as const;
+  return null;
+}
+
 router.post("/auth/resolve-student-number", async (req, res, next) => {
   try {
     const rawIdentifier = typeof req.body?.identifier === "string" ? req.body.identifier.trim() : "";
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
     const digits = rawIdentifier.replace(/^T/i, "");
-    if (!/^\d+$/.test(digits)) {
-      res.status(400).json({ error: "Tələbə nömrəsi düzgün deyil." });
+    const invalid = !password || password.length > 200 || !/^\d+$/.test(digits);
+    if (invalid) {
+      res.status(401).json({ error: "Email və ya şifrə düzgün deyil." });
+      return;
+    }
+    if (!mayResolveStudentNumber(digits)) {
+      res.status(429).json({ error: "Çox sayda cəhd edildi. Bir az sonra yenidən cəhd edin." });
       return;
     }
     const studentNumber = Number(digits);
-    const [student] = await db.select({ email: applicationsTable.email })
+    const [student] = await db.select({ email: applicationsTable.email, clerkUserId: applicationsTable.clerkUserId })
       .from(studentAcademicProfilesTable)
       .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
       .where(and(eq(studentAcademicProfilesTable.studentNumber, studentNumber), eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)))
       .limit(1);
-    if (!student?.email) {
-      res.status(404).json({ error: "Tələbə nömrəsi tapılmadı." });
+    if (!student?.email || !student.clerkUserId || !(await clerkPasswordMatches(student.clerkUserId, password))) {
+      recordStudentNumberFailure(digits);
+      res.status(401).json({ error: "Email və ya şifrə düzgün deyil." });
       return;
     }
     res.json({ email: student.email });
@@ -1895,21 +1963,21 @@ router.patch("/account/profile", async (req, res, next) => {
     if (!clerkUser) { res.status(404).json({ error: "İstifadəçi tapılmadı." }); return; }
     const [application] = await db.select().from(applicationsTable).where(eq(applicationsTable.clerkUserId, userId)).limit(1);
     const previousProfile = userProfileSnapshot(clerkUser, application);
+    const currentEmail = normalizedEmail(clerkUser.primaryEmailAddress?.emailAddress);
+    if (normalizedEmail(input.email) !== currentEmail) {
+      res.status(400).json({ error: "E-poçt ünvanı buradan dəyişdirilə bilməz." });
+      return;
+    }
     const updatedClerkUser = await clerkClient.users.updateUser(userId, {
       firstName: input.firstName,
       lastName: input.lastName,
       username: input.username || undefined,
     });
-    const currentEmail = normalizedEmail(clerkUser.primaryEmailAddress?.emailAddress);
-    let finalClerkUser = updatedClerkUser;
-    if (currentEmail !== normalizedEmail(input.email)) {
-      const emailAddress = await clerkClient.emailAddresses.createEmailAddress({ userId, emailAddress: input.email });
-      finalClerkUser = await clerkClient.users.updateUser(userId, { primaryEmailAddressID: emailAddress.id });
-    }
+    const finalClerkUser = updatedClerkUser;
     if (application) {
       await db.update(applicationsTable).set({
         firstName: input.firstName, lastName: input.lastName, username: input.username || "",
-        email: input.email, phone: input.phone, birthDate: input.birthDate, arabicLevel: input.arabicLevel,
+        email: clerkUser.primaryEmailAddress?.emailAddress || input.email, phone: input.phone, birthDate: input.birthDate, arabicLevel: input.arabicLevel,
       }).where(eq(applicationsTable.id, application.id));
     }
     const updatedProfile = {
@@ -5217,7 +5285,8 @@ router.get("/application-window", async (_req, res, next) => {
 router.get("/system-statistics", async (_req, res, next) => {
   try {
     res.setHeader("Cache-Control", "no-store");
-    res.json(await getSystemStatistics());
+    const statistics = await getSystemStatistics();
+    res.json(statistics.visible ? statistics : { teachers: 0, currentStudents: 0, graduatedStudents: 0, visible: false });
   } catch (error) {
     next(error);
   }
@@ -5618,9 +5687,19 @@ router.patch("/admin/users/:userId/profile", requireOwnerOrAssistant, async (req
     });
     const currentEmail = normalizedEmail(clerkUser.primaryEmailAddress?.emailAddress);
     if (currentEmail !== normalizedEmail(input.email)) {
+      const conflict = await emailChangeConflict(input.email, userId);
+      if (conflict === "owner") {
+        res.status(403).json({ error: "Sistem sahibi e-poçtu başqa hesaba verilə bilməz." });
+        return;
+      }
+      if (conflict === "taken") {
+        res.status(409).json({ error: "Bu e-poçt ünvanı artıq başqa hesabdadır." });
+        return;
+      }
       const emailAddress = await clerkClient.emailAddresses.createEmailAddress({
         userId,
         emailAddress: input.email,
+        verified: true,
       });
       updatedClerkUser = await clerkClient.users.updateUser(userId, {
         primaryEmailAddressID: emailAddress.id,

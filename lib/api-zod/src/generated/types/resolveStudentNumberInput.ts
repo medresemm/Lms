@@ -8,4 +8,5 @@
 
 export interface ResolveStudentNumberInput {
   identifier: string;
+  password: string;
 }

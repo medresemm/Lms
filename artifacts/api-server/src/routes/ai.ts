@@ -78,10 +78,18 @@ import {
   type AiTeacher,
   type StudentAiContext,
 } from "../lib/ai/aiProvider.js";
+import { logger } from "../lib/logger.js";
 import { parseSourceSelection, routeAdminMessage } from "../lib/ai/adminRouting.js";
-import { answerResearch, openShamelaPage, ResearchUpstreamError, shamelaPageUrl } from "../lib/ai/research.js";
+import { answerResearch, openShamelaPage, type UpstreamStatusEvent, ResearchUpstreamError, shamelaPageUrl } from "../lib/ai/research.js";
 
 const router: IRouter = Router();
+
+// Xarici mənbə nəticəsini yalnız status kodu ilə qeyd edir — sorğu mətni heç vaxt log edilmir.
+function logUpstreamStatus(event: UpstreamStatusEvent) {
+  const entry = { upstream: event.upstream, status: event.status, code: event.code, cfMitigated: event.cfMitigated, contentType: event.contentType.split(";")[0] };
+  if (event.code === "ok") logger.info(entry, "research upstream ok");
+  else logger.warn(entry, "research upstream failed");
+}
 
 const MAX_MESSAGE_LENGTH = 1000;
 const MAX_HISTORY_TURNS = 10;
@@ -876,7 +884,7 @@ router.post("/ai/admin/chat", noStore, requireAiStaff, rateLimit, async (req, re
       { message: input.message, mode: selection.mode, target: selection.target, canReadLms: isOwner || permissions.has("students") },
       {
         internal: () => getAiProvider().answer(input, buildAdminContext(permissions, isOwner, String(res.locals.aiRole ?? ""))),
-        research: (intent) => answerResearch(intent),
+        research: (intent) => answerResearch(intent, { onUpstreamStatus: logUpstreamStatus }),
       },
     );
     res.json(result);

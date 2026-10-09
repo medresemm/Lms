@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import {
   answerResearch,
+  dorarApiUrl,
+  httpGetText,
+  type UpstreamStatusEvent,
   detectResearchIntent,
   openShamelaPage,
   parseCitation,
@@ -188,7 +193,7 @@ test("answerResearch times out slow upstreams", async () => {
   const started = Date.now();
   const reply = await answerResearch({ kind: "dorar", query: "نية" }, { fetchImpl: hanging, timeoutMs: 50 });
   assert.ok(Date.now() - started < 2000);
-  assert.equal(reply.sources.error, "unavailable");
+  assert.equal(reply.sources.error, "timeout");
 });
 
 test("detectResearchIntent recognises Azerbaijani, Turkish and Arabic commands with typos", () => {
@@ -213,4 +218,79 @@ test("detectResearchIntent recognises Azerbaijani, Turkish and Arabic commands w
   for (const message of ["Tələbələri axtar: Əli", "Bu gün hansı dərslər var?", "axtar: Əli", "shamela", "hədislər haqqında dərs", "Davamiyyət statistikası"]) {
     assert.equal(detectResearchIntent(message), null, message);
   }
+});
+
+const CLOUDFLARE_403 = '<!DOCTYPE html><html><head><title>Attention Required! | Cloudflare</title></head><body>Sorry, you have been blocked. Cloudflare Ray ID: abc</body></html>';
+
+test("Dorar 403 Cloudflare page is reported as «blocked» with status only (no query text)", async () => {
+  const events: UpstreamStatusEvent[] = [];
+  const fetchImpl: FetchLike = async () => new Response(CLOUDFLARE_403, { status: 403, headers: { "content-type": "text/html; charset=UTF-8" } });
+  const reply = await answerResearch({ kind: "dorar", query: "سرّي جدا" }, { fetchImpl, onUpstreamStatus: (event) => events.push(event) });
+  assert.equal(reply.sources.error, "blocked");
+  assert.equal(reply.sources.items.length, 0);
+  assert.equal(reply.sources.query, "سرّي جدا");
+  assert.deepEqual(events, [{ upstream: "dorar", status: 403, code: "blocked", cfMitigated: null, contentType: "text/html; charset=UTF-8" }]);
+  assert.ok(!JSON.stringify(events).includes("سرّي"));
+});
+
+test("Dorar 200 HTML challenge (non-JSON) is detected instead of crashing", async () => {
+  const fetchImpl: FetchLike = async () => new Response(CLOUDFLARE_403, { status: 200, headers: { "content-type": "text/html" } });
+  const reply = await answerResearch({ kind: "dorar", query: "نية" }, { fetchImpl });
+  assert.equal(reply.sources.error, "blocked");
+});
+
+test("dorarApiUrl percent-encodes Arabic queries", () => {
+  assert.equal(dorarApiUrl("إنما الأعمال"), "https://dorar.net/dorar_api.json?skey=%D8%A5%D9%86%D9%85%D8%A7%20%D8%A7%D9%84%D8%A3%D8%B9%D9%85%D8%A7%D9%84");
+  assert.equal(dorarApiUrl("a&b=c#d"), "https://dorar.net/dorar_api.json?skey=a%26b%3Dc%23d");
+});
+
+async function withServer(handler: http.RequestListener, run: (base: string) => Promise<void>) {
+  const server = http.createServer(handler);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  try {
+    await run(`http://127.0.0.1:${port}`);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+}
+
+test("searchDorar uses node:http(s) with only our own headers (no fetch fingerprint headers)", async () => {
+  let seen: http.IncomingHttpHeaders = {};
+  let path = "";
+  await withServer((req, res) => {
+    seen = req.headers;
+    path = req.url ?? "";
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ahadith: { result: DORAR_HTML } }));
+  }, async (base) => {
+    const items = await searchDorar("إنما الأعمال", { dorarBaseUrl: base });
+    assert.equal(items.length, 2);
+    assert.equal(items[0].grading, "صحيح غريب");
+  });
+  assert.equal(path, `/dorar_api.json?skey=${encodeURIComponent("إنما الأعمال")}`);
+  assert.equal(seen["user-agent"], RESEARCH_USER_AGENT);
+  assert.equal(seen.referer, "https://www.madinahacademy.net/");
+  assert.ok(String(seen.accept).includes("application/json"));
+  assert.equal(seen["sec-fetch-mode"], undefined);
+});
+
+test("searchDorar over node:http reports Cloudflare 403 as blocked", async () => {
+  await withServer((_req, res) => {
+    res.writeHead(403, { "content-type": "text/html; charset=UTF-8", "cf-mitigated": "challenge" });
+    res.end(CLOUDFLARE_403);
+  }, async (base) => {
+    const events: UpstreamStatusEvent[] = [];
+    const reply = await answerResearch({ kind: "dorar", query: "نية" }, { dorarBaseUrl: base, onUpstreamStatus: (event) => events.push(event) });
+    assert.equal(reply.sources.error, "blocked");
+    assert.equal(events[0].status, 403);
+    assert.equal(events[0].cfMitigated, "challenge");
+  });
+});
+
+test("httpGetText times out on a hanging upstream", async () => {
+  await withServer(() => { /* heç vaxt cavab vermir */ }, async (base) => {
+    await assert.rejects(httpGetText(`${base}/x`, {}, 100), (error: Error & { code?: string }) => error.code === "timeout");
+  });
 });

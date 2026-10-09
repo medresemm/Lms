@@ -5,6 +5,8 @@
 // - Sorğu mətni log edilmir.
 // - Şamilə cavabındakı `notice` sahəsi dil modelləri üçün təlimatdır; burada ona əməl edilmir və istifadə olunmur.
 // - Dorar HTML fraqmenti serverdə düz mətnə çevrilir; brauzerə heç vaxt xam HTML ötürülmür.
+import http from "node:http";
+import https from "node:https";
 import { normalizeText, fuzzyKeywordMatch } from "./text.js";
 
 export const RESEARCH_USER_AGENT = "MadinahAcademy-LMS/1.0 (+https://www.madinahacademy.net)";
@@ -23,6 +25,20 @@ export interface ResearchOptions {
   fetchImpl?: FetchLike;
   timeoutMs?: number;
   shamelaUrl?: string;
+  /** Yalnız testlər üçün: Dorar ünvanını dəyişmək (məs. lokal test serveri). */
+  dorarBaseUrl?: string;
+  /** Upstream nəticəsi (yalnız status/kod — sorğu mətni YOX) üçün qeydçi. */
+  onUpstreamStatus?: (event: UpstreamStatusEvent) => void;
+}
+
+export type UpstreamErrorCode = "blocked" | "timeout" | "unavailable" | "unreadable";
+
+export interface UpstreamStatusEvent {
+  upstream: "shamela" | "dorar";
+  status: number | null;
+  code: UpstreamErrorCode | "ok";
+  cfMitigated: string | null;
+  contentType: string;
 }
 
 export interface ShamelaItem {
@@ -49,13 +65,15 @@ export interface DorarItem {
 }
 
 export type ResearchSources =
-  | { kind: "shamela"; query: string; sourceUrl: string; items: ShamelaItem[]; error?: string }
-  | { kind: "dorar"; query: string; sourceUrl: string; items: DorarItem[]; error?: string };
+  | { kind: "shamela"; query: string; sourceUrl: string; items: ShamelaItem[]; error?: UpstreamErrorCode }
+  | { kind: "dorar"; query: string; sourceUrl: string; items: DorarItem[]; error?: UpstreamErrorCode };
 
 export class ResearchUpstreamError extends Error {
-  constructor(message: string) {
+  code: UpstreamErrorCode;
+  constructor(message: string, code: UpstreamErrorCode = "unavailable") {
     super(message);
     this.name = "ResearchUpstreamError";
+    this.code = code;
   }
 }
 
@@ -67,21 +85,76 @@ function shamelaEndpoint(options: ResearchOptions) {
   return configured && /^https:\/\//i.test(configured.trim()) ? configured.trim() : "https://mcp.shamela.ws/";
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit, options: ResearchOptions) {
+async function fetchWithTimeout(url: string, init: RequestInit, options: ResearchOptions, acceptAnyStatus = false) {
   const fetchImpl = options.fetchImpl ?? (globalThis.fetch as FetchLike);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   try {
     const response = await fetchImpl(url, { ...init, signal: controller.signal, redirect: "follow" });
-    if (!response.ok) throw new ResearchUpstreamError(`upstream status ${response.status}`);
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!response.ok && !acceptAnyStatus) {
+      throw new ResearchUpstreamError(`upstream status ${response.status}`, classifyStatus(response.status, contentType, response.headers.get("cf-mitigated")));
+    }
     const body = await response.text();
-    return { body, contentType: response.headers.get("content-type") ?? "" };
+    return { body, contentType, status: response.status, cfMitigated: response.headers.get("cf-mitigated") };
   } catch (error) {
     if (error instanceof ResearchUpstreamError) throw error;
-    throw new ResearchUpstreamError(controller.signal.aborted ? "upstream timeout" : "upstream unreachable");
+    throw new ResearchUpstreamError(controller.signal.aborted ? "upstream timeout" : "upstream unreachable", controller.signal.aborted ? "timeout" : "unavailable");
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** 403/429/503 və ya HTML cavab (Cloudflare «Attention Required» / challenge) → «blocked». */
+export function classifyStatus(status: number, contentType: string, cfMitigated: string | null): UpstreamErrorCode {
+  if (cfMitigated || status === 403 || status === 429 || (status === 503 && /html/i.test(contentType))) return "blocked";
+  return "unavailable";
+}
+
+const MAX_UPSTREAM_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Dorar üçün node:https ilə GET. Səbəb: Node 24-ün daxili fetch-i (undici 7) ilə göndərilən sorğunu Dorar-ın
+ * Cloudflare qoruması eyni başlıqlarla belə 403 ilə bloklayır (Vercel Node 24 işlədir), node:https isə 200 alır.
+ * Başlıqlar tam bizim nəzarətimizdədir: yalnız Host, User-Agent, Accept, Accept-Language, Referer.
+ */
+export function httpGetText(url: string, headers: Record<string, string>, timeoutMs: number): Promise<{ status: number; contentType: string; cfMitigated: string | null; body: string }> {
+  return new Promise((resolve, reject) => {
+    const target = new URL(url);
+    const client = target.protocol === "http:" ? http : https;
+    let settled = false;
+    const finish = (error: ResearchUpstreamError | null, value?: { status: number; contentType: string; cfMitigated: string | null; body: string }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error) reject(error);
+      else resolve(value!);
+    };
+    const request = client.request(target, { method: "GET", headers }, (response) => {
+      const chunks: Buffer[] = [];
+      let size = 0;
+      response.on("data", (chunk: Buffer) => {
+        size += chunk.length;
+        if (size > MAX_UPSTREAM_BYTES) {
+          request.destroy();
+          finish(new ResearchUpstreamError("upstream response too large", "unreadable"));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.on("end", () => {
+        const cfMitigated = typeof response.headers["cf-mitigated"] === "string" ? response.headers["cf-mitigated"] : null;
+        finish(null, { status: response.statusCode ?? 0, contentType: String(response.headers["content-type"] ?? ""), cfMitigated, body: Buffer.concat(chunks).toString("utf8") });
+      });
+      response.on("error", () => finish(new ResearchUpstreamError("upstream unreachable", "unavailable")));
+    });
+    const timer = setTimeout(() => {
+      request.destroy();
+      finish(new ResearchUpstreamError("upstream timeout", "timeout"));
+    }, timeoutMs);
+    request.on("error", () => finish(new ResearchUpstreamError("upstream unreachable", "unavailable")));
+    request.end();
+  });
 }
 
 /** Görünməz idarəedici simvolları (bidi override-lar daxil) atır, boşluqları səliqəyə salır. */
@@ -370,21 +443,65 @@ export function dorarSearchUrl(query: string) {
   return `https://dorar.net/hadith/search?q=${encodeURIComponent(query)}`;
 }
 
-export async function searchDorar(query: string, options: ResearchOptions = {}): Promise<DorarItem[]> {
-  const url = `https://dorar.net/dorar_api.json?skey=${encodeURIComponent(query.slice(0, 200))}`;
-  const { body } = await fetchWithTimeout(url, {
-    method: "GET",
-    headers: { Accept: "application/json", "User-Agent": RESEARCH_USER_AGENT },
-  }, options);
+export const DORAR_HEADERS: Readonly<Record<string, string>> = {
+  "User-Agent": RESEARCH_USER_AGENT,
+  Accept: "application/json, text/javascript, */*;q=0.1",
+  "Accept-Language": "ar,az;q=0.8,en;q=0.6",
+  Referer: "https://www.madinahacademy.net/",
+};
+
+export function dorarApiUrl(query: string, base = "https://dorar.net") {
+  return `${base.replace(/\/$/, "")}/dorar_api.json?skey=${encodeURIComponent(query.slice(0, 200))}`;
+}
+
+/** Dorar API JSON-unu oxuyur; HTML (Cloudflare səhifəsi) və ya pozuq JSON → aydın xəta. */
+export function parseDorarApiBody(body: string, contentType: string): DorarItem[] {
+  const trimmed = body.trim();
+  if (/text\/html/i.test(contentType) && !trimmed.startsWith("{")) {
+    throw new ResearchUpstreamError("upstream returned html", /cloudflare|attention required|cf-ray|challenge/i.test(trimmed.slice(0, 4000)) ? "blocked" : "unreadable");
+  }
   let parsed: { ahadith?: { result?: unknown } };
   try {
-    parsed = JSON.parse(body) as typeof parsed;
+    parsed = JSON.parse(trimmed) as typeof parsed;
   } catch {
-    throw new ResearchUpstreamError("unreadable upstream response");
+    throw new ResearchUpstreamError("unreadable upstream response", /cloudflare|attention required/i.test(trimmed.slice(0, 4000)) ? "blocked" : "unreadable");
   }
   const html = parsed?.ahadith?.result;
   if (typeof html !== "string") return [];
   return parseDorarHtml(html);
+}
+
+export async function searchDorar(query: string, options: ResearchOptions = {}): Promise<DorarItem[]> {
+  const url = dorarApiUrl(query, options.dorarBaseUrl);
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const report = (event: Omit<UpstreamStatusEvent, "upstream">) => options.onUpstreamStatus?.({ upstream: "dorar", ...event });
+  let response: { status: number; contentType: string; cfMitigated: string | null; body: string };
+  try {
+    if (options.fetchImpl) {
+      const result = await fetchWithTimeout(url, { method: "GET", headers: { ...DORAR_HEADERS } }, options, true);
+      response = { status: result.status, contentType: result.contentType, cfMitigated: result.cfMitigated, body: result.body };
+    } else {
+      response = await httpGetText(url, { ...DORAR_HEADERS }, timeoutMs);
+    }
+  } catch (error) {
+    const code = error instanceof ResearchUpstreamError ? error.code : "unavailable";
+    report({ status: null, code, cfMitigated: null, contentType: "" });
+    throw error instanceof ResearchUpstreamError ? error : new ResearchUpstreamError("upstream unreachable", "unavailable");
+  }
+  if (response.status < 200 || response.status >= 300) {
+    const code = classifyStatus(response.status, response.contentType, response.cfMitigated);
+    report({ status: response.status, code, cfMitigated: response.cfMitigated, contentType: response.contentType });
+    throw new ResearchUpstreamError(`upstream status ${response.status}`, code);
+  }
+  try {
+    const items = parseDorarApiBody(response.body, response.contentType);
+    report({ status: response.status, code: "ok", cfMitigated: response.cfMitigated, contentType: response.contentType });
+    return items;
+  } catch (error) {
+    const code = error instanceof ResearchUpstreamError ? error.code : "unreadable";
+    report({ status: response.status, code, cfMitigated: response.cfMitigated, contentType: response.contentType });
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -504,7 +621,7 @@ export async function answerResearch(intent: ResearchIntent, options: ResearchOp
       return {
         reply: `Şamilə hal-hazırda cavab vermir. Bir az sonra yenidən cəhd edin və ya birbaşa ${SHAMELA_FALLBACK_URL} ünvanında axtarın.`,
         suggestions: RESEARCH_SUGGESTIONS,
-        sources: { kind: "shamela", query: intent.query, sourceUrl: SHAMELA_FALLBACK_URL, items: [], error: "unavailable" },
+        sources: { kind: "shamela", query: intent.query, sourceUrl: SHAMELA_FALLBACK_URL, items: [], error: "unavailable" as UpstreamErrorCode },
       };
     }
   }
@@ -518,11 +635,16 @@ export async function answerResearch(intent: ResearchIntent, options: ResearchOp
       suggestions: RESEARCH_SUGGESTIONS,
       sources: { kind: "dorar", query: intent.query, sourceUrl, items },
     };
-  } catch {
+  } catch (error) {
+    const code: UpstreamErrorCode = error instanceof ResearchUpstreamError ? error.code : "unavailable";
     return {
-      reply: `Dorar hal-hazırda cavab vermir. Bir az sonra yenidən cəhd edin və ya birbaşa ${DORAR_FALLBACK_URL} ünvanında axtarın.`,
+      reply: code === "blocked"
+        ? `Dorar hal-hazırda cavab vermir (sayt sorğunu qəbul etmədi). Bir az sonra yenidən cəhd edin və ya birbaşa ${sourceUrl} ünvanında axtarın.`
+        : code === "timeout"
+          ? `Dorar hal-hazırda cavab vermir (vaxt bitdi). Bir az sonra yenidən cəhd edin və ya birbaşa ${sourceUrl} ünvanında axtarın.`
+          : `Dorar hal-hazırda cavab vermir. Bir az sonra yenidən cəhd edin və ya birbaşa ${sourceUrl} ünvanında axtarın.`,
       suggestions: RESEARCH_SUGGESTIONS,
-      sources: { kind: "dorar", query: intent.query, sourceUrl: DORAR_FALLBACK_URL, items: [], error: "unavailable" },
+      sources: { kind: "dorar", query: intent.query, sourceUrl: sourceUrl, items: [], error: code },
     };
   }
 }

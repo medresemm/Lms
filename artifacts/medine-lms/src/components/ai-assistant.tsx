@@ -444,6 +444,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
     : external
       ? 'Xarici rejim: yazdığınızı yalnız Şamilə kitabxanasında və/və ya Dorar hədis bazasında axtarıram. LMS məlumatlarına baxılmır. Mətnlər burada göstərilir, saytda saxlanmır.'
       : 'Daxili rejim: tələbələr, müəllimlər, dərslər, müraciətlər, tapşırıqlar, testlər və elanlar üzrə yalnız LMS bazasından cavab verirəm — hərf səhvlərini də başa düşürəm.';
+  // Telefon və planşetdə (≤1024px) kartlar bir sətirlik, üfüqi sürüşən kiçik düymələrdir; yalnız böyük ekranda iri kartlar.
   const chipRow = 'flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
   return (
@@ -541,7 +542,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
 
       <div className="relative z-10 shrink-0 space-y-2 px-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-1 sm:space-y-3 sm:px-5 sm:pb-5 md:px-7">
         {hasChat && lastSuggestions.length > 0 && !sending && (
-          <div className={`${chipRow} sm:flex-wrap sm:overflow-visible`}>
+          <div className={`${chipRow} min-[1025px]:flex-wrap min-[1025px]:overflow-visible`}>
             {lastSuggestions.map((suggestion) => (
               <button key={suggestion} type="button" onClick={() => void send(suggestion)} dir="auto" className="shrink-0 whitespace-nowrap rounded-full border border-[#e3c27a]/35 bg-white/[.03] px-3 py-1.5 text-xs font-semibold text-[#f3dca6] transition hover:border-[#e3c27a]/80 hover:bg-[#e3c27a]/10">
                 {suggestion}
@@ -571,15 +572,15 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
             </button>
           </div>
         </form>
-        <div className={`${chipRow} sm:grid sm:gap-2.5 sm:overflow-visible sm:pb-0 sm:grid-cols-5`} data-testid="ai-tiles">
+        <div className={`${chipRow} min-[1025px]:grid min-[1025px]:gap-2.5 min-[1025px]:overflow-visible min-[1025px]:pb-0 min-[1025px]:grid-cols-5`} data-testid="ai-tiles">
           {tiles.map(({ label, hint, prompt, Icon, fill }) => (
             <button key={label} type="button" onClick={() => (fill ? prefill(prompt) : void send(prompt))} disabled={sending} title={hint}
-              className="group flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-[#e3c27a]/25 bg-white/[.03] px-3 py-1.5 text-center transition hover:border-[#e3c27a]/60 hover:bg-[#e3c27a]/[.06] disabled:opacity-50 sm:flex-col sm:gap-0 sm:whitespace-normal sm:rounded-2xl sm:border-[#e3c27a]/20 sm:px-3 sm:py-3"
+              className="group flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-[#e3c27a]/25 bg-white/[.03] px-3 py-1.5 text-center transition hover:border-[#e3c27a]/60 hover:bg-[#e3c27a]/[.06] disabled:opacity-50 min-[1025px]:flex-col min-[1025px]:gap-0 min-[1025px]:whitespace-normal min-[1025px]:rounded-2xl min-[1025px]:border-[#e3c27a]/20 min-[1025px]:px-3 min-[1025px]:py-3"
               data-testid={`button-ai-tile-${label}`}>
-              <Icon size={14} className="sm:hidden" style={{ color: gold }} />
-              <Icon size={20} className="hidden sm:block" style={{ color: gold }} />
-              <span className="text-[11px] font-bold text-[#f4ead5] sm:mt-2 sm:text-xs">{label}</span>
-              <span dir="auto" className="mt-0.5 hidden text-[10px] leading-4 text-[#f4ead5]/55 sm:block">{hint}</span>
+              <Icon size={14} className="min-[1025px]:hidden" style={{ color: gold }} />
+              <Icon size={20} className="hidden min-[1025px]:block" style={{ color: gold }} />
+              <span className="text-[11px] font-bold text-[#f4ead5] min-[1025px]:mt-2 min-[1025px]:text-xs">{label}</span>
+              <span dir="auto" className="mt-0.5 hidden text-[10px] leading-4 text-[#f4ead5]/55 min-[1025px]:block">{hint}</span>
             </button>
           ))}
         </div>

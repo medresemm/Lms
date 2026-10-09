@@ -3407,24 +3407,8 @@ const individualPermissionRole = (user: AdminUser): IndividualPermissionRole | n
 const adminTabButtonClass = (value: string, active: boolean) =>
   `focus-ring inline-flex max-w-full items-center gap-2 whitespace-normal rounded-full border px-3.5 py-2 text-left text-xs font-bold transition ${active ? 'border-transparent bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]'}`;
 
-const adminTileTones: Record<string, string> = {
-  announcement: 'bg-[#fff4e8] text-[#c56a1a]',
-  'student-notifications': 'bg-[#eef6ff] text-[#2f6fad]',
-  article: 'bg-[#eef8f1] text-[#2f7d4f]',
-  benefit: 'bg-[#f4f0ff] text-[#6d4bb5]',
-  'student-management': 'bg-[#fff0f4] text-[#b14b6c]',
-  application: 'bg-[#fff1f5] text-[#c25478]',
-  exams: 'bg-[#eef4ff] text-[#3d63b8]',
-  'course-content': 'bg-[#eef8f3] text-[#2f7a62]',
-  users: 'bg-[#f6f0ff] text-[#6a4cae]',
-  'course-activation': 'bg-[#f3f8ee] text-[#4d7a32]',
-  statistics: 'bg-[#fff6ea] text-[#b86a22]',
-  'audit-history': 'bg-[#eef3fb] text-[#3e5f93]',
-  'graduation-certificates': 'bg-[#fff6ee] text-[#b86a22]',
-};
-
-const adminTileClass = (value: string, active: boolean) =>
-  `focus-ring flex min-h-[92px] flex-col items-start justify-between gap-3 rounded-2xl px-3.5 py-3 text-left text-xs font-bold transition hover:-translate-y-0.5 ${adminTileTones[value] ?? 'bg-[hsl(var(--muted))] text-[hsl(var(--primary))]'} ${active ? 'ring-2 ring-[hsl(var(--primary))]' : ''}`;
+const adminTileClass = (_value: string, active: boolean) =>
+  `focus-ring flex min-h-[92px] flex-col items-start justify-between gap-3 rounded-2xl border px-3.5 py-3 text-left text-xs font-bold text-[hsl(var(--primary))] transition hover:-translate-y-0.5 ${active ? 'border-[hsl(var(--primary))] bg-[hsl(var(--accent)/.55)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] hover:bg-[hsl(var(--muted))]'}`;
 
 function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: boolean }) {
   const usersQuery = useGetAdminUsers({ query: { queryKey: getGetAdminUsersQueryKey() } });

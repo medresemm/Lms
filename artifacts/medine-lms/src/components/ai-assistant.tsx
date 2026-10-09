@@ -34,10 +34,10 @@ const studentTiles: Tile[] = [
 ];
 
 const adminTiles: Tile[] = [
-  { label: 'Tələbə axtar', hint: 'Ad, e-poçt və ya T-nömrə ilə', prompt: 'Tələbə axtar', Icon: Search },
-  { label: 'Kurs siyahısı', hint: 'Kurslar, müəllimlər, semestrlər', prompt: 'Kurs siyahısı', Icon: BookOpen },
-  { label: 'Müəllim cədvəli', hint: 'Aktiv semestrlər üzrə dərslər', prompt: 'Müəllim cədvəli', Icon: CalendarDays },
-  { label: 'Statistika', hint: 'Semestrlər üzrə tələbə sayı', prompt: 'Tələbə statistikası', Icon: UsersRound },
+  { label: 'Tələbə axtar', hint: 'Ad, e-poçt, telefon, T-nömrə — səhvlə yazsanız da', prompt: 'Tələbə axtar', Icon: Search },
+  { label: 'Qayıbı çox olanlar', hint: 'Davamiyyət və zəif qiymət filtrləri', prompt: 'Qayıbı çox olanlar', Icon: CalendarDays },
+  { label: 'Müraciətlər', hint: 'Gözləyən müraciətlər və statuslar', prompt: 'Neçə müraciət gözləyir?', Icon: ClipboardList },
+  { label: 'Ümumi statistika', hint: 'Tələbə, müəllim, tapşırıq, test sayları', prompt: 'Ümumi statistika', Icon: UsersRound },
   { label: 'Paneldən istifadə', hint: 'Bölmələr və düymələr üzrə bələdçi', prompt: 'Admin paneldən necə istifadə edim?', Icon: Compass },
 ];
 
@@ -200,7 +200,7 @@ export function AiAssistant({ mode, backHref, backLabel }: { mode: AiAssistantMo
             </div>
             <p className="mt-5 text-xs leading-5 text-[#f4ead5]/55">
               {mode === 'admin'
-                ? 'Tələbə məlumatları, kurslar və müəllim cədvəli üzrə LMS bazasından cavab verirəm.'
+                ? 'Tələbələr, müəllimlər, kurslar, müraciətlər, tapşırıqlar, testlər və elanlar üzrə LMS bazasından cavab verirəm — hərf səhvlərini də başa düşürəm.'
                 : 'Yalnız sizin dərsləriniz, cədvəliniz, tapşırıqlarınız və nəticələriniz əsasında cavab verirəm.'}
             </p>
           </div>

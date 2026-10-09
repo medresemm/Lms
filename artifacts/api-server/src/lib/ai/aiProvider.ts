@@ -138,11 +138,142 @@ export interface AiCourseInfo {
   lessons: AiLesson[];
 }
 
+/** Admin axtarışı üçün tələbə sətri (cari semestr üzrə toplanmış göstəricilərlə). */
+export interface AiRosterStudent extends AiStudentMatch {
+  program: string | null;
+  arabicLevel: string | null;
+  scheduleApproved: boolean;
+  /** Cari semestr qiymətlərinin ortalaması, 100 ballıq şkala ilə. */
+  gradeAverage: number | null;
+  gradedCourses: number;
+  /** Cari semestrdə «qayıb» qeydlərinin sayı. */
+  absences: number;
+  /** Cari semestrdə təhvil verilməmiş tapşırıqlar. */
+  missingAssignments: Array<{ title: string; courseTitle: string; dueAt: Date; overdue: boolean }>;
+  /** Cari semestrdə oxuduğu fənlər və müəllim qrupları. */
+  courseTitles: string[];
+  teacherNames: string[];
+}
+
+export interface AiTeacher {
+  clerkUserId: string;
+  name: string;
+  /** Yalnız istifadəçi idarəetməsi icazəsi olanlara göstərilir. */
+  email: string | null;
+  role: string;
+  lessons: AiLesson[];
+  studentCount: number;
+}
+
+export interface AiStaffMember {
+  clerkUserId: string;
+  name: string;
+  email: string | null;
+  role: string;
+}
+
+export interface AiApplication {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  username: string;
+  arabicLevel: string;
+  status: string;
+  rejectionReason: string | null;
+  createdAt: string;
+  deleted: boolean;
+}
+
+export interface AiSubjectRequest {
+  studentName: string;
+  studentNumber: number | null;
+  courseTitle: string;
+  termNumber: number;
+  status: string;
+  reason: string;
+  createdAt: string;
+}
+
+export interface AiAssignmentOverview {
+  id: number;
+  courseTitle: string;
+  title: string;
+  termNumber: number;
+  teacherName: string | null;
+  dueAt: Date;
+  maxScore: number;
+  status: string;
+  submitted: number;
+  graded: number;
+  pendingReview: number;
+  averageScore: number | null;
+  missingStudents: Array<{ name: string; studentNumber: number }>;
+}
+
+export interface AiExamOverview {
+  id: number;
+  courseTitle: string;
+  title: string;
+  termNumber: number;
+  isOnboarding: boolean;
+  status: string;
+  results: Array<{ studentName: string; studentNumber: number | null; percentage: number; correctCount: number; totalQuestions: number; submittedAt: Date | string | null }>;
+}
+
+export interface AiNoticeItem {
+  kind: "announcement" | "notification";
+  title: string;
+  body: string;
+  date: string | null;
+  target: string | null;
+}
+
+export interface AiExcuse {
+  studentName: string;
+  studentNumber: number | null;
+  courseTitle: string;
+  attendanceDate: string | null;
+  status: string;
+  reason: string;
+  createdAt: string;
+}
+
+export interface AiQuestionItem {
+  title: string;
+  answered: boolean;
+  answeredByName: string | null;
+  createdAt: string;
+}
+
 export interface AdminAiContext {
   mode: "admin";
   /** İstifadəçinin rol icazələri (sahib üçün hamısı). */
   permissions: ReadonlySet<string>;
   isOwner: boolean;
+  /** Clerk rolu (owner, owner_assistant, admin, teacher, supervisor). */
+  role: string;
+  /** Aktiv tələbələr və cari semestr göstəriciləri («students» icazəsi). */
+  roster(): Promise<AiRosterStudent[]>;
+  /** Müəllimlər, dərsləri və tələbə sayı («schedule» icazəsi; yoxdursa null). */
+  teachers(): Promise<AiTeacher[] | null>;
+  /** Bütün heyət üzvləri və e-poçtları (sahib/sahib köməkçisi + «userRoleManagement»; yoxdursa null). */
+  staff(): Promise<AiStaffMember[] | null>;
+  /** Qəbul müraciətləri («applications»; yoxdursa null). */
+  applications(): Promise<AiApplication[] | null>;
+  /** Fəndən imtina müraciətləri («applications»; yoxdursa null). */
+  subjectRequests(): Promise<AiSubjectRequest[] | null>;
+  /** Tapşırıqlar və təhvil statistikası («assignments»; yoxdursa null). */
+  assignmentsOverview(): Promise<AiAssignmentOverview[] | null>;
+  /** Testlər və nəticələr. */
+  examsOverview(): Promise<AiExamOverview[]>;
+  /** Elanlar və tələbə bildirişləri («announcements»; yoxdursa null). */
+  notices(): Promise<AiNoticeItem[] | null>;
+  /** Davamiyyət üzrləri («excuses»; yoxdursa null). */
+  excuses(): Promise<AiExcuse[] | null>;
+  /** Sual-cavab bölməsinin sualları (yalnız başlıq və status). */
+  questions(): Promise<AiQuestionItem[]>;
   allStudents(): Promise<AiStudentMatch[]>;
   studentDetails(profileId: number): Promise<AiStudentDetails | null>;
   courses(): Promise<AiCourseInfo[]>;

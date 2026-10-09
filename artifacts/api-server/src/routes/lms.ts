@@ -425,7 +425,7 @@ export async function getClerkUser(userId: string) {
   return request;
 }
 
-async function getClerkDirectory(): Promise<ClerkUser[]> {
+export async function getClerkDirectory(): Promise<ClerkUser[]> {
   if (clerkDirectoryCache && clerkDirectoryCache.expiresAt > Date.now()) return clerkDirectoryCache.value;
   if (clerkDirectoryRequest) return clerkDirectoryRequest;
 
@@ -478,7 +478,7 @@ export async function userIsSystemOwner(userId: string, clerkUser?: Awaited<Retu
   return normalizedEmail(user?.primaryEmailAddress?.emailAddress) === ownerEmail;
 }
 
-function roleForClerkUser(clerkUser: NonNullable<Awaited<ReturnType<typeof getClerkUser>>>) {
+export function roleForClerkUser(clerkUser: NonNullable<Awaited<ReturnType<typeof getClerkUser>>>) {
   const ownerEmail = normalizedEmail(process.env.SYSTEM_OWNER_EMAIL);
   if (ownerEmail && normalizedEmail(clerkUser.primaryEmailAddress?.emailAddress) === ownerEmail) return "owner" as const;
   return metadataRole(clerkUser.publicMetadata) ?? "none" as const;
@@ -1019,7 +1019,7 @@ function toResource(row: typeof resourcesTable.$inferSelect) {
   };
 }
 
-function clerkDisplayName(user: NonNullable<Awaited<ReturnType<typeof getClerkUser>>>) {
+export function clerkDisplayName(user: NonNullable<Awaited<ReturnType<typeof getClerkUser>>>) {
   return [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || "Müəllim";
 }
 

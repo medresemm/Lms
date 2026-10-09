@@ -3552,6 +3552,47 @@ router.get("/admin/teacher-courses", requireTeacher, async (req, res, next) => {
   }
 });
 
+async function notifyStudentsAboutCourseLinks(courseId: number, courseTitle: string, labels: string[], senderId: string, updated = false) {
+  if (!labels.length) return;
+  const resources = await db.select({ termNumber: resourcesTable.termNumber }).from(resourcesTable).where(eq(resourcesTable.courseId, courseId));
+  const terms = [...new Set(resources.map((resource) => resource.termNumber))];
+  if (!terms.length) return;
+  const students = await db.select({ profile: studentAcademicProfilesTable }).from(studentAcademicProfilesTable)
+    .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
+    .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)));
+  const inTerm = students.filter((student) => terms.includes(currentTermNumber(student.profile)));
+  if (!inTerm.length) return;
+  const removed = await db.select({ profileId: studentCourseSelectionsTable.profileId }).from(studentCourseSelectionsTable).where(and(
+    eq(studentCourseSelectionsTable.courseId, courseId),
+    eq(studentCourseSelectionsTable.selected, false),
+    inArray(studentCourseSelectionsTable.termNumber, terms),
+    inArray(studentCourseSelectionsTable.profileId, inTerm.map((student) => student.profile.id)),
+  ));
+  const removedIds = new Set(removed.map((row) => row.profileId));
+  const targetProfileIds = inTerm.filter((student) => !removedIds.has(student.profile.id)).map((student) => student.profile.id);
+  if (!targetProfileIds.length) return;
+  const verb = updated ? "yeniləndi" : "əlavə olundu";
+  await db.insert(studentNotificationsTable).values({
+    title: updated ? "Dərs linki yeniləndi" : "Dərs linki əlavə olundu",
+    body: `«${courseTitle}» dərsi üçün ${labels.join(", ")} ${verb}. Dərs səhifəsindən qoşula bilərsiniz.`,
+    targetTerms: [],
+    targetProfileIds,
+    destination: "home",
+    senderClerkUserId: senderId,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+function addedCourseLinkLabels(course: { telegramUrl: string | null; zoomUrl: string | null; googleMeetUrl: string | null; lessonUrl: string | null }) {
+  const fields = [
+    [course.telegramUrl, "Telegram"],
+    [course.zoomUrl, "Zoom"],
+    [course.googleMeetUrl, "Google Meet"],
+    [course.lessonUrl, "Dərs linki"],
+  ] as const;
+  return fields.filter(([value]) => Boolean(value?.trim())).map(([, label]) => label);
+}
+
 router.patch("/admin/courses/:courseId", requireTeacher, async (req, res, next) => {
   try {
     const courseId = Number(req.params.courseId);
@@ -3621,6 +3662,11 @@ router.patch("/admin/courses/:courseId", requireTeacher, async (req, res, next) 
       ...(lessonDays !== undefined ? { lessonDays } : {}),
       ...(lessonTime !== undefined ? { lessonTime: lessonTime || null } : {}),
     };
+    const [previousCourse] = await db.select().from(coursesTable).where(eq(coursesTable.id, courseId)).limit(1);
+    if (!previousCourse) {
+      res.status(404).json({ error: "Dərs tapılmadı." });
+      return;
+    }
     const [course] = await db.update(coursesTable)
       .set(update)
       .where(eq(coursesTable.id, courseId))
@@ -3628,6 +3674,27 @@ router.patch("/admin/courses/:courseId", requireTeacher, async (req, res, next) 
     if (!course) {
       res.status(404).json({ error: "Dərs tapılmadı." });
       return;
+    }
+    const linkFields = [
+      ["telegramUrl", "Telegram"],
+      ["zoomUrl", "Zoom"],
+      ["googleMeetUrl", "Google Meet"],
+      ["lessonUrl", "Dərs linki"],
+    ] as const;
+    const addedLabels: string[] = [];
+    const updatedLabels: string[] = [];
+    for (const [key, label] of linkFields) {
+      if (!Object.prototype.hasOwnProperty.call(update, key)) continue;
+      const before = previousCourse[key]?.trim() || "";
+      const after = course[key]?.trim() || "";
+      if (!after || before === after) continue;
+      if (!before) addedLabels.push(label);
+      else updatedLabels.push(label);
+    }
+    if (addedLabels.length || updatedLabels.length) {
+      await notifyStudentsAboutCourseLinks(course.id, course.title, [...addedLabels, ...updatedLabels], teacherClerkUserId, updatedLabels.length > 0 && addedLabels.length === 0).catch((error: unknown) => {
+        req.log.error({ err: error, courseId: course.id }, "Course link notification failed");
+      });
     }
     await recordAuditEvent({
       eventType: "course.updated",
@@ -4161,6 +4228,18 @@ router.post("/admin/resources", requireTeacher, async (req, res, next) => {
       details: { courseId: resource.courseId, kind: resource.kind },
       deduplicationKey: `resource.created:${resource.id}`,
     });
+    if (actorId && resource) {
+      const earlierResources = await db.select({ id: resourcesTable.id }).from(resourcesTable).where(and(eq(resourcesTable.courseId, resource.courseId), ne(resourcesTable.id, resource.id))).limit(1);
+      if (!earlierResources.length) {
+        const [linkedCourse] = await db.select({ title: coursesTable.title, telegramUrl: coursesTable.telegramUrl, zoomUrl: coursesTable.zoomUrl, googleMeetUrl: coursesTable.googleMeetUrl, lessonUrl: coursesTable.lessonUrl }).from(coursesTable).where(eq(coursesTable.id, resource.courseId)).limit(1);
+        const labels = linkedCourse ? addedCourseLinkLabels(linkedCourse) : [];
+        if (linkedCourse && labels.length) {
+          await notifyStudentsAboutCourseLinks(resource.courseId, linkedCourse.title, labels, actorId).catch((error: unknown) => {
+            req.log.error({ err: error, courseId: resource.courseId }, "Course link notification failed");
+          });
+        }
+      }
+    }
      res.status(201).json(resource && (await resourceViews([resource]))[0]);
   } catch (error) {
     next(error);

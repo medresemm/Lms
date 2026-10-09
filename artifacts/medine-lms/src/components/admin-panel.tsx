@@ -4461,18 +4461,6 @@ export function AdminPanel() {
                {tab === 'messages' && <MessageCenter staff />}
                 {tab === 'questions' && <QaCenter canAnswer onUnansweredCountChange={setUnansweredQuestionCount} />}
           </section>
-          <div className="mt-4">
-            <div className="flex items-center justify-between gap-4 rounded-2xl bg-[hsl(var(--primary))] px-5 py-4 text-[hsl(var(--primary-foreground))]">
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/10 text-[hsl(var(--accent))]"><Send size={18} /></span>
-                <div>
-                  <p className="text-sm font-bold">Məzmunu canlı saxla</p>
-                  <p className="mt-1 text-xs leading-5 text-[hsl(var(--primary-foreground)/.7)]">Əlavə etdiyiniz məlumat tələbələrin kabinetində və ana səhifədə görünəcək.</p>
-                </div>
-              </div>
-              <ChevronDown className="-rotate-90 shrink-0 text-[hsl(var(--accent))]" size={18} />
-            </div>
-          </div>
           <div className="mt-4 space-y-4">
             <DailyBenefitList benefits={dailyBenefits} />
             <section className="rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)]">

@@ -140,25 +140,39 @@ function platformForUrl(url: string | null) {
   return 'Onlayn dərs';
 }
 
+function timeForLessonDay(lessonTime: string | null | undefined, day: string) {
+  if (!lessonTime) return null;
+  if (lessonTime.startsWith('{')) {
+    try {
+      const map = JSON.parse(lessonTime) as Record<string, string>;
+      return map[day] && /^\d{2}:\d{2}$/.test(map[day]) ? map[day] : null;
+    } catch {
+      return null;
+    }
+  }
+  return /^\d{2}:\d{2}$/.test(lessonTime) ? lessonTime : null;
+}
+
 function upcomingLessonDate(resource: LearningResource, now = new Date()) {
-  if (!resource.lessonTime || !resource.lessonDays.length) return null;
+  if (!resource.lessonDays.length) return null;
   const current = academyDateParts(now);
   const base = Date.UTC(current.year, current.month - 1, current.day);
   for (let offset = 0; offset <= 7; offset += 1) {
     const date = new Date(base + offset * 24 * 60 * 60 * 1000);
     const weekday = academyWeekdays[date.getUTCDay()];
-    if (!resource.lessonDays.includes(weekday)) continue;
-    const start = academyStartUtc({ year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() }, resource.lessonTime);
+    const lessonTime = timeForLessonDay(resource.lessonTime, weekday);
+    if (!resource.lessonDays.includes(weekday) || !lessonTime) continue;
+    const start = academyStartUtc({ year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() }, lessonTime);
     if (start >= now) return start;
   }
   return null;
 }
 
 function lessonIsLive(resource: LearningResource, now = new Date()) {
-  if (!resource.lessonTime) return false;
   const current = academyDateParts(now);
-  if (!resource.lessonDays.includes(current.weekday)) return false;
-  const start = academyStartUtc(current, resource.lessonTime);
+  const lessonTime = timeForLessonDay(resource.lessonTime, current.weekday);
+  if (!lessonTime || !resource.lessonDays.includes(current.weekday)) return false;
+  const start = academyStartUtc(current, lessonTime);
   return start.getTime() <= now.getTime() && now.getTime() < start.getTime() + 60 * 60 * 1000;
 }
 
@@ -537,7 +551,7 @@ function UpcomingLessons({ resources, courseNames, onJoin }: { resources: Learni
   const upcoming = resources.map((resource) => ({ resource, date: upcomingLessonDate(resource) })).filter((item): item is { resource: LearningResource; date: Date } => Boolean(item.date)).sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 4);
   return <section className="mt-4 rounded-xl border border-[hsl(var(--accent)/.45)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-upcoming-lessons">
     <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">Yaxınlaşan tədbirlər / dərslər</p><h4 className="mt-1 font-serif text-xl text-[hsl(var(--primary))]">Növbəti dərslər</h4></div><Clock3 size={19} className="text-[hsl(var(--secondary-foreground))]" /></div>
-    {upcoming.length ? <div className="mt-3 space-y-2">{upcoming.map(({ resource, date }) => <div key={`${resource.id}-${date.toISOString()}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[hsl(var(--card))] px-3 py-3"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{academyDateKey(date) === academyDateKey() ? 'Bu gün' : formatAcademyDateTime(date)}, {resource.lessonTime} — {courseNames.get(resource.courseId) ?? resource.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Akademiya vaxtı: {formatAcademyDateTime(date)} · Sizin vaxtınız: {formatLocalTime(date)} · {platformForUrl(resource.url)}</p></div>{resource.url ? <button type="button" onClick={() => onJoin(resource.url!)} className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-[10px] font-black text-[hsl(var(--primary-foreground))]" data-testid={`button-join-lesson-${resource.id}`}>Dərsə qoşul</button> : <span className="rounded-lg bg-[hsl(var(--muted))] px-3 py-2 text-[10px] font-bold text-[hsl(var(--muted-foreground))]">Link yoxdur</span>}</div>)}</div> : <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Yaxınlaşan dərs cədvələ əlavə edilməyib.</p>}
+    {upcoming.length ? <div className="mt-3 space-y-2">{upcoming.map(({ resource, date }) => <div key={`${resource.id}-${date.toISOString()}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[hsl(var(--card))] px-3 py-3"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{academyDateKey(date) === academyDateKey() ? 'Bu gün' : formatAcademyDateTime(date)} — {courseNames.get(resource.courseId) ?? resource.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Akademiya vaxtı: {formatAcademyDateTime(date)} · Sizin vaxtınız: {formatLocalTime(date)} · {platformForUrl(resource.url)}</p></div>{resource.url ? <button type="button" onClick={() => onJoin(resource.url!)} className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-[10px] font-black text-[hsl(var(--primary-foreground))]" data-testid={`button-join-lesson-${resource.id}`}>Dərsə qoşul</button> : <span className="rounded-lg bg-[hsl(var(--muted))] px-3 py-2 text-[10px] font-bold text-[hsl(var(--muted-foreground))]">Link yoxdur</span>}</div>)}</div> : <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Yaxınlaşan dərs cədvələ əlavə edilməyib.</p>}
   </section>;
 }
 
@@ -560,7 +574,7 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
     day, label,
     lessons: termResources
       .filter((resource) => resource.lessonDays.some((lessonDay) => lessonDay === day))
-      .sort((a, b) => (a.lessonTime ?? '99:99').localeCompare(b.lessonTime ?? '99:99')),
+      .sort((a, b) => (timeForLessonDay(a.lessonTime, day) ?? '99:99').localeCompare(timeForLessonDay(b.lessonTime, day) ?? '99:99')),
   }));
   const loadExcuses = async () => {
     if (excusesLoaded) { setShowExcuses((current) => !current); return; }
@@ -616,7 +630,7 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-7">
                   {scheduleByDay.map(({ day, label, lessons }) => { const live = lessons.some((lesson) => lessonIsLive(lesson)); return <button key={day} type="button" onClick={() => setSelectedScheduleDay(day)} className={`focus-ring relative rounded-xl border px-2 py-3 text-center transition hover:-translate-y-0.5 ${day === (selectedScheduleDay ?? todayKey) ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent))] text-[hsl(var(--primary))] shadow-[0_4px_0_hsl(37_83%_52%)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]'}`} aria-expanded={day === (selectedScheduleDay ?? todayKey)} data-testid={`button-schedule-day-${day}`}><span className="block text-xs font-black">{label}</span><span className="mt-1 block text-[10px] font-semibold opacity-70">{lessons.length ? `${lessons.length} dərs` : 'Dərs yoxdur'}</span>{live && <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[hsl(var(--destructive))] px-1.5 py-0.5 text-[9px] font-black text-white"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> CANLI</span>}</button>; })}
                 </div>
-                  {(() => { const selected = scheduleByDay.find(({ day }) => day === (selectedScheduleDay ?? todayKey)) ?? scheduleByDay[0]; return <div className="mt-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid="section-selected-daily-schedule"><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--primary))]">{selected.label} günü</p>{selected.lessons.length ? <div className="mt-3 space-y-2">{selected.lessons.map((lesson) => <div key={lesson.id} className="space-y-1.5"><button type="button" onClick={() => onOpenCourse?.(lesson.courseId, lesson.teacherName)} className="focus-ring flex w-full items-start justify-between gap-3 rounded-lg bg-[hsl(var(--muted)/.45)] px-3 py-3 text-left transition hover:-translate-y-0.5 hover:bg-[hsl(var(--accent)/.2)]" data-testid={`button-open-scheduled-lesson-${lesson.id}`}><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{courseNames.get(lesson.courseId) ?? lesson.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Müəllim: {lesson.teacherName || 'Müəllim təyin edilməyib'}</p><p className="mt-2 text-[10px] font-bold text-[hsl(var(--secondary-foreground))]">PDF və bütün linklərə bax</p></div><span className="shrink-0 rounded-lg bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-sm font-black text-[hsl(var(--secondary-foreground))]">{lesson.lessonTime ?? '—'}</span></button>{selected.day === todayKey && lesson.lessonTime && <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/lessons/${lesson.id}/join`} target="_blank" rel="noreferrer" className={`focus-ring flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-black ${lessonIsLive(lesson) ? 'bg-[hsl(var(--destructive))] text-white' : 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]'}`} title="Qoşulma avtomatik davamiyyət üçün qeyd olunur" data-testid={`link-join-lesson-${lesson.id}`}><Video size={14} /> {lessonIsLive(lesson) ? 'Canlı dərsə qoşul' : 'Dərsə qoşul'}</a>}</div>)}</div> : <div className="mt-4 flex flex-col items-center rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] px-4 py-5 text-center"><div className="grid h-10 w-10 place-items-center rounded-full bg-[hsl(var(--accent)/.28)] text-[hsl(var(--secondary-foreground))]"><Coffee size={19} strokeWidth={1.8} /></div><p className="mt-3 text-sm font-semibold text-[hsl(var(--primary))]">Bu gün üçün dərs planlaşdırılmayıb.</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">İstirahət edə bilərsiniz!</p></div>}</div>; })()}
+                  {(() => { const selected = scheduleByDay.find(({ day }) => day === (selectedScheduleDay ?? todayKey)) ?? scheduleByDay[0]; return <div className="mt-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid="section-selected-daily-schedule"><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--primary))]">{selected.label} günü</p>{selected.lessons.length ? <div className="mt-3 space-y-2">{selected.lessons.map((lesson) => <div key={lesson.id} className="space-y-1.5"><button type="button" onClick={() => onOpenCourse?.(lesson.courseId, lesson.teacherName)} className="focus-ring flex w-full items-start justify-between gap-3 rounded-lg bg-[hsl(var(--muted)/.45)] px-3 py-3 text-left transition hover:-translate-y-0.5 hover:bg-[hsl(var(--accent)/.2)]" data-testid={`button-open-scheduled-lesson-${lesson.id}`}><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{courseNames.get(lesson.courseId) ?? lesson.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Müəllim: {lesson.teacherName || 'Müəllim təyin edilməyib'}</p><p className="mt-2 text-[10px] font-bold text-[hsl(var(--secondary-foreground))]">PDF və bütün linklərə bax</p></div><span className="shrink-0 rounded-lg bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-sm font-black text-[hsl(var(--secondary-foreground))]">{timeForLessonDay(lesson.lessonTime, selected.day) ?? '—'}</span></button>{selected.day === todayKey && timeForLessonDay(lesson.lessonTime, selected.day) && <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/lessons/${lesson.id}/join`} target="_blank" rel="noreferrer" className={`focus-ring flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-black ${lessonIsLive(lesson) ? 'bg-[hsl(var(--destructive))] text-white' : 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]'}`} title="Qoşulma avtomatik davamiyyət üçün qeyd olunur" data-testid={`link-join-lesson-${lesson.id}`}><Video size={14} /> {lessonIsLive(lesson) ? 'Canlı dərsə qoşul' : 'Dərsə qoşul'}</a>}</div>)}</div> : <div className="mt-4 flex flex-col items-center rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] px-4 py-5 text-center"><div className="grid h-10 w-10 place-items-center rounded-full bg-[hsl(var(--accent)/.28)] text-[hsl(var(--secondary-foreground))]"><Coffee size={19} strokeWidth={1.8} /></div><p className="mt-3 text-sm font-semibold text-[hsl(var(--primary))]">Bu gün üçün dərs planlaşdırılmayıb.</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">İstirahət edə bilərsiniz!</p></div>}</div>; })()}
               </div>}
             </div>
             )}
@@ -1295,7 +1309,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
               <Check size={16} className="text-[hsl(var(--secondary-foreground))]" />
             </div>
             <div className="mt-3 space-y-2">
-              {notificationResourcesQuery.data?.map((resource) => ({ resource, date: upcomingLessonDate(resource) })).filter((item): item is { resource: LearningResource; date: Date } => Boolean(item.date)).sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 2).map(({ resource, date }) => <div key={`notice-lesson-${resource.id}`} className="rounded-xl bg-[hsl(var(--accent)/.2)] px-3 py-2.5"><p className="text-xs font-bold text-[hsl(var(--primary))]">Yaxınlaşan dərs</p><p className="mt-1 text-xs text-[hsl(var(--primary))]">{date.toLocaleDateString('az-AZ', { weekday: 'short', day: 'numeric', month: 'short' })}, {resource.lessonTime} · {notificationCourseNames.get(resource.courseId) ?? resource.title}</p></div>)}
+              {notificationResourcesQuery.data?.map((resource) => ({ resource, date: upcomingLessonDate(resource) })).filter((item): item is { resource: LearningResource; date: Date } => Boolean(item.date)).sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 2).map(({ resource, date }) => <div key={`notice-lesson-${resource.id}`} className="rounded-xl bg-[hsl(var(--accent)/.2)] px-3 py-2.5"><p className="text-xs font-bold text-[hsl(var(--primary))]">Yaxınlaşan dərs</p><p className="mt-1 text-xs text-[hsl(var(--primary))]">{date.toLocaleDateString('az-AZ', { weekday: 'short', day: 'numeric', month: 'short' })}, {date.toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' })} · {notificationCourseNames.get(resource.courseId) ?? resource.title}</p></div>)}
               <div className="rounded-xl bg-[hsl(var(--muted)/.55)] px-3 py-2.5"><p className="text-xs font-bold text-[hsl(var(--primary))]">Tapşırıq son tarixləri</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hazırda son tarixli tapşırıq yoxdur.</p></div>
               {resolvedAnnouncements.slice(0, 3).map((announcement) => <div key={`notice-announcement-${announcement.id}`} className="rounded-xl bg-[hsl(var(--muted)/.55)] px-3 py-2.5"><p className="text-xs font-bold text-[hsl(var(--primary))]">Akademiya elanı</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{announcement.title}</p></div>)}
               {!notificationResourcesQuery.data?.length && !resolvedAnnouncements.length && <p className="text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hazırda yeni bildiriş yoxdur.</p>}

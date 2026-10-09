@@ -24,6 +24,19 @@ export function isLessonTime(value: unknown): value is string {
   return typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 
+export function lessonTimeForDay(stored: string | null | undefined, day: string): string | null {
+  if (!stored) return null;
+  if (stored.startsWith("{")) {
+    try {
+      const map = JSON.parse(stored) as Record<string, unknown>;
+      return isLessonTime(map[day]) ? map[day] : null;
+    } catch {
+      return null;
+    }
+  }
+  return isLessonTime(stored) ? stored : null;
+}
+
 /** Akademiya (Bakı) vaxtı ilə bugünkü tarix və həftə günü. */
 export function academyToday(now = new Date()) {
   const shifted = new Date(now.getTime() + ACADEMY_UTC_OFFSET_HOURS * 60 * 60 * 1000);
@@ -49,10 +62,10 @@ export type LessonSchedule = { lessonDays: string[]; lessonTime: string | null }
  * başlamadan 15 dəqiqə əvvəldən 3 saat sonrasına qədər qeyd olunur.
  */
 export function joinableSession(schedule: LessonSchedule, now = new Date()) {
-  if (!isLessonTime(schedule.lessonTime) || !schedule.lessonDays.length) return { ok: false as const, reason: "no_schedule" as const };
   const today = academyToday(now);
-  if (!schedule.lessonDays.includes(today.weekday)) return { ok: false as const, reason: "not_today" as const };
-  const start = lessonStartUtc(today.date, schedule.lessonTime);
+  const lessonTime = lessonTimeForDay(schedule.lessonTime, today.weekday);
+  if (!lessonTime || !schedule.lessonDays.includes(today.weekday)) return { ok: false as const, reason: !lessonTime || !schedule.lessonDays.length ? "no_schedule" as const : "not_today" as const };
+  const start = lessonStartUtc(today.date, lessonTime);
   const time = now.getTime();
   if (time < start - JOIN_WINDOW_EARLY_MINUTES * 60_000) return { ok: false as const, reason: "too_early" as const, start };
   if (time > start + JOIN_WINDOW_LATE_MINUTES * 60_000) return { ok: false as const, reason: "too_late" as const, start };
@@ -62,14 +75,16 @@ export function joinableSession(schedule: LessonSchedule, now = new Date()) {
 
 /** Son N gün ərzində (bu gün daxil, başlamış) planlaşdırılmış dərs tarixləri, yenidən köhnəyə. */
 export function recentSessionDates(schedule: LessonSchedule, now = new Date(), lookbackDays = SESSION_LOOKBACK_DAYS) {
-  if (!isLessonTime(schedule.lessonTime) || !schedule.lessonDays.length) return [];
+  if (!schedule.lessonTime || !schedule.lessonDays.length) return [];
   const today = academyToday(now).date;
   const [year, month, day] = today.split("-").map(Number);
   const dates: string[] = [];
   for (let offset = 0; offset <= lookbackDays; offset += 1) {
     const date = new Date(Date.UTC(year, month - 1, day - offset)).toISOString().slice(0, 10);
-    if (!schedule.lessonDays.includes(weekdayOf(date))) continue;
-    if (lessonStartUtc(date, schedule.lessonTime) - JOIN_WINDOW_EARLY_MINUTES * 60_000 > now.getTime()) continue;
+    const weekday = weekdayOf(date);
+    const lessonTime = lessonTimeForDay(schedule.lessonTime, weekday);
+    if (!schedule.lessonDays.includes(weekday) || !lessonTime) continue;
+    if (lessonStartUtc(date, lessonTime) - JOIN_WINDOW_EARLY_MINUTES * 60_000 > now.getTime()) continue;
     dates.push(date);
   }
   return dates;

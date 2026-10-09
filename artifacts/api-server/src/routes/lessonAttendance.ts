@@ -21,9 +21,9 @@ import {
   academyToday,
   buildSessionRows,
   isIsoDate,
-  isLessonTime,
   joinableSession,
   lessonStartUtc,
+  lessonTimeForDay,
   parsePlatform,
   recentSessionDates,
   resolveConfirmation,
@@ -198,8 +198,9 @@ async function viewerAccess(userId: string) {
 }
 
 function sessionIsOpenForReview(resource: ResourceRow, date: string, now = new Date()) {
-  if (!isIsoDate(date) || !isLessonTime(resource.lessonTime) || !resource.lessonDays.includes(weekdayOf(date))) return false;
-  return lessonStartUtc(date, resource.lessonTime) - JOIN_WINDOW_EARLY_MINUTES * 60_000 <= now.getTime();
+  const lessonTime = lessonTimeForDay(resource.lessonTime, weekdayOf(date));
+  if (!isIsoDate(date) || !lessonTime || !resource.lessonDays.includes(weekdayOf(date))) return false;
+  return lessonStartUtc(date, lessonTime) - JOIN_WINDOW_EARLY_MINUTES * 60_000 <= now.getTime();
 }
 
 async function sessionDetail(resource: ResourceRow, date: string) {
@@ -260,7 +261,7 @@ router.get("/admin/attendance/lesson-sessions", requireTeacher, async (req, res,
     const userId = getAuth(req).userId!;
     const access = await viewerAccess(userId);
     const resources = (await db.select().from(resourcesTable))
-      .filter((resource) => isLessonTime(resource.lessonTime) && resource.lessonDays.length && (access.all || resource.teacherClerkUserId === userId));
+      .filter((resource) => resource.lessonDays.some((day) => lessonTimeForDay(resource.lessonTime, day)) && (access.all || resource.teacherClerkUserId === userId));
     if (!resources.length) { res.json([]); return; }
     const since = (() => {
       const [year, month, day] = academyToday().date.split("-").map(Number);

@@ -3,7 +3,7 @@ import { clerkClient, getAuth } from "@clerk/express";
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { getApplicationWindowStatus, type ApplicationWindow } from "../lib/applicationWindow.js";
-import { isMeetingUrl } from "../lib/lessonAttendance.js";
+import { isMeetingUrl, lessonTimeForDay } from "../lib/lessonAttendance.js";
 import {
   applicationUploadIntentsTable,
   applicationSettingsTable,
@@ -1201,6 +1201,20 @@ function validateTermNumber(value: number) {
   return !Number.isInteger(value) || value < 1 || value > 8
     ? "Semestr 1 ilə 8 arasında tam ədəd olmalıdır."
     : null;
+}
+
+function storedLessonTime(days: string[], rawTimes: unknown, fallback: unknown) {
+  const valid = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+  const fromBody = rawTimes && typeof rawTimes === "object" ? rawTimes as Record<string, unknown> : null;
+  const map: Record<string, string> = {};
+  for (const day of days) {
+    const candidate = fromBody && typeof fromBody[day] === "string" ? fromBody[day].trim() : typeof fallback === "string" ? fallback.trim() : "";
+    if (!valid.test(candidate)) return null;
+    map[day] = candidate;
+  }
+  const times = Object.values(map);
+  if (!times.length) return null;
+  return times.every((time) => time === times[0]) ? times[0] : JSON.stringify(map);
 }
 
 function isValidIsoDate(value: string) {
@@ -3171,7 +3185,7 @@ router.post("/student/lesson-joins", requireApprovedStudent, async (req, res, ne
     const [resource] = await db.select().from(resourcesTable).where(and(
       eq(resourcesTable.id, input.resourceId), eq(resourcesTable.termNumber, input.termNumber),
     )).limit(1);
-    if (!resource || !resource.lessonTime || !resource.lessonDays.length) {
+    if (!resource || !resource.lessonDays.length) {
       res.status(400).json({ error: "Bu resurs üçün canlı dərs cədvəli yoxdur." }); return;
     }
     if (!await studentMayAttendResource(profile.id, resource)) {
@@ -3179,11 +3193,12 @@ router.post("/student/lesson-joins", requireApprovedStudent, async (req, res, ne
       return;
     }
     const session = bakuToday();
-    if (!resource.lessonDays.includes(session.weekday)) {
+    const lessonTime = lessonTimeForDay(resource.lessonTime, session.weekday);
+    if (!lessonTime || !resource.lessonDays.includes(session.weekday)) {
       res.status(400).json({ error: "Bu gün üçün planlaşdırılmış dərs yoxdur." }); return;
     }
     const now = new Date();
-    const start = scheduledLessonStartUtc(session.date, resource.lessonTime);
+    const start = scheduledLessonStartUtc(session.date, lessonTime);
     if (now.getTime() < start) {
       res.status(400).json({ error: "Dərs hələ başlamayıb." }); return;
     }
@@ -3929,11 +3944,8 @@ router.post("/admin/schedule-lessons", requireTeacher, async (req, res, next) =>
     }
     const termNumber = Number(req.body?.termNumber);
     const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
-    const lessonDays = Array.isArray(req.body?.lessonDays) ? req.body.lessonDays.filter((day: unknown): day is string => typeof day === "string") : [];
-    const lessonTime = typeof req.body?.lessonTime === "string" ? req.body.lessonTime.trim() : "";
-    const validLessonDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-    if (validateTermNumber(termNumber) || !title || !lessonDays.length || lessonDays.some((day: string) => !validLessonDays.includes(day)) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(lessonTime)) {
-      res.status(400).json({ error: "Semestr, dərs adı, gün və saat düzgün doldurulmalıdır." });
+    if (validateTermNumber(termNumber) || !title) {
+      res.status(400).json({ error: "Semestr və dərs adı düzgün doldurulmalıdır." });
       return;
     }
     const [course] = await db.insert(coursesTable).values({
@@ -3950,8 +3962,8 @@ router.post("/admin/schedule-lessons", requireTeacher, async (req, res, next) =>
       curriculum: [],
       lessonDescription: "",
       nextLesson: null,
-      lessonDays,
-      lessonTime,
+      lessonDays: [],
+      lessonTime: null,
     }).returning();
     if (!course) throw new Error("Dərs yaradılmadı.");
     const [resource] = await db.insert(resourcesTable).values({
@@ -3961,8 +3973,8 @@ router.post("/admin/schedule-lessons", requireTeacher, async (req, res, next) =>
       title,
       body: "Cədvəl dərsi",
       url: null,
-      lessonDays,
-      lessonTime,
+      lessonDays: [],
+      lessonTime: null,
       isMandatory: true,
       teacherClerkUserId: null,
       studentCapacity: 0,
@@ -3989,15 +4001,8 @@ router.patch("/admin/schedule-lessons/:resourceId", requireTeacher, async (req, 
       return;
     }
     const title = typeof req.body?.title === "string" && req.body.title.trim() ? req.body.title.trim() : existing.title;
-    const lessonDays = Array.isArray(req.body?.lessonDays) ? req.body.lessonDays.filter((day: unknown): day is string => typeof day === "string") : existing.lessonDays;
-    const lessonTime = typeof req.body?.lessonTime === "string" ? req.body.lessonTime.trim() : existing.lessonTime ?? "";
-    const validLessonDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-    if (!lessonDays.length || lessonDays.some((day: string) => !validLessonDays.includes(day)) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(lessonTime)) {
-      res.status(400).json({ error: "Gün və dərs saatı düzgün doldurulmalıdır." });
-      return;
-    }
-    await db.update(coursesTable).set({ title, lessonDays, lessonTime }).where(eq(coursesTable.id, existing.courseId));
-    await db.update(resourcesTable).set({ title, lessonDays, lessonTime }).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber)));
+    await db.update(coursesTable).set({ title }).where(eq(coursesTable.id, existing.courseId));
+    await db.update(resourcesTable).set({ title }).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber)));
     res.json({ ok: true });
   } catch (error) {
     next(error);
@@ -4066,11 +4071,17 @@ router.post("/admin/resources", requireTeacher, async (req, res, next) => {
       res.status(400).json({ error: "Yalnız aktiv müəllim hesabı təyin edilə bilər." });
       return;
     }
+    const lessonTime = storedLessonTime(input.lessonDays, req.body?.lessonDayTimes, input.lessonTime);
+    if (!lessonTime) {
+      res.status(400).json({ error: "Hər seçilmiş gün üçün dərs saatı yazın." });
+      return;
+    }
     const [resource] = await db.insert(resourcesTable).values({
       ...input,
       title: input.title.trim() || "Dərs",
       body: input.body.trim() || "Cədvəl dərsi",
       teacherClerkUserId: assignedTeacherId,
+      lessonTime,
       url,
       expiresAt: resourceLinkExpiresAt(url),
     }).returning();
@@ -4121,6 +4132,11 @@ router.patch("/admin/resources/:resourceId", requireTeacher, async (req, res, ne
      if (!existingResource || !Number.isInteger(resourceId) || resourceId <= 0 || !Number.isInteger(courseId) || courseId <= 0 ||
        validateTermNumber(termNumber) || !kind || !lessonDays?.length || lessonDays.some((day: string) => !validLessonDays.includes(day)) || !validLessonTime || isMandatory === undefined || !teacherClerkUserId || !Number.isInteger(studentCapacity) || studentCapacity < 0) {
       res.status(400).json({ error: "Fənn, semestr, gün və dərs saatı düzgün doldurulmalıdır." });
+      return;
+    }
+    const storedTime = storedLessonTime(lessonDays, req.body?.lessonDayTimes, lessonTime);
+    if (!storedTime) {
+      res.status(400).json({ error: "Hər seçilmiş gün üçün dərs saatı yazın." });
       return;
     }
     if (!canManageAnyResource && teacherClerkUserId !== actorId) {
@@ -4176,7 +4192,7 @@ router.patch("/admin/resources/:resourceId", requireTeacher, async (req, res, ne
       ? existingResource.expiresAt
       : resourceLinkExpiresAt(url);
     const [resource] = await db.update(resourcesTable).set({
-      courseId, termNumber, kind, title, body, url, expiresAt, lessonDays, lessonTime, isMandatory, teacherClerkUserId, studentCapacity,
+      courseId, termNumber, kind, title, body, url, expiresAt, lessonDays, lessonTime: storedTime, isMandatory, teacherClerkUserId, studentCapacity,
     })
      .where(eq(resourcesTable.id, resourceId)).returning();
    if (!resource) { res.status(404).json({ error: "Material tapılmadı." }); return; }

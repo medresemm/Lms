@@ -2,6 +2,7 @@ import fs from "node:fs";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { findAssetPath, readAsset } from "./assets.js";
+import { hasRtl, paragraphIsRtl, visualRuns, type VisualRun } from "./certificateBidi.js";
 
 const a4Width = 595.28;
 const a4Height = 841.89;
@@ -57,24 +58,122 @@ function setFont(document: PDFKit.PDFDocument, font?: string) {
   if (font) document.font(font);
 }
 
-// Ərəb hərfləri: DejaVu Serif-də ərəb qlifləri yoxdur, DejaVu Sans-da isə var (fontkit hərfləri birləşdirir).
-// PDFKit bidi dəstəkləmir, ona görə ərəb söz qrupları bölünməz boşluqla birləşdirilir ki, sağdan-sola düzgün düzülsün.
-const arabicRange = "\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF";
-const arabicPattern = new RegExp(`[${arabicRange}]`);
-const arabicRunPattern = new RegExp(`[${arabicRange}]+(?:[ \\t]+[${arabicRange}]+)*([ \\t]+)?`, "g");
+// Ərəb/ivrit mətni: PDFKit bidi dəstəkləmir, ona görə belə mətnlər üçün sətir bölgüsü və vizual
+// sıralama certificateBidi.ts ilə burada edilir. Ərəb hərfləri DejaVu Sans ilə çəkilir (Serif-də ərəb
+// qlifləri yoxdur); fontkit ərəb hərflərini birləşdirir (shaping). Latın mətni blokun öz şriftində qalır.
+type BidiLine = { text: string; baseRtl: boolean; runs: Array<VisualRun & { font?: string; width: number }>; width: number };
 
-export function prepareCertificateText(text: string) {
-  if (!arabicPattern.test(text)) return text;
-  return text.replace(arabicRunPattern, (run: string, trailing?: string) => {
-    // Çox uzun ərəb mətni sətirlərə bölünə bilsin deyə yalnız qısa qruplar birləşdirilir.
-    if (run.trimEnd().length > 60) return run;
-    const glued = run.trimEnd().replace(/[ \t]+/g, "\u00A0");
-    return trailing ? `\u00A0${glued} ` : glued;
-  });
+function runFont(run: VisualRun, font?: string) {
+  return run.rtlScript && sansFont ? sansFont : font;
 }
 
-function fontForText(text: string, font?: string) {
-  return arabicPattern.test(text) && sansFont ? sansFont : font;
+function layoutBidiLine(document: PDFKit.PDFDocument, line: string, baseRtl: boolean, fontSize: number, font?: string): BidiLine {
+  const runs = visualRuns(line, baseRtl).map((run) => {
+    const runFontPath = runFont(run, font);
+    setFont(document, runFontPath);
+    document.fontSize(fontSize);
+    return { ...run, font: runFontPath, width: document.widthOfString(run.draw) };
+  });
+  return { text: line, baseRtl, runs, width: runs.reduce((sum, run) => sum + run.width, 0) };
+}
+
+// Latın (LTR) paraqrafın içindəki qısa ərəb ifadəsi, məs. "(العلوم الشرعية)", iki sətrə bölünmür.
+function groupRtlPhrases(words: string[], baseRtl: boolean) {
+  if (baseRtl) return words;
+  const grouped: string[] = [];
+  for (const word of words) {
+    const previous = grouped[grouped.length - 1];
+    if (previous && hasRtl(previous) && hasRtl(word) && Array.from(`${previous} ${word}`).length <= 32) {
+      grouped[grouped.length - 1] = `${previous} ${word}`;
+    } else {
+      grouped.push(word);
+    }
+  }
+  return grouped;
+}
+
+function wrapBidiText(document: PDFKit.PDFDocument, text: string, fontSize: number, font: string | undefined, width: number) {
+  const lines: BidiLine[] = [];
+  for (const paragraph of text.split(/\r?\n/)) {
+    const baseRtl = paragraphIsRtl(paragraph);
+    const words = groupRtlPhrases(paragraph.split(/[ \t]+/).filter(Boolean), baseRtl);
+    let current = "";
+    const push = (value: string) => lines.push(layoutBidiLine(document, value, baseRtl, fontSize, font));
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (layoutBidiLine(document, candidate, baseRtl, fontSize, font).width <= width) {
+        current = candidate;
+        continue;
+      }
+      if (current) push(current);
+      current = word;
+      // Sətrə sığmayan tək söz hərf-hərf bölünür.
+      while (layoutBidiLine(document, current, baseRtl, fontSize, font).width > width && Array.from(current).length > 1) {
+        const chars = Array.from(current);
+        let cut = chars.length - 1;
+        while (cut > 1 && layoutBidiLine(document, chars.slice(0, cut).join(""), baseRtl, fontSize, font).width > width) cut--;
+        push(chars.slice(0, cut).join(""));
+        current = chars.slice(cut).join("");
+      }
+    }
+    if (current || !words.length) push(current);
+  }
+  return lines;
+}
+
+function bidiLineHeight(document: PDFKit.PDFDocument, fontSize: number, font?: string) {
+  setFont(document, font);
+  return document.fontSize(fontSize).currentLineHeight(true);
+}
+
+function measureBidiBlock(document: PDFKit.PDFDocument, text: string, fontSize: number, font: string | undefined, width: number, lineGap: number) {
+  const lines = wrapBidiText(document, text, fontSize, font, width);
+  return lines.length * (bidiLineHeight(document, fontSize, font) + lineGap);
+}
+
+function drawBidiBlock(
+  document: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+  options: { fontSize: number; font?: string; width: number; lineGap: number; maxHeight?: number },
+) {
+  const { fontSize, font, width, lineGap, maxHeight } = options;
+  const lineHeight = bidiLineHeight(document, fontSize, font);
+  let lines = wrapBidiText(document, text, fontSize, font, width);
+  const maxLines = maxHeight === undefined ? lines.length : Math.max(1, Math.floor((maxHeight - lineHeight) / (lineHeight + lineGap) + 1 + 1e-6));
+  if (lines.length > maxLines) {
+    // Ayrılmış sahəyə sığmayan mətn son sətirdə "…" ilə kəsilir.
+    const kept = lines.slice(0, maxLines);
+    const last = kept[kept.length - 1];
+    let words = last.text.split(" ").filter(Boolean);
+    let candidate = layoutBidiLine(document, `${words.join(" ")} …`, last.baseRtl, fontSize, font);
+    while (words.length > 1 && candidate.width > width) {
+      words = words.slice(0, -1);
+      candidate = layoutBidiLine(document, `${words.join(" ")} …`, last.baseRtl, fontSize, font);
+    }
+    kept[kept.length - 1] = candidate;
+    lines = kept;
+  }
+  lines.forEach((line, index) => {
+    let cursor = x + Math.max(0, (width - line.width) / 2);
+    const lineY = y + index * (lineHeight + lineGap);
+    for (const run of line.runs) {
+      setFont(document, run.font);
+      document.fontSize(fontSize).text(run.draw, cursor, lineY, { lineBreak: false });
+      cursor += run.width;
+    }
+  });
+  return lines.length * (lineHeight + lineGap);
+}
+
+function drawSingleLine(document: PDFKit.PDFDocument, text: string, x: number, y: number, width: number, fontSize: number, font?: string) {
+  if (hasRtl(text)) {
+    drawBidiBlock(document, text, x, y, { fontSize, font, width, lineGap: 0, maxHeight: bidiLineHeight(document, fontSize, font) });
+    return;
+  }
+  setFont(document, font);
+  document.fontSize(fontSize).text(text, x, y, { width, align: "center", lineBreak: false });
 }
 
 function drawCenteredText(
@@ -94,9 +193,10 @@ function drawCenteredText(
 }
 
 function measureBlock(document: PDFKit.PDFDocument, text: string, fontSize: number, font: string | undefined, width = contentWidth, lineGap = 4) {
-  setFont(document, fontForText(text, font));
+  if (hasRtl(text)) return measureBidiBlock(document, text, fontSize, font, width, lineGap);
+  setFont(document, font);
   document.fontSize(fontSize);
-  return document.heightOfString(prepareCertificateText(text), { width, lineGap, align: "center" });
+  return document.heightOfString(text, { width, lineGap, align: "center" });
 }
 
 function drawCenteredBlock(
@@ -111,8 +211,12 @@ function drawCenteredBlock(
 ) {
   const height = measureBlock(document, text, fontSize, font, width, lineGap);
   const clipped = maxHeight !== undefined ? Math.min(height, maxHeight) : height;
+  if (hasRtl(text)) {
+    drawBidiBlock(document, text, contentX, y, { fontSize, font, width, lineGap, maxHeight: clipped + 0.5 });
+    return clipped;
+  }
   // `height` + `ellipsis`: mətn heç vaxt ayrılmış sahədən çıxmır və PDFKit yeni səhifə açmır.
-  document.fontSize(fontSize).text(prepareCertificateText(text), contentX, y, {
+  document.fontSize(fontSize).text(text, contentX, y, {
     width,
     align: "center",
     lineGap,
@@ -184,7 +288,7 @@ function detailsLayout(document: PDFKit.PDFDocument, details: Array<{ label: str
   const valueSize = details.length === 5 ? 8.2 : 9;
   setFont(document, sansFont);
   document.fontSize(valueSize);
-  const valueHeight = Math.min(32, Math.max(...details.map(({ value }) => document.heightOfString(prepareCertificateText(value), { width: columnWidth, align: "center", lineGap: 2 }))));
+  const valueHeight = Math.min(32, Math.max(...details.map(({ value }) => (hasRtl(value) ? measureBidiBlock(document, value, valueSize, sansFont, columnWidth, 2) : document.heightOfString(value, { width: columnWidth, align: "center", lineGap: 2 })))));
   return { height: 13 + 8 + 6 + valueHeight + 14, valueHeight };
 }
 
@@ -218,8 +322,12 @@ function drawDetails(
       characterSpacing: 0.65,
     });
     document.fillColor(navy);
-    setFont(document, fontForText(value, sansFont));
-    document.fontSize(valueSize).text(prepareCertificateText(value), x, y + topPadding + 14, {
+    if (hasRtl(value)) {
+      drawBidiBlock(document, value, x, y + topPadding + 14, { fontSize: valueSize, font: sansFont, width: columnWidth, lineGap: valueLineGap, maxHeight: valueHeight + 0.5 });
+      return;
+    }
+    setFont(document, sansFont);
+    document.fontSize(valueSize).text(value, x, y + topPadding + 14, {
       width: columnWidth,
       align: "center",
       lineGap: valueLineGap,
@@ -331,7 +439,8 @@ export async function buildGraduationCertificatePdf({
 
     document.fillColor("#9e782a");
     setFont(document, sansFont);
-    document.fontSize(8.6).text(certificateTitle, contentX, bodyY, {
+    if (hasRtl(certificateTitle)) drawSingleLine(document, certificateTitle, contentX, bodyY, contentWidth, 8.6, sansFont);
+    else document.fontSize(8.6).text(certificateTitle, contentX, bodyY, {
       width: contentWidth,
       align: "center",
       lineBreak: false,
@@ -400,18 +509,8 @@ export async function buildGraduationCertificatePdf({
       document.lineWidth(0.8).strokeColor(navy)
         .moveTo(footerColumns[0] + (sideColumnWidth - 112.5) / 2, footerY + 58.5)
         .lineTo(footerColumns[0] + (sideColumnWidth + 112.5) / 2, footerY + 58.5).stroke();
-      setFont(document, fontForText(directorTitle, serifFont));
-      document.fontSize(9.75).text(prepareCertificateText(directorTitle), footerColumns[0], footerY + 67.5, {
-        width: sideColumnWidth,
-        align: "center",
-        lineBreak: false,
-      });
-      setFont(document, sansFont);
-      document.fontSize(9).text(prepareCertificateText(directorName), footerColumns[0], footerY + 84, {
-        width: sideColumnWidth,
-        align: "center",
-        lineBreak: false,
-      });
+      drawSingleLine(document, directorTitle, footerColumns[0], footerY + 67.5, sideColumnWidth, 9.75, serifFont);
+      drawSingleLine(document, directorName, footerColumns[0], footerY + 84, sideColumnWidth, 9, sansFont);
     }
 
     if (showSeal) drawSeal(document, footerColumns[1] + centerColumnWidth / 2, footerY + 45, issuedAt);

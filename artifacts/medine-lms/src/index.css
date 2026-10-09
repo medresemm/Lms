@@ -330,6 +330,11 @@
   transform-origin: top left;
 }
 
+/* Ərəb/Latın qarışıq mətn: hər paraqraf istiqamətini ilk güclü hərfdən götürür, mötərizələr düzgün güzgülənir. */
+.certificate-print-area [dir="auto"] {
+  unicode-bidi: plaintext;
+}
+
 .certificate-print-root {
   display: none;
 }

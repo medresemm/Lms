@@ -63,23 +63,23 @@ export function CertificateSheet({
         </header>
         <div className="certificate-rule" aria-hidden="true" />
         <main className="certificate-body">
-          <p className="certificate-eyebrow">{certificate.certificateTitle}</p>
-          <h1 className={nameSizeClass}>{studentName}</h1>
-          <p className={`certificate-copy ${bodySizeClass}`}>{bodyText}</p>
-          <p className="certificate-honor">{certificate.honorText}</p>
+          <p className="certificate-eyebrow" dir="auto">{certificate.certificateTitle}</p>
+          <h1 className={nameSizeClass} dir="auto">{studentName}</h1>
+          <p className={`certificate-copy ${bodySizeClass}`} dir="auto">{bodyText}</p>
+          <p className="certificate-honor" dir="auto">{certificate.honorText}</p>
         </main>
         <div className={`certificate-details certificate-details-${visibleDetailsCount}`}>
           <div><span>Tələbə №</span><strong>{studentNumber}</strong></div>
           <div><span>Verilmə tarixi</span><strong>{formatDate(certificate.issuedAt)}</strong></div>
           <div><span>Şəhadətnamə №</span><strong>{certificate.certificateNumber}</strong></div>
           {certificate.showGpa && <div><span>GPA / 5.00</span><strong>{certificate.gpa.toFixed(2)}</strong></div>}
-          {certificate.showGraduationCategory && <div><span>Nəticə</span><strong>{certificate.graduationCategory}</strong></div>}
+          {certificate.showGraduationCategory && <div><span>Nəticə</span><strong dir="auto">{certificate.graduationCategory}</strong></div>}
         </div>
         <footer className="certificate-footer">
           {certificate.showDirector ? <div className="certificate-signature">
             <div className="certificate-signature-line" />
-            <strong>{certificate.directorTitle}</strong>
-            <span>{certificate.directorName}</span>
+            <strong dir="auto">{certificate.directorTitle}</strong>
+            <span dir="auto">{certificate.directorName}</span>
           </div> : <div className="certificate-signature certificate-signature-hidden" aria-hidden="true" />}
           {certificate.showSeal ? <div className="certificate-seal-wrap">
             <div className="certificate-seal" aria-label="Akademiyanın möhürü">

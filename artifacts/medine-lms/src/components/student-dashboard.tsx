@@ -42,7 +42,7 @@ import { ArticlesLink, HomeLink } from '@/components/home-link';
 import { MessageCenter } from '@/components/message-center';
 import { loadUnansweredQuestionCount, QaCenter } from '@/components/qa-center';
 import { StudentExamsLauncher, StudentExamsSection } from '@/components/exam-module';
-import { AiAssistant, AiAssistantLauncher } from '@/components/ai-assistant';
+import { AiAssistantLauncher } from '@/components/ai-assistant';
 
 type ScheduleAccessSnapshot = {
   approved?: boolean;
@@ -1307,7 +1307,6 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [unansweredQuestionCount, setUnansweredQuestionCount] = useState(0);
   const [showQuestions, setShowQuestions] = useState(false);
-  const [showAi, setShowAi] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [activeNotification, setActiveNotification] = useState<StudentNotification | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<{ id: number; teacherName?: string } | null>(null);
@@ -1512,14 +1511,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
             </div>
           </div>
         )}
-        {!showAi && <AiAssistantLauncher onClick={() => setShowAi(true)} />}
-        {showAi && (
-          <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/70 p-0 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-label="Mədinə AI" data-testid="modal-ai-assistant" onKeyDown={(event) => { if (event.key === 'Escape') setShowAi(false); }}>
-            <div className="h-[100dvh] w-full max-w-3xl sm:h-[92dvh]">
-              <AiAssistant mode="student" onClose={() => setShowAi(false)} />
-            </div>
-          </div>
-        )}
+        <AiAssistantLauncher href="/ai" />
       </div>
       {selectedCourse !== null && <CourseDetailModal courseId={selectedCourse.id} teacherName={selectedCourse.teacherName} onClose={() => setSelectedCourse(null)} />}
     </div>

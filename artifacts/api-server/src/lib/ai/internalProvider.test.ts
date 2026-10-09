@@ -110,3 +110,44 @@ test("admin courses, teacher schedule, stats and permissions", async () => {
   assert.match((await ask("Müəllim cədvəli", adminContext(["students"]))).reply, /icazə/);
   assert.match((await ask("Tələbə axtar", adminContext())).reply, /Kimi axtarım/);
 });
+
+test("student site guide: how/where questions win over data questions", async () => {
+  const cases: Array<[string, RegExp]> = [
+    ["Tapşırığı necə göndərim?", /Ev tapşırığını göndərmək[\s\S]*«Təhvili göndər»/],
+    ["Dərs cədvəlini harada görüm?", /Dərs cədvəlinə baxmaq[\s\S]*«Dərs Cədvəlim»/],
+    ["Qayıb üzrlü necə yazım?", /Qayıb üçün üzr bildirmək[\s\S]*«Üzr bildir»[\s\S]*«Üzrü göndər»/],
+    ["Resurslar haradadır?", /Resurslar, kitablar və materiallar[\s\S]*«PDF və bütün linklərə bax»/],
+    ["Müəllimə necə mesaj yazım?", /Müəllimə mesaj yazmaq[\s\S]*«Müəllim seçin»/],
+    ["Sual-cavab necə işləyir?", /Sual-cavab bölməsi[\s\S]*«Sualı göndər»/],
+    ["Profilimi necə dəyişim?", /Şəxsi məlumatları dəyişmək[\s\S]*«Dəyişiklikləri yadda saxla»/],
+    ["İmtahan necə verilir?", /İmtahan və test vermək[\s\S]*«Cavabları göndər»/],
+    ["Bildirişlər harada?", /Bildirişlər və yeniliklər[\s\S]*«Bildirişləri göstər»/],
+    ["Çıxış necə edim?", /Hesabdan çıxmaq[\s\S]*«Çıxış»/],
+    ["çıxış", /Hesabdan çıxmaq/],
+    ["Saytdan istifadə", /Tələbə kabinetindən istifadə[\s\S]*«Menyunu aç»/],
+    ["ödevimi nasıl yüklerim", /Ev tapşırığını göndərmək/],
+    ["derse nasıl katılırım", /Onlayn dərsə qoşulmaq/],
+    ["Şifrəmi unutdum", /Şifrəni unutmusunuzsa[\s\S]*«Bərpa kodunu göndər»/],
+    ["şifrəmi necə dəyişim", /Şifrəni dəyişmək[\s\S]*«Mövcud şifrə»/],
+    ["müəllimi necə dəyişim", /Fənləri və müəllimi idarə etmək[\s\S]*«Müəllimi dəyiş»/],
+  ];
+  for (const [question, expected] of cases) {
+    assert.match((await ask(question, studentContext())).reply, expected, question);
+  }
+});
+
+test("data questions without how/where cues still return data", async () => {
+  assert.match((await ask("Tapşırıqlarım", studentContext())).reply, /Fatihə əzbəri/);
+  assert.match((await ask("Neçə qayıbım var?", studentContext())).reply, /Quran: 1 qayıb/);
+  assert.match((await ask("Neçə tələbə var?", adminContext())).reply, /tələbə sayı: 3/);
+  assert.match((await ask("salam", studentContext())).reply, /Tapşırığı necə göndərim/);
+});
+
+test("admin site guide", async () => {
+  assert.match((await ask("Elanı necə yayımlayım?", adminContext())).reply, /«Elanı yayımla»/);
+  assert.match((await ask("Tələbələri harada idarə edim?", adminContext())).reply, /«Tələbələri idarə et»[\s\S]*«Qiymətləndirmə»/);
+  assert.match((await ask("Test necə yaradım?", adminContext())).reply, /«Yeni test»/);
+  assert.match((await ask("Mesajlara necə cavab verim?", adminContext())).reply, /«Məsləhətləşmə \/ Əlaqə»/);
+  assert.match((await ask("Admin paneldən necə istifadə edim?", adminContext())).reply, /Admin paneldən istifadə/);
+  assert.doesNotMatch((await ask("Tapşırığı necə göndərim?", adminContext())).reply, /Ev tapşırığını göndərmək/);
+});

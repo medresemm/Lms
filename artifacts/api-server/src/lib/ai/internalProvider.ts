@@ -18,52 +18,10 @@ import type {
   AiStudentMatch,
   StudentAiContext,
 } from "./aiProvider.js";
+import { countKeywords, hasKeyword, normalizeText, parse, tokenize, type ParsedMessage } from "./text.js";
+import { answerGuide, guideTopicList } from "./siteGuide.js";
 
-// ---------------------------------------------------------------------------
-// Mətn normallaşdırması
-// ---------------------------------------------------------------------------
-
-export function normalizeText(value: string) {
-  return value
-    .toLocaleLowerCase("az-AZ")
-    .replace(/ə/g, "e")
-    .replace(/ı/g, "i")
-    .replace(/ö/g, "o")
-    .replace(/ü/g, "u")
-    .replace(/ş/g, "s")
-    .replace(/ç/g, "c")
-    .replace(/ğ/g, "g")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9@.\s-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function tokenize(normalized: string) {
-  return normalized.split(/[\s.\-]+/).filter(Boolean);
-}
-
-interface ParsedMessage {
-  raw: string;
-  text: string;
-  tokens: string[];
-}
-
-function parse(message: string): ParsedMessage {
-  const text = normalizeText(message);
-  return { raw: message, text, tokens: tokenize(text) };
-}
-
-/** Açar söz: boşluq varsa ifadə kimi, yoxdursa söz başlanğıcı (şəkilçilərə dözümlü) kimi yoxlanır. */
-function hasKeyword(parsed: ParsedMessage, keyword: string) {
-  if (keyword.includes(" ")) return ` ${parsed.text} `.includes(` ${keyword}`);
-  return parsed.tokens.some((token) => token === keyword || (keyword.length >= 3 && token.startsWith(keyword)));
-}
-
-function countKeywords(parsed: ParsedMessage, keywords: readonly string[]) {
-  return keywords.reduce((total, keyword) => total + (hasKeyword(parsed, keyword) ? 1 : 0), 0);
-}
+export { normalizeText } from "./text.js";
 
 // ---------------------------------------------------------------------------
 // Açar sözlər (normallaşdırılmış: ə→e, ı→i, ö→o, ü→u, ş→s, ç→c, ğ→g)
@@ -229,7 +187,7 @@ function titleMatches(parsed: ParsedMessage, title: string) {
 // Tələbə rejimi
 // ---------------------------------------------------------------------------
 
-const STUDENT_SUGGESTIONS = ["Dərs cədvəlim", "Tapşırıqlarım", "Qiymətlərim", "Resurslar"];
+const STUDENT_SUGGESTIONS = ["Dərs cədvəlim", "Tapşırıqlarım", "Qiymətlərim", "Saytdan istifadə"];
 
 function studentHelp(name?: string) {
   return reply([
@@ -243,6 +201,11 @@ function studentHelp(name?: string) {
     "• «Resurslar» — dərs materialları və linklər",
     "• «Fənlərim», «Profilim», «Elanlar»",
     "Fənnin adını da yaza bilərsiniz, məsələn: «Quran qiymətim».",
+    "",
+    "Saytdan istifadə ilə bağlı da soruşa bilərsiniz, məsələn:",
+    "• «Tapşırığı necə göndərim?», «Dərs cədvəlini harada görüm?», «Qayıb üçün üzr necə yazım?»",
+    "• «Resurslar haradadır?», «Müəllimə necə mesaj yazım?», «Sual-cavab necə işləyir?»",
+    "• «Profilimi necə dəyişim?», «İmtahan necə verilir?», «Bildirişlər harada?», «Çıxış necə edim?»",
   ], STUDENT_SUGGESTIONS);
 }
 
@@ -464,6 +427,10 @@ async function studentCourseFocus(ctx: StudentAiContext, courseIds: Set<number>)
 async function answerStudent(parsed: ParsedMessage, ctx: StudentAiContext): Promise<AiReply> {
   if (!parsed.tokens.length) return studentHelp();
 
+  // "Necə / harada" sualları məlumat sorğularından üstündür: saytdan istifadə bələdçisi.
+  const guide = answerGuide(parsed, "student");
+  if (guide) return guide;
+
   // Fənn adına görə filtr (yalnız tələbənin öz fənləri arasında).
   const [semesters, overview] = await Promise.all([ctx.semesters(), ctx.overview()]);
   const courseTitles = new Map<number, string>();
@@ -520,6 +487,7 @@ async function answerStudent(parsed: ParsedMessage, ctx: StudentAiContext): Prom
   return reply([
     "Bu sualı tam başa düşmədim. Mən daxili köməkçiyəm və yalnız sizin LMS məlumatlarınız əsasında cavab verirəm.",
     "Bunları soruşa bilərsiniz: dərs cədvəli, tapşırıqlar, imtahanlar, qiymətlər, davamiyyət, resurslar, fənlər, profil, elanlar.",
+    `Saytdan istifadə mövzuları: ${guideTopicList("student").join(", ")}. Məsələn: «Tapşırığı necə göndərim?»`,
     "Dini və ya elmi suallar üçün kabinetdəki «Sual-cavab» bölməsindən müəllimlərə yaza bilərsiniz.",
   ], STUDENT_SUGGESTIONS);
 }
@@ -548,6 +516,7 @@ function adminHelp(ctx: AdminAiContext) {
     "• «Tələbə statistikası» — semestrlər üzrə tələbə sayı",
     schedule ? "• «Kurs siyahısı», «Quran dərsinin tələbələri»" : null,
     schedule ? "• «Müəllim cədvəli» və ya müəllimin adı ilə cədvəl" : null,
+    "• Paneldən istifadə: «Elanı necə yayımlayım?», «Tələbələri harada idarə edim?», «Test necə yaradım?», «Mesajlara necə cavab verim?»",
   ], ADMIN_SUGGESTIONS.filter((item) => schedule || (item !== "Kurs siyahısı" && item !== "Müəllim cədvəli")));
 }
 
@@ -707,6 +676,9 @@ async function adminTeacherSchedule(ctx: AdminAiContext, parsed: ParsedMessage) 
 
 async function answerAdmin(parsed: ParsedMessage, ctx: AdminAiContext): Promise<AiReply> {
   if (!parsed.tokens.length) return adminHelp(ctx);
+
+  const guide = answerGuide(parsed, "admin");
+  if (guide) return guide;
   const canSchedule = ctx.permissions.has("schedule");
 
   const strongLookup = /@/.test(parsed.raw) || /\bt\s*0*\d{1,6}\b/.test(parsed.text);

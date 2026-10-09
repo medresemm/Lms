@@ -138,11 +138,10 @@ import { ArticlesLink, HomeLink } from '@/components/home-link';
 import { MessageCenter } from '@/components/message-center';
 import { loadUnansweredQuestionCount, QaCenter } from '@/components/qa-center';
 import { AdminExamsSection } from '@/components/exam-module';
-import { AiAssistant } from '@/components/ai-assistant';
 import { GraduateCertificateSection } from '@/components/graduate-certificate';
 import { formatFullName, formatPersonName } from '@/lib/utils';
 
-type Tab = 'ai' | 'course-content' | 'course-activation' | 'announcement' | 'student-notifications' | 'article' | 'benefit' | 'schedule' | 'teachers-schedule' | 'messages' | 'questions' | 'student-management' | 'application' | 'exams' | 'users' | 'statistics' | 'audit-history' | 'graduation-certificates';
+type Tab = 'course-content' | 'course-activation' | 'announcement' | 'student-notifications' | 'article' | 'benefit' | 'schedule' | 'teachers-schedule' | 'messages' | 'questions' | 'student-management' | 'application' | 'exams' | 'users' | 'statistics' | 'audit-history' | 'graduation-certificates';
 
 const emptyCourse: CourseInput = {
   title: '',
@@ -4427,13 +4426,12 @@ export function AdminPanel() {
                   <button type="button" onClick={() => toggleTab('teachers-schedule')} className={adminTabButtonClass('teachers-schedule', tab === 'teachers-schedule')} data-testid="tab-admin-teachers-schedule"><CalendarRange size={18} /> Müəllimlər cədvəli</button>
                    <button type="button" onClick={() => toggleTab('messages')} className={adminTabButtonClass('messages', tab === 'messages')} data-testid="tab-admin-messages"><Mail size={18} /> Məsləhətləşmə / Əlaqə {unreadMessageCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unreadMessageCount}</span>}</button>
                    <button type="button" onClick={() => toggleTab('questions')} className={adminTabButtonClass('questions', tab === 'questions')} data-testid="tab-admin-questions"><HelpCircle size={18} /> Sual-cavab {unansweredQuestionCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unansweredQuestionCount}</span>}</button>
-                   {(owner || rolePermissions.has('students')) && <button type="button" onClick={() => toggleTab('ai')} className={adminTabButtonClass('ai', tab === 'ai')} data-testid="tab-admin-ai"><Sparkles size={18} /> Mədinə AI</button>}
+                   {(owner || rolePermissions.has('students')) && <Link href="/ai" className={adminTabButtonClass('ai', false)} data-testid="link-admin-ai"><Sparkles size={18} /> Mədinə AI</Link>}
               </div>
              {tab === 'schedule' && <TeacherSchedule ownerName={fullName} />}
               {tab === 'teachers-schedule' && <TeachersSchedule ownerName={fullName} />}
                {tab === 'messages' && <MessageCenter staff />}
                 {tab === 'questions' && <QaCenter canAnswer onUnansweredCountChange={setUnansweredQuestionCount} />}
-                {tab === 'ai' && (owner || rolePermissions.has('students')) && <div className="mt-2 h-[min(860px,85dvh)]"><AiAssistant mode="admin" /></div>}
           </section>
           <aside className="space-y-4">
             <div className="rounded-2xl bg-[hsl(var(--primary))] p-5 text-[hsl(var(--primary-foreground))]">

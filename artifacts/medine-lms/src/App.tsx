@@ -28,6 +28,7 @@ import { ApplicationForm } from '@/components/application-form';
 import { StudentDashboard } from '@/components/student-dashboard';
 import { StudentExamsSection } from '@/components/exam-module';
 import { AdminPanel } from '@/components/admin-panel';
+import { AiAssistantPage } from '@/components/ai-assistant';
 import { CertificateVerificationPage } from '@/components/graduate-certificate';
 import { Toaster } from '@/components/ui/toaster';
 import { HomeLink } from '@/components/home-link';
@@ -752,6 +753,45 @@ function AdminRoute() {
   return isStaff ? <AdminPanel /> : <Redirect to="/user-portal" />;
 }
 
+// Mədinə AI ayrıca səhifədir (/ai). Rejim rola görə seçilir:
+// - heyət (owner və ya «students» icazəsi olan) → admin rejimi, geri düyməsi /admin-ə;
+// - təsdiqlənmiş tələbə → tələbə rejimi, geri düyməsi /user-portal-a.
+// Server tərəfində eyni yoxlamalar yenidən aparılır (requireAiStaff / requireApprovedStudent).
+function MedineAiRoute() {
+  const { user, isLoaded } = useUser();
+  const signedIn = isLoaded && Boolean(user);
+  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: signedIn, queryKey: getGetOwnUserProfileQueryKey(), staleTime: 60_000 } });
+  const profile = accountProfileQuery.data;
+  const isStaff = isStaffRole(profile?.role) || (!profile && isTeacherAccount(user));
+  const scheduleAccessQuery = useGetStudentScheduleAccess({
+    query: { enabled: signedIn && !isStaff && Boolean(profile), queryKey: getGetStudentScheduleAccessQueryKey(), staleTime: 30_000, retry: false },
+  });
+  const profilePending = !profile && (accountProfileQuery.isLoading || accountProfileQuery.isFetching);
+  if (!isLoaded || profilePending) return <AccountGateLoading />;
+  if (accountProfileQuery.isError && !isStaff) return <AccountGateError onRetry={() => void accountProfileQuery.refetch()} />;
+
+  if (isStaff) {
+    if (!profile) return <AccountGateLoading />;
+    const ownerEmail = import.meta.env.VITE_SYSTEM_OWNER_EMAIL?.trim().toLowerCase();
+    const userEmail = user?.primaryEmailAddress?.emailAddress?.trim().toLowerCase();
+    const owner = profile.role === 'owner' || isOwnerMetadata(user) || Boolean(ownerEmail && userEmail === ownerEmail);
+    const canUseAi = owner || (profile.rolePermissions ?? []).includes('students');
+    if (!canUseAi) return <Redirect to="/admin" />;
+    return <AiAssistantPage mode="admin" backHref="/admin" backLabel="Admin panelə qayıt" />;
+  }
+
+  const accessPending = !scheduleAccessQuery.data && (scheduleAccessQuery.isLoading || scheduleAccessQuery.isFetching);
+  if (accessPending) return <AccountGateLoading />;
+  if (scheduleAccessQuery.data?.onboardingRequired && !scheduleAccessQuery.data.approved) return <Redirect to="/admission-exam" />;
+  if (scheduleAccessQuery.isError || !scheduleAccessQuery.data) return <Redirect to="/user-portal" />;
+  return <AiAssistantPage mode="student" backHref="/user-portal" backLabel="Kabinetə qayıt" />;
+}
+
+function isOwnerMetadata(user: { publicMetadata?: unknown } | null | undefined) {
+  const metadata = user?.publicMetadata;
+  return typeof metadata === 'object' && metadata !== null && 'role' in metadata && (metadata as { role?: unknown }).role === 'owner';
+}
+
 function AccountGateLoading() {
   return (
     <main className="grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5">
@@ -811,6 +851,8 @@ function Router() {
         <Route path="/admission-exam"><Show when="signed-in"><AdmissionExamPortal /></Show><Show when="signed-out"><Redirect to="/" /></Show></Route>
         <Route path="/user-portal"><Show when="signed-in"><UserPortal /></Show><Show when="signed-out"><Redirect to="/" /></Show></Route>
         <Route path="/admin"><Show when="signed-in"><AdminRoute /></Show><Show when="signed-out"><Redirect to="/" /></Show></Route>
+        <Route path="/ai"><Show when="signed-in"><MedineAiRoute /></Show><Show when="signed-out"><Redirect to="/" /></Show></Route>
+        <Route path="/admin/ai"><Redirect to="/ai" /></Route>
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>

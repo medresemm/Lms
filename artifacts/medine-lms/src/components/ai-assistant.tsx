@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { BookOpen, CalendarDays, ClipboardList, GraduationCap, LibraryBig, Loader2, Search, SendHorizontal, Trash2, UsersRound, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, CalendarDays, ClipboardList, Compass, GraduationCap, LibraryBig, Loader2, Search, SendHorizontal, Trash2, UsersRound } from 'lucide-react';
+import { Link } from 'wouter';
 import { useAuth, useUser } from '@clerk/react';
 
 // Mədinə AI — saytın daxili köməkçisi.
@@ -29,6 +30,7 @@ const studentTiles: Tile[] = [
   { label: 'Tapşırıqlarım', hint: 'Açıq ev tapşırıqları və son tarixlər', prompt: 'Tapşırıqlarım', Icon: ClipboardList },
   { label: 'Qiymətlərim', hint: 'Fənn qiymətləri və orta bal', prompt: 'Qiymətlərim', Icon: GraduationCap },
   { label: 'Resurslar', hint: 'Dərs materialları və linklər', prompt: 'Resurslar', Icon: LibraryBig },
+  { label: 'Saytdan istifadə', hint: 'Hansı düymə harada, addım-addım', prompt: 'Saytdan necə istifadə edim?', Icon: Compass },
 ];
 
 const adminTiles: Tile[] = [
@@ -36,6 +38,7 @@ const adminTiles: Tile[] = [
   { label: 'Kurs siyahısı', hint: 'Kurslar, müəllimlər, semestrlər', prompt: 'Kurs siyahısı', Icon: BookOpen },
   { label: 'Müəllim cədvəli', hint: 'Aktiv semestrlər üzrə dərslər', prompt: 'Müəllim cədvəli', Icon: CalendarDays },
   { label: 'Statistika', hint: 'Semestrlər üzrə tələbə sayı', prompt: 'Tələbə statistikası', Icon: UsersRound },
+  { label: 'Paneldən istifadə', hint: 'Bölmələr və düymələr üzrə bələdçi', prompt: 'Admin paneldən necə istifadə edim?', Icon: Compass },
 ];
 
 const gold = '#e3c27a';
@@ -87,7 +90,7 @@ function BrandTile({ size = 'lg' }: { size?: 'lg' | 'sm' }) {
   );
 }
 
-export function AiAssistant({ mode, onClose }: { mode: AiAssistantMode; onClose?: () => void }) {
+export function AiAssistant({ mode, backHref, backLabel }: { mode: AiAssistantMode; backHref?: string; backLabel?: string }) {
   const { user } = useUser();
   const { getToken } = useAuth();
   const key = storageKey(user?.id);
@@ -162,9 +165,14 @@ export function AiAssistant({ mode, onClose }: { mode: AiAssistantMode; onClose?
   const hasChat = messages.length > 0;
 
   return (
-    <section className="relative flex h-full min-h-[560px] flex-col overflow-hidden rounded-[28px] border border-[#e3c27a]/25 bg-[radial-gradient(ellipse_at_top,#2a2214_0%,#121010_45%,#0a0a0b_100%)] text-[#f4ead5] shadow-[0_30px_80px_rgba(0,0,0,.45)]" data-testid={`section-ai-assistant-${mode}`} aria-label="Mədinə AI">
+    <section className="relative mx-auto flex h-[100dvh] w-full max-w-4xl flex-col overflow-hidden text-[#f4ead5]" data-testid={`section-ai-assistant-${mode}`} aria-label="Mədinə AI">
       <header className="relative z-10 flex items-center justify-between gap-3 px-5 pt-5 md:px-7">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          {backHref && (
+            <Link href={backHref} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#e3c27a]/30 px-3 py-2 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6]" data-testid="link-ai-back">
+              <ArrowLeft size={14} /> <span className="hidden sm:inline">{backLabel ?? 'Panelə qayıt'}</span><span className="sr-only sm:hidden">{backLabel ?? 'Panelə qayıt'}</span>
+            </Link>
+          )}
           <BrandTile size="sm" />
           <div>
             <p className="font-serif text-lg leading-none text-[#f4ead5]">Mədinə <span style={{ color: gold }}>AI</span></p>
@@ -175,7 +183,6 @@ export function AiAssistant({ mode, onClose }: { mode: AiAssistantMode; onClose?
           <button type="button" onClick={clearHistory} disabled={!hasChat || sending} className="inline-flex items-center gap-1.5 rounded-full border border-[#e3c27a]/30 px-3 py-2 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6] disabled:cursor-not-allowed disabled:opacity-40" data-testid="button-ai-clear-history">
             <Trash2 size={13} /> Tarixçəni təmizlə
           </button>
-          {onClose && <button type="button" onClick={onClose} className="rounded-full border border-[#e3c27a]/30 p-2 text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6]" aria-label="Mədinə AI pəncərəsini bağla" data-testid="button-ai-close"><X size={16} /></button>}
         </div>
       </header>
 
@@ -251,7 +258,7 @@ export function AiAssistant({ mode, onClose }: { mode: AiAssistantMode; onClose?
             </button>
           </div>
         </form>
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
           {tiles.map(({ label, hint, prompt, Icon }) => (
             <button key={label} type="button" onClick={() => void send(prompt)} disabled={sending} className="group flex flex-col items-center rounded-2xl border border-[#e3c27a]/20 bg-white/[.03] px-3 py-3 text-center transition hover:border-[#e3c27a]/60 hover:bg-[#e3c27a]/[.06] disabled:opacity-50" data-testid={`button-ai-tile-${label}`}>
               <Icon size={20} style={{ color: gold }} />
@@ -265,11 +272,20 @@ export function AiAssistant({ mode, onClose }: { mode: AiAssistantMode; onClose?
   );
 }
 
-export function AiAssistantLauncher({ onClick }: { onClick: () => void }) {
+export function AiAssistantLauncher({ href = '/ai' }: { href?: string }) {
   return (
-    <button type="button" onClick={onClick} className="fixed bottom-5 right-5 z-[60] inline-flex items-center gap-2.5 rounded-full border border-[#e3c27a]/60 bg-[#121010] py-2 pl-2 pr-4 text-sm font-semibold text-[#f4ead5] shadow-[0_12px_40px_rgba(0,0,0,.35)] transition hover:-translate-y-0.5 hover:border-[#e3c27a]" data-testid="button-open-ai-assistant">
+    <Link href={href} className="fixed bottom-5 right-5 z-[60] inline-flex items-center gap-2.5 rounded-full border border-[#e3c27a]/60 bg-[#121010] py-2 pl-2 pr-4 text-sm font-semibold text-[#f4ead5] shadow-[0_12px_40px_rgba(0,0,0,.35)] transition hover:-translate-y-0.5 hover:border-[#e3c27a]" data-testid="link-open-ai-assistant">
       <BrandTile size="sm" />
       <span>Mədinə <span style={{ color: gold }}>AI</span></span>
-    </button>
+    </Link>
+  );
+}
+
+// Tam ekran Mədinə AI səhifəsi (/ai). Rol yoxlaması App.tsx-dəki marşrutda aparılır.
+export function AiAssistantPage({ mode, backHref, backLabel }: { mode: AiAssistantMode; backHref: string; backLabel?: string }) {
+  return (
+    <main className="min-h-[100dvh] bg-[radial-gradient(ellipse_at_top,#2a2214_0%,#121010_45%,#0a0a0b_100%)]" data-testid={`page-ai-assistant-${mode}`}>
+      <AiAssistant mode={mode} backHref={backHref} backLabel={backLabel} />
+    </main>
   );
 }

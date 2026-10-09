@@ -43,11 +43,18 @@ import { MessageCenter } from '@/components/message-center';
 import { loadUnansweredQuestionCount, QaCenter } from '@/components/qa-center';
 import { StudentExamsLauncher, StudentExamsSection } from '@/components/exam-module';
 
+type ScheduleAccessSnapshot = {
+  approved?: boolean;
+  onboardingRequired?: boolean;
+  onboardingExamId?: number | null;
+};
+
 type DashboardProps = {
   dashboard?: Dashboard;
   courses?: Course[];
   announcements?: Announcement[];
   academicProfile?: AcademicProfile;
+  initialScheduleAccess?: ScheduleAccessSnapshot;
   isLoading: boolean;
   hasError: boolean;
   onRetry: () => void;
@@ -534,12 +541,12 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
   const activeTerm = profile?.currentTermNumber ?? 1;
   const resourcesQuery = useGetResources({ termNumber: activeTerm }, { query: { enabled: Boolean(profile) && scheduleAccessApproved, queryKey: getGetResourcesQueryKey({ termNumber: activeTerm }) } });
   useEffect(() => {
-    if (!profile) return;
+    if (!profile || (!isScheduleEditorOpen && selectedSubjectId === null)) return;
     void fetch(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/student/teacher-choices?termNumber=${activeTerm}`)
       .then((response) => response.ok ? response.json() : Promise.reject())
       .then((data) => setTeacherChoices(data))
       .catch(() => setTeacherChoices([]));
-  }, [profile?.id, activeTerm]);
+  }, [profile?.id, activeTerm, isScheduleEditorOpen, selectedSubjectId]);
   useEffect(() => {
     if (!profile) return;
     const loadSubjectRemovalRequests = async () => {
@@ -578,12 +585,12 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
     window.addEventListener('open-schedule-editor', openScheduleEditor);
     return () => window.removeEventListener('open-schedule-editor', openScheduleEditor);
   }, [profile?.currentTermNumber]);
-  if (!profile) return null;
+  if (!profile) return <section className="h-28 animate-pulse rounded-2xl bg-[hsl(var(--muted))]" data-testid="section-academic-profile" />;
   const currentSemesterLabel = profile.semesters.find((item) => item.termNumber === profile.currentTermNumber)?.label ?? `${profile.currentTermNumber}-ci Semestr`;
   const semester = profile.semesters.find((item) => item.termNumber === activeTerm) ?? profile.semesters[0];
   const visibleSubjects = semester.subjects.filter((subject) => !hiddenSubjects.includes(`${activeTerm}:${subject.courseId}`));
   const courseNames = new Map(visibleSubjects.map((subject) => [subject.courseId, subject.title]));
-  const termResources = resourcesQuery.isFetching ? [] : (resourcesQuery.data ?? []);
+  const termResources = resourcesQuery.data ?? [];
   const lessonSchedules = new Map(termResources.map((resource) => [resource.courseId, resource.lessonDays.length ? `${resource.lessonDays.map((day) => lessonDayLabels[day] ?? day).join(', ')} · ${resource.lessonTime ?? 'Saat təyin edilməyib'}` : 'Həftəlik cədvəl təyin edilməyib']));
   const todayKey = academyDateParts().weekday;
   const scheduleByDay = Object.entries(lessonDayLabels).map(([day, label]) => ({
@@ -1380,15 +1387,15 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-export function StudentDashboard({ dashboard, courses, announcements, academicProfile, isLoading, hasError, onRetry, onLogout }: DashboardProps) {
+export function StudentDashboard({ dashboard, courses, announcements, academicProfile, initialScheduleAccess, isLoading, hasError, onRetry, onLogout }: DashboardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
   const [showExams, setShowExams] = useState(false);
-  const [onboardingRequired, setOnboardingRequired] = useState(false);
-  const [onboardingExamId, setOnboardingExamId] = useState<number | null>(null);
+  const [onboardingRequired, setOnboardingRequired] = useState(initialScheduleAccess?.onboardingRequired === true);
+  const [onboardingExamId, setOnboardingExamId] = useState<number | null>(initialScheduleAccess?.onboardingExamId ?? null);
   const [scheduleAccessRefreshKey, setScheduleAccessRefreshKey] = useState(0);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [unansweredQuestionCount, setUnansweredQuestionCount] = useState(0);
@@ -1423,12 +1430,11 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
     setActiveNotification(null);
     await fetch(`${apiBase}/api/student/notifications/${notification.id}/dismiss`, { method: 'POST' }).catch(() => undefined);
   };
-  const [scheduleAccessApproved, setScheduleAccessApproved] = useState(false);
-  const [scheduleAccessLoaded, setScheduleAccessLoaded] = useState(false);
+  const [scheduleAccessApproved, setScheduleAccessApproved] = useState(initialScheduleAccess?.approved === true);
+  const [scheduleAccessLoaded, setScheduleAccessLoaded] = useState(Boolean(initialScheduleAccess));
   const onboardingRequiredRef = useRef(false);
   useEffect(() => {
     let cancelled = false;
-    setScheduleAccessLoaded(false);
     const load = () => {
       void fetch(`${apiBase}/api/student/schedule-access`, { cache: 'no-store' })
         .then((response) => response.ok ? response.json() as Promise<{ approved?: boolean; onboardingRequired?: boolean; onboardingExamId?: number | null }> : Promise.reject(new Error('load')))

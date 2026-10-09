@@ -904,8 +904,16 @@ let seedPromise: Promise<void> | undefined;
 async function ensureSeeded() {
   if (!seedPromise) {
     seedPromise = (async () => {
-      const existing = await db.select({ id: coursesTable.id }).from(coursesTable).limit(1);
-      if (existing.length === 0) {
+      const [existingCourses, existingResources, existingSettings] = await Promise.all([
+        db.select({ id: coursesTable.id }).from(coursesTable).limit(1),
+        db.select({ id: resourcesTable.id }).from(resourcesTable).limit(1),
+        db.select({ id: applicationSettingsTable.id }).from(applicationSettingsTable).limit(1),
+        db.delete(announcementsTable).where(or(...demoAnnouncements.map((item) => and(eq(announcementsTable.title, item.title), eq(announcementsTable.body, item.body))))),
+        db.delete(articlesTable).where(or(...demoArticles.map((item) => and(eq(articlesTable.title, item.title), eq(articlesTable.excerpt, item.excerpt), eq(articlesTable.author, "Mədinə Tədris Akademiyası"))))),
+        db.delete(dailyBenefitsTable).where(or(eq(dailyBenefitsTable.body, "Ttt"), eq(dailyBenefitsTable.source, "Ttt"))),
+      ]);
+      const existingBenefit = await db.select({ id: dailyBenefitsTable.id }).from(dailyBenefitsTable).limit(1);
+      if (existingCourses.length === 0) {
         await db.insert(coursesTable).values(
           seedCourses.map((course) => ({
             ...course,
@@ -913,9 +921,6 @@ async function ensureSeeded() {
           })),
         );
       }
-      await db.delete(announcementsTable).where(or(...demoAnnouncements.map((item) => and(eq(announcementsTable.title, item.title), eq(announcementsTable.body, item.body)))));
-      await db.delete(articlesTable).where(or(...demoArticles.map((item) => and(eq(articlesTable.title, item.title), eq(articlesTable.excerpt, item.excerpt), eq(articlesTable.author, "Mədinə Tədris Akademiyası")))));
-      const existingResources = await db.select({ id: resourcesTable.id }).from(resourcesTable).limit(1);
       if (existingResources.length === 0) {
         const seededCourses = await db.select({ id: coursesTable.id, title: coursesTable.title }).from(coursesTable);
         const resources = seededCourses.map((course) => ({
@@ -933,12 +938,9 @@ async function ensureSeeded() {
         }));
         if (resources.length) await db.insert(resourcesTable).values(resources);
       }
-      const existingSettings = await db.select({ id: applicationSettingsTable.id }).from(applicationSettingsTable).limit(1);
       if (existingSettings.length === 0) {
         await db.insert(applicationSettingsTable).values({ id: 1, opensAt: null, closesAt: null, statisticsVisible: false, admissionExamRequired: false, semesterDates: "{}", updatedAt: new Date().toISOString() });
       }
-      await db.delete(dailyBenefitsTable).where(or(eq(dailyBenefitsTable.body, "Ttt"), eq(dailyBenefitsTable.source, "Ttt")));
-      const existingBenefit = await db.select({ id: dailyBenefitsTable.id }).from(dailyBenefitsTable).limit(1);
       if (existingBenefit.length === 0) {
         await db.insert(dailyBenefitsTable).values({
           ...seedDailyBenefit,
@@ -1061,24 +1063,27 @@ async function activeTeachers() {
 }
 
 async function teacherNameMap(ids: string[]) {
-  const uniqueIds = Array.from(new Set(ids));
-  const users = await Promise.all(uniqueIds.map(async (id) => [id, await getClerkUser(id)] as const));
-  const applicationRows = uniqueIds.length
-    ? await db.select({
-        clerkUserId: applicationsTable.clerkUserId,
-        firstName: applicationsTable.firstName,
-        lastName: applicationsTable.lastName,
-      }).from(applicationsTable).where(inArray(applicationsTable.clerkUserId, uniqueIds))
-    : [];
+  const uniqueIds = Array.from(new Set(ids.filter((id): id is string => Boolean(id))));
+  if (!uniqueIds.length) return new Map<string, string | null>();
+  const applicationRows = await db.select({
+    clerkUserId: applicationsTable.clerkUserId,
+    firstName: applicationsTable.firstName,
+    lastName: applicationsTable.lastName,
+  }).from(applicationsTable).where(inArray(applicationsTable.clerkUserId, uniqueIds));
   const applicationNames = new Map(applicationRows.map((application) => [
     application.clerkUserId,
     [application.firstName, application.lastName].filter(Boolean).join(" ").trim(),
   ]));
-  return new Map(users.map(([id, user]) => {
-    if (!user) return [id, null] as const;
+  const missing = uniqueIds.filter((id) => !applicationNames.get(id));
+  const directory = missing.length ? await getClerkDirectory() : [];
+  const usersById = new Map(directory.map((user) => [user.id, user]));
+  return new Map(uniqueIds.map((id) => {
+    const applicationName = applicationNames.get(id);
+    const user = usersById.get(id);
+    if (!user) return [id, applicationName || null] as const;
     const displayName = roleForClerkUser(user) === "owner"
-      ? applicationNames.get(id) || "Fərman İsayev"
-      : applicationNames.get(id) || clerkDisplayName(user);
+      ? applicationName || "Fərman İsayev"
+      : applicationName || clerkDisplayName(user);
     return [id, displayName] as const;
   }));
 }
@@ -1266,6 +1271,9 @@ async function ensureAcademicProfile(application: typeof applicationsTable.$infe
   if (!application.clerkUserId) {
     throw new Error("Tələbə hesabı ilə müraciət əlaqələndirilməyib.");
   }
+  const [existing] = await db.select().from(studentAcademicProfilesTable)
+    .where(eq(studentAcademicProfilesTable.applicationId, application.id)).limit(1);
+  if (existing) return existing;
   const now = new Date().toISOString();
   await db.insert(studentAcademicProfilesTable).values({
     applicationId: application.id,

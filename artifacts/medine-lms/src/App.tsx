@@ -4,7 +4,6 @@ import {
   getGetAnnouncementsQueryKey,
   getGetArticlesQueryKey,
   getGetDailyBenefitQueryKey,
-  getGetCoursesQueryKey,
   getGetDashboardQueryKey,
   getGetStudentAcademicProfileQueryKey,
   getGetStudentScheduleAccessQueryKey,
@@ -12,7 +11,6 @@ import {
   getGetOwnUserProfileQueryKey,
   useGetAnnouncements,
   useGetArticles,
-  useGetCourses,
   useGetDailyBenefit,
   useGetDashboard,
   useGetStudentAcademicProfile,
@@ -66,21 +64,23 @@ function stripBase(path: string): string {
 
 function UserPortal() {
   const { user, isLoaded } = useUser();
-  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: isLoaded && Boolean(user), queryKey: getGetOwnUserProfileQueryKey() } });
+  const signedIn = isLoaded && Boolean(user);
+  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: signedIn, queryKey: getGetOwnUserProfileQueryKey(), staleTime: 60_000 } });
   const isStaff = isStaffRole(accountProfileQuery.data?.role) || (!accountProfileQuery.data && isTeacherAccount(user));
   const scheduleAccessQuery = useGetStudentScheduleAccess({
     query: {
-      enabled: isLoaded && Boolean(user) && !accountProfileQuery.isLoading && !isStaff,
+      enabled: signedIn && !isStaff,
       queryKey: getGetStudentScheduleAccessQueryKey(),
-      staleTime: 0,
-      refetchOnMount: 'always',
+      staleTime: 30_000,
     },
   });
-  if (!isLoaded || accountProfileQuery.isLoading || accountProfileQuery.isFetching || (!isStaff && (scheduleAccessQuery.isLoading || scheduleAccessQuery.isFetching))) return <AccountGateLoading />;
+  const profilePending = !accountProfileQuery.data && (accountProfileQuery.isLoading || accountProfileQuery.isFetching);
+  const accessPending = !isStaff && !scheduleAccessQuery.data && (scheduleAccessQuery.isLoading || scheduleAccessQuery.isFetching);
+  if (!isLoaded || profilePending || accessPending) return <AccountGateLoading />;
   if (accountProfileQuery.isError && !isStaff) return <AccountGateError onRetry={() => void accountProfileQuery.refetch()} />;
   if (isStaff) return <Redirect to="/admin" />;
   if (scheduleAccessQuery.data?.onboardingRequired && !scheduleAccessQuery.data.approved) return <Redirect to="/admission-exam" />;
-  return <StudentPortal />;
+  return <StudentPortal initialScheduleAccess={scheduleAccessQuery.data} />;
 }
 
 function AdmissionExamPortal() {
@@ -161,11 +161,9 @@ function AdmissionExamPortal() {
   );
 }
 
-function StudentPortal() {
-  const dashboardQuery = useGetDashboard({ query: { queryKey: getGetDashboardQueryKey() } });
-  const coursesQuery = useGetCourses({ query: { queryKey: getGetCoursesQueryKey() } });
-  const announcementsQuery = useGetAnnouncements({ query: { queryKey: getGetAnnouncementsQueryKey() } });
-  const academicProfileQuery = useGetStudentAcademicProfile({ query: { queryKey: getGetStudentAcademicProfileQueryKey() } });
+function StudentPortal({ initialScheduleAccess }: { initialScheduleAccess?: { approved?: boolean; onboardingRequired?: boolean; onboardingExamId?: number | null } }) {
+  const dashboardQuery = useGetDashboard({ query: { queryKey: getGetDashboardQueryKey(), staleTime: 60_000 } });
+  const academicProfileQuery = useGetStudentAcademicProfile({ query: { queryKey: getGetStudentAcademicProfileQueryKey(), staleTime: 60_000 } });
   const deletionNoticeQuery = useGetStudentDeletionNotice({ query: { queryKey: getGetStudentDeletionNoticeQueryKey() } });
   const { user } = useUser();
   const { signOut } = useClerk();
@@ -211,12 +209,13 @@ function StudentPortal() {
 
   return <StudentDashboard
     dashboard={displayName && dashboardQuery.data ? { ...dashboardQuery.data, studentName: displayName, greeting: `Xoş gəldin, ${displayName}` } : dashboardQuery.data}
-    courses={coursesQuery.data}
-    announcements={announcementsQuery.data}
+    courses={dashboardQuery.data?.courses}
+    announcements={dashboardQuery.data?.announcements}
     academicProfile={academicProfileQuery.data}
-    isLoading={dashboardQuery.isLoading || coursesQuery.isLoading || announcementsQuery.isLoading || academicProfileQuery.isLoading}
-    hasError={dashboardQuery.isError || coursesQuery.isError || announcementsQuery.isError || academicProfileQuery.isError}
-    onRetry={() => { void dashboardQuery.refetch(); void coursesQuery.refetch(); void announcementsQuery.refetch(); void academicProfileQuery.refetch(); }}
+    initialScheduleAccess={initialScheduleAccess}
+    isLoading={dashboardQuery.isLoading && !dashboardQuery.data}
+    hasError={dashboardQuery.isError && !dashboardQuery.data}
+    onRetry={() => { void dashboardQuery.refetch(); void academicProfileQuery.refetch(); }}
     onLogout={() => void signOut({ redirectUrl: basePath || '/' })}
   />;
 }

@@ -2342,10 +2342,23 @@ router.get("/resources", requireApprovedStudent, async (req, res, next) => {
     const selections = await db.select({ courseId: studentCourseSelectionsTable.courseId, selected: studentCourseSelectionsTable.selected })
       .from(studentCourseSelectionsTable)
       .where(and(eq(studentCourseSelectionsTable.profileId, studentProfile.id), eq(studentCourseSelectionsTable.termNumber, termNumber)));
+    const approvedChoices = await db.select({ resourceId: studentTeacherChoicesTable.resourceId })
+      .from(studentTeacherChoicesTable)
+      .where(and(eq(studentTeacherChoicesTable.profileId, studentProfile.id), eq(studentTeacherChoicesTable.status, "approved")));
+    const approvedResourceIds = new Set(approvedChoices.map((choice) => choice.resourceId));
     const removedCourseIds = new Set(selections.filter((selection) => !selection.selected).map((selection) => selection.courseId));
-    const visible = resources
-      .filter((resource) => !removedCourseIds.has(resource.courseId))
-      .map((resource) => resourceLinkIsExpired(resource) ? { ...resource, url: null, expiresAt: null } : resource);
+    const grouped = new Map<number, typeof resources>();
+    for (const resource of resources) {
+      if (removedCourseIds.has(resource.courseId)) continue;
+      const group = grouped.get(resource.courseId) ?? [];
+      group.push(resource);
+      grouped.set(resource.courseId, group);
+    }
+    const visible = Array.from(grouped.values()).flatMap((group) => {
+      const assigned = group.filter((resource) => approvedResourceIds.has(resource.id));
+      const chosen = assigned.length ? assigned : group.length === 1 ? group : [];
+      return chosen.map((resource) => resourceLinkIsExpired(resource) ? { ...resource, url: null, expiresAt: null } : resource);
+    });
     res.json(GetResourcesResponse.parse(await resourceViews(visible)));
   } catch (error) {
     next(error);
@@ -3926,6 +3939,8 @@ router.post("/admin/resources", requireTeacher, async (req, res, next) => {
     }
     const [resource] = await db.insert(resourcesTable).values({
       ...input,
+      title: input.title.trim() || "Dərs",
+      body: input.body.trim() || "Cədvəl dərsi",
       teacherClerkUserId: assignedTeacherId,
       url,
       expiresAt: resourceLinkExpiresAt(url),
@@ -3953,7 +3968,7 @@ router.patch("/admin/resources/:resourceId", requireTeacher, async (req, res, ne
     const [existingResource] = await db.select().from(resourcesTable).where(eq(resourcesTable.id, resourceId)).limit(1);
     const actor = actorId ? await getClerkUser(actorId) : null;
     const actorRole = actor ? roleForClerkUser(actor) : "none";
-    const canManageAnyResource = actorRole === "owner" || actorRole === "owner_assistant";
+    const canManageAnyResource = actorRole === "owner" || actorRole === "owner_assistant" || actorRole === "admin";
     if (!existingResource) {
       res.status(404).json({ error: "Material tapılmadı." });
       return;
@@ -3963,8 +3978,8 @@ router.patch("/admin/resources/:resourceId", requireTeacher, async (req, res, ne
       return;
     }
     const kind = typeof req.body?.kind === "string" ? req.body.kind.trim() : existingResource?.kind;
-    const title = typeof req.body?.title === "string" ? req.body.title.trim() : existingResource?.title;
-    const body = typeof req.body?.body === "string" ? req.body.body.trim() : existingResource?.body;
+    const title = (typeof req.body?.title === "string" ? req.body.title.trim() : existingResource?.title) || "Dərs";
+    const body = (typeof req.body?.body === "string" ? req.body.body.trim() : existingResource?.body) || "Cədvəl dərsi";
     const lessonDays = Array.isArray(req.body?.lessonDays) ? req.body.lessonDays.filter((day: unknown): day is string => typeof day === "string") : existingResource?.lessonDays;
     const lessonTime = typeof req.body?.lessonTime === "string" ? req.body.lessonTime.trim() : existingResource?.lessonTime;
     const isMandatory = typeof req.body?.isMandatory === "boolean" ? req.body.isMandatory : existingResource?.isMandatory;
@@ -3975,8 +3990,8 @@ router.patch("/admin/resources/:resourceId", requireTeacher, async (req, res, ne
     const validLessonDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
     const validLessonTime = typeof lessonTime === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(lessonTime);
      if (!existingResource || !Number.isInteger(resourceId) || resourceId <= 0 || !Number.isInteger(courseId) || courseId <= 0 ||
-       validateTermNumber(termNumber) || !kind || !title || !body || !lessonDays?.length || lessonDays.some((day: string) => !validLessonDays.includes(day)) || !validLessonTime || isMandatory === undefined || !teacherClerkUserId || !Number.isInteger(studentCapacity) || studentCapacity < 0) {
-      res.status(400).json({ error: "Fənn, semestr, kitab adı və kitab məlumatı düzgün doldurulmalıdır." });
+       validateTermNumber(termNumber) || !kind || !lessonDays?.length || lessonDays.some((day: string) => !validLessonDays.includes(day)) || !validLessonTime || isMandatory === undefined || !teacherClerkUserId || !Number.isInteger(studentCapacity) || studentCapacity < 0) {
+      res.status(400).json({ error: "Fənn, semestr, gün və dərs saatı düzgün doldurulmalıdır." });
       return;
     }
     if (!canManageAnyResource && teacherClerkUserId !== actorId) {

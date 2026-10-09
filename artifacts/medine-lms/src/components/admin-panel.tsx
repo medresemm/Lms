@@ -165,12 +165,6 @@ const emptyCourse: CourseInput = {
   credits: 3,
   hours: 45,
 };
-const emptyCourseEdit = {
-  title: '', category: '', instructor: '', totalLessons: 0, color: 'teal',
-  description: '', curriculum: '', lessonDescription: '', nextLesson: '',
-  pdfUrl: '', telegramUrl: '', zoomUrl: '', googleMeetUrl: '', lessonUrl: '',
-  lessonDays: [] as string[], lessonTime: '', credits: 3, hours: 45,
-};
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
@@ -1870,270 +1864,6 @@ function CourseLessonCountForm() {
   );
 }
 
-function CourseContentEditor({ initialCourseId, teacherOnly = false }: { initialCourseId?: string; teacherOnly?: boolean }) {
-  const coursesQuery = useGetCourses();
-  const resourcesQuery = useGetAdminResources();
-  const teachersQuery = useGetAdminTeachers();
-  const [termNumber, setTermNumber] = useState(1);
-  const [courseId, setCourseId] = useState('');
-  const [form, setForm] = useState(emptyCourseEdit);
-  const [notice, setNotice] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isAddingTeacher, setIsAddingTeacher] = useState(false);
-  const [newTeacherId, setNewTeacherId] = useState('');
-  const [teacherCourseIds, setTeacherCourseIds] = useState<number[] | null>(teacherOnly ? null : []);
-  const [teacherCoursesError, setTeacherCoursesError] = useState('');
-  const queryClient = useQueryClient();
-  const teacherCoursesLoading = teacherOnly && teacherCourseIds === null;
-
-  useEffect(() => {
-    if (!teacherOnly) return;
-    setTeacherCoursesError('');
-    setTeacherCourseIds(null);
-    void fetch(apiUrl(`/admin/teacher-courses?termNumber=${termNumber}`))
-      .then((response) => response.ok ? response.json() as Promise<Array<{ id: number }>> : response.json().then((result: { error?: string }) => Promise.reject(new Error(result.error || 'Müəllim dərsləri yüklənə bilmədi.'))))
-      .then((courses) => setTeacherCourseIds(courses.map((course) => course.id)))
-      .catch((error) => {
-        setTeacherCourseIds([]);
-        setTeacherCoursesError(error instanceof Error ? error.message : 'Müəllim dərsləri yüklənə bilmədi.');
-      });
-  }, [teacherOnly, termNumber]);
-
-  const termCourseIds = new Set((resourcesQuery.data ?? []).filter((resource) => resource.termNumber === termNumber).map((resource) => resource.courseId));
-  const availableCourses = (coursesQuery.data ?? [])
-    .filter((course) => termCourseIds.has(course.id))
-    .filter((course) => !teacherOnly || teacherCourseIds?.includes(course.id));
-  const selectedCourseTeacherIds = new Set(
-    (resourcesQuery.data ?? [])
-      .filter((resource) => resource.termNumber === termNumber && String(resource.courseId) === courseId && resource.teacherClerkUserId)
-      .map((resource) => resource.teacherClerkUserId),
-  );
-  const availableCourseTeachers = (teachersQuery.data ?? []).filter((teacher) => selectedCourseTeacherIds.has(teacher.clerkUserId));
-  const availableAdditionalTeachers = (teachersQuery.data ?? []).filter((teacher) => !selectedCourseTeacherIds.has(teacher.clerkUserId));
-
-  const changeTerm = (value: string) => {
-    setTermNumber(Number(value));
-    setCourseId('');
-    setForm(emptyCourseEdit);
-    setNotice('');
-  };
-
-  const loadCourse = async (value: string) => {
-    setCourseId(value);
-    setNotice('');
-    if (!value) {
-      setForm(emptyCourseEdit);
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const response = await fetch(apiUrl(`/admin/courses/${value}`));
-      const course = await response.json() as {
-        title?: string; category?: string; instructor?: string; totalLessons?: number; color?: string; credits?: number; hours?: number;
-        description?: string; curriculum?: string[]; lessonDescription?: string; nextLesson?: string | null;
-        pdfUrl?: string | null; telegramUrl?: string | null; zoomUrl?: string | null; googleMeetUrl?: string | null; lessonUrl?: string | null; lessonDays?: string[]; lessonTime?: string | null; error?: string;
-      };
-      if (!response.ok) throw new Error(course.error || 'Dərs məlumatları yüklənə bilmədi.');
-      setForm({
-        title: course.title ?? '',
-        category: course.category ?? '',
-        instructor: course.instructor ?? '',
-        totalLessons: course.totalLessons ?? 0,
-        credits: course.credits ?? 3,
-        hours: course.hours ?? 45,
-        color: course.color ?? 'teal',
-        description: course.description ?? '',
-        curriculum: course.curriculum?.join('\n') ?? '',
-        lessonDescription: course.lessonDescription ?? '',
-         lessonDays: course.lessonDays ?? [],
-         lessonTime: course.lessonTime ?? '',
-        nextLesson: course.nextLesson ?? '',
-        pdfUrl: course.pdfUrl ?? '',
-        telegramUrl: course.telegramUrl ?? '',
-        zoomUrl: course.zoomUrl ?? '',
-        googleMeetUrl: course.googleMeetUrl ?? '',
-        lessonUrl: course.lessonUrl ?? '',
-      });
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Dərs məlumatları yüklənə bilmədi.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (initialCourseId) void loadCourse(initialCourseId);
-  }, [initialCourseId]);
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setNotice('');
-    setIsSaving(true);
-    try {
-      const response = await fetch(apiUrl(`/admin/courses/${courseId}`), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: form.title,
-          category: form.title,
-          instructor: form.instructor,
-          totalLessons: form.totalLessons,
-          credits: form.credits,
-          hours: form.hours,
-          color: form.color,
-          description: form.description,
-          curriculum: form.curriculum.split('\n'),
-          lessonDescription: form.lessonDescription,
-          nextLesson: form.nextLesson || null,
-          pdfUrl: form.pdfUrl || null,
-          telegramUrl: form.telegramUrl || null,
-          zoomUrl: form.zoomUrl || null,
-          googleMeetUrl: form.googleMeetUrl || null,
-          lessonUrl: form.lessonUrl || null,
-           lessonDays: form.lessonDays,
-           lessonTime: form.lessonTime || null,
-        }),
-      });
-      const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Dərs mətnləri yadda saxlanıla bilmədi.');
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getGetCoursesQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() }),
-      ]);
-      setNotice('Dərs mətnləri uğurla yeniləndi.');
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Dərs mətnləri yadda saxlanıla bilmədi.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const addTeacherToCourse = async () => {
-    if (!courseId || !newTeacherId) return;
-    const teacher = teachersQuery.data?.find((item) => item.clerkUserId === newTeacherId);
-    if (!teacher) return;
-    setIsAddingTeacher(true);
-    setNotice('');
-    try {
-      const response = await fetch(apiUrl('/admin/resources'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          courseId: Number(courseId),
-          termNumber,
-          kind: ResourceInputKind.material,
-          title: form.title,
-          body: form.description,
-          url: form.pdfUrl || null,
-          lessonDays: form.lessonDays,
-          lessonTime: form.lessonTime || null,
-          isMandatory: true,
-          teacherClerkUserId: teacher.clerkUserId,
-          studentCapacity: 0,
-        }),
-      });
-      const result = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Müəllim bu dərsə əlavə edilə bilmədi.');
-      setNewTeacherId('');
-      setNotice(`${teacher.displayName} müəllimi ${termNumber}-ci semestr üzrə dərsə əlavə edildi.`);
-      await queryClient.invalidateQueries({ queryKey: getGetAdminResourcesQueryKey() });
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Müəllim dərsə əlavə edilə bilmədi.');
-    } finally {
-      setIsAddingTeacher(false);
-    }
-  };
-
-  return (
-    <form onSubmit={submit} className="mt-8 border-t border-[hsl(var(--border))] pt-6" data-testid="form-edit-course-content">
-      <div className="mb-4">
-        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Dərs məzmununu redaktə et</p>
-        <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Mövcud dərsi redaktə et</h3>
-      </div>
-      <Field label="Semestr">
-        <select required className={inputClass} value={termNumber} onChange={(event) => changeTerm(event.target.value)} disabled={resourcesQuery.isLoading} data-testid="select-edit-course-term">
-          {Array.from({ length: 8 }, (_, index) => index + 1).map((term) => <option key={term} value={term}>{term}-ci semestr</option>)}
-        </select>
-      </Field>
-      {!initialCourseId && <Field label="Dərs seçin">
-        {teacherCoursesLoading || resourcesQuery.isLoading ? <p className="rounded-xl border border-dashed border-[hsl(var(--border))] px-3.5 py-3 text-sm text-[hsl(var(--muted-foreground))]">Dərslər yüklənir...</p> : teacherCoursesError ? <p className="rounded-xl border border-[hsl(var(--destructive)/.25)] bg-[hsl(var(--destructive)/.05)] px-3.5 py-3 text-sm text-[hsl(var(--destructive))]">{teacherCoursesError}</p> : <select required className={inputClass} value={courseId} onChange={(event) => void loadCourse(event.target.value)} data-testid="select-edit-course-content">
-          <option value="">Dərs seçin</option>
-          {availableCourses.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
-        </select>}
-      </Field>}
-      {!teacherCoursesLoading && !resourcesQuery.isLoading && !teacherCoursesError && availableCourses.length === 0 && <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{termNumber}-ci semestr üçün dərs tapılmadı.</p>}
-      {courseId && (
-        <div className="mt-4 space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-             <Field label="Dərsin adı"><input required className={inputClass} value={form.title} disabled={isLoading} onChange={(event) => setForm({ ...form, title: event.target.value })} data-testid="input-edit-course-title" /></Field>
-            <Field label="Müəllimlər"><select className={inputClass} value={form.instructor} disabled={isLoading || teachersQuery.isLoading || resourcesQuery.isLoading} onChange={(event) => setForm({ ...form, instructor: event.target.value })} data-testid="select-edit-course-instructor"><option value="">Müəllim seçin</option>{availableCourseTeachers.map((teacher) => <option key={teacher.clerkUserId} value={teacher.displayName}>{teacher.displayName}</option>)}</select>
-              <div className="mt-2 flex gap-2">
-                <select className={`${inputClass} min-w-0 flex-1`} value={newTeacherId} disabled={isLoading || isAddingTeacher || teachersQuery.isLoading || resourcesQuery.isLoading} onChange={(event) => setNewTeacherId(event.target.value)} data-testid="select-add-course-teacher">
-                  <option value="">Bu semestrə başqa müəllim əlavə et</option>
-                  {availableAdditionalTeachers.map((teacher) => <option key={teacher.clerkUserId} value={teacher.clerkUserId}>{teacher.displayName}</option>)}
-                </select>
-                <button type="button" className={`${buttonClass} shrink-0 px-3`} disabled={!newTeacherId || isAddingTeacher} onClick={() => void addTeacherToCourse()} data-testid="button-add-course-teacher">{isAddingTeacher ? 'Əlavə olunur...' : 'Əlavə et'}</button>
-              </div>
-            </Field>
-            <Field label="Ümumi dərs sayı"><input required min="0" type="number" className={inputClass} value={form.totalLessons} disabled={isLoading} onChange={(event) => setForm({ ...form, totalLessons: Number(event.target.value) })} data-testid="input-edit-course-total-lessons" /></Field>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="PDF linki"><input type="url" className={inputClass} value={form.pdfUrl} disabled={isLoading} onChange={(event) => setForm({ ...form, pdfUrl: event.target.value })} /></Field>
-            <Field label="Telegram linki"><input type="url" className={inputClass} value={form.telegramUrl} disabled={isLoading} onChange={(event) => setForm({ ...form, telegramUrl: event.target.value })} /></Field>
-            <Field label="Zoom linki"><input type="url" className={inputClass} value={form.zoomUrl} disabled={isLoading} onChange={(event) => setForm({ ...form, zoomUrl: event.target.value })} /></Field>
-            <Field label="Google Meet linki"><input type="url" className={inputClass} value={form.googleMeetUrl} disabled={isLoading} onChange={(event) => setForm({ ...form, googleMeetUrl: event.target.value })} /></Field>
-          </div>
-          <div className="flex justify-end"><button type="submit" className={buttonClass} disabled={isLoading || isSaving} data-testid="button-save-course-content">{isSaving ? 'Yadda saxlanılır...' : 'Bütün dərs məlumatlarını yadda saxla'}</button></div>
-        </div>
-      )}
-      <FormNotice text={notice} error={notice.includes('bil') || notice.includes('saxlanıla')} />
-    </form>
-  );
-}
-
-function CourseCatalog({ onEdit }: { onEdit: (courseId: string) => void }) {
-  const coursesQuery = useGetCourses();
-  const queryClient = useQueryClient();
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const deleteCourse = async (courseId: number, title: string) => {
-    if (!window.confirm(`“${title}” dərsini və ona bağlı material, qiymət və davamiyyət məlumatlarını silmək istəyirsiniz?`)) return;
-    setDeletingId(courseId);
-    const response = await fetch(apiUrl(`/admin/courses/${courseId}`), { method: 'DELETE' });
-    if (response.ok) await queryClient.invalidateQueries({ queryKey: getGetCoursesQueryKey() });
-    setDeletingId(null);
-  };
-  return (
-    <div className="mb-8 border-b border-[hsl(var(--border))] pb-7" data-testid="section-admin-course-catalog">
-      <div className="mb-4 flex items-end justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Akademiyanın dərsləri</p>
-          <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Mövcud dərslər</h3>
-        </div>
-        <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">{coursesQuery.data?.length ?? 0} dərs</span>
-      </div>
-      {coursesQuery.isLoading ? (
-        <p className="rounded-xl bg-[hsl(var(--muted)/.45)] p-4 text-xs text-[hsl(var(--muted-foreground))]">Dərslər yüklənir...</p>
-      ) : coursesQuery.data?.length ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {coursesQuery.data.map((course) => (
-            <article key={course.id} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.3)] p-4 transition hover:-translate-y-0.5 hover:border-[hsl(var(--secondary-foreground)/.45)] hover:shadow-[var(--shadow-sm)]" data-testid={`admin-course-${course.id}`}>
-              <button type="button" onClick={() => onEdit(String(course.id))} className="w-full text-left"><p className="font-serif text-lg text-[hsl(var(--primary))]">{course.title}</p>
-              <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{course.instructor || 'Müəllim təyin edilməyib'}</p>
-              <p className="mt-3 text-[11px] font-semibold text-[hsl(var(--secondary-foreground))]">0 / {course.totalLessons} dərs · tələbə irəliləyişi başlanmayıb</p>
-              <p className="mt-3 text-[11px] font-bold text-[hsl(var(--primary))]">Redaktə etmək üçün kliklə</p>
-              </button>
-              <button type="button" onClick={() => void deleteCourse(course.id, course.title)} disabled={deletingId === course.id} className="mt-3 rounded-lg border border-[hsl(var(--destructive)/.3)] px-3 py-2 text-xs font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.08)] disabled:opacity-50" data-testid={`button-delete-course-${course.id}`}>{deletingId === course.id ? 'Silinir...' : 'Dərsi sil'}</button>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-4 text-xs text-[hsl(var(--muted-foreground))]">Hələ dərs əlavə edilməyib.</p>
-      )}
-    </div>
-  );
-}
-
 function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: () => void; teacherOnly?: boolean; teacherName?: string }) {
   type ResourceStudent = { profileId: number; studentNumber: number; firstName: string; lastName: string };
   const coursesQuery = useGetCourses();
@@ -2411,7 +2141,7 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
           const courseUpdateResult = await courseUpdateResponse.json().catch(() => ({})) as { error?: string };
           if (!courseUpdateResponse.ok) throw new Error(courseUpdateResult.error || 'Dərs linkləri yadda saxlanıla bilmədi.');
         }
-        const data = { courseId, termNumber: form.termNumber, kind: form.kind, title: form.title, body: form.body, url: resourceUrl, lessonDays: form.lessonDays, lessonTime: form.lessonTime, isMandatory: form.isMandatory, teacherClerkUserId, studentCapacity: form.studentCapacity };
+        const data = { courseId, termNumber: form.termNumber, kind: form.kind, title: form.title.trim() || 'Dərs', body: form.body.trim() || 'Cədvəl dərsi', url: resourceUrl, lessonDays: form.lessonDays, lessonTime: form.lessonTime, isMandatory: form.isMandatory, teacherClerkUserId, studentCapacity: form.studentCapacity };
        let savedResourceId = editingId;
        if (editingId === null) {
          const createdResource = await mutation.mutateAsync({ data });
@@ -2546,9 +2276,9 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
         </Field>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-       <Field label="Dərsin kitab adı"><input required className={inputClass} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Məsələn, Təcvid qaydaları" data-testid="input-resource-title" /></Field>
+       <Field label="Kitab adı" hint="İstəyə bağlıdır."><input className={inputClass} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Məsələn, Təcvid qaydaları" data-testid="input-resource-title" /></Field>
       </div>
-      <Field label="Müəllif və kitab məlumatı"><textarea required rows={6} className={`${inputClass} resize-y`} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="Müəllif, nəşriyyat, nəşr ili və digər məlumatlar." data-testid="textarea-resource-body" /></Field>
+      <Field label="Müəllif və kitab məlumatı" hint="İstəyə bağlıdır. Boş saxlasanız cədvəl yenə də yaranır."><textarea rows={4} className={`${inputClass} resize-y`} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="Müəllif, nəşriyyat, nəşr ili və digər məlumatlar." data-testid="textarea-resource-body" /></Field>
        <Field label="PDF faylı yüklə" hint="PDF seçin; maksimum 25 MB. Link yazmaq əvəzinə birbaşa fayl yükləyə bilərsiniz."><input ref={pdfInput} type="file" accept="application/pdf,.pdf" className="block w-full cursor-pointer text-sm file:mr-4 file:rounded-xl file:border-0 file:bg-[hsl(var(--primary))] file:px-4 file:py-2.5 file:text-xs file:font-black file:text-[hsl(var(--primary-foreground))] file:transition hover:file:bg-[hsl(var(--primary)/.85)]" onChange={(e) => { const file = e.target.files?.[0] ?? null; if (file && (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf'))) { setNotice('Yalnız PDF faylı seçə bilərsiniz.'); e.target.value = ''; return; } if (file && file.size > 25 * 1024 * 1024) { setNotice('PDF faylı 25 MB-dan böyük ola bilməz.'); e.target.value = ''; return; } setPdfFile(file); }} data-testid="input-resource-pdf-file" />{pdfFile && <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{pdfFile.name}</p>}</Field>
        <div className="grid gap-4 sm:grid-cols-2">
          <Field label="PDF linki"><input type="url" className={inputClass} value={courseLinks.pdfUrl} onChange={(e) => setCourseLinks((current) => ({ ...current, pdfUrl: e.target.value }))} placeholder="https://" data-testid="input-resource-pdf-url" /></Field>
@@ -4411,7 +4141,7 @@ export function AdminPanel() {
               {tab === 'student-notifications' && rolePermissions.has('announcements') && <StudentNotificationForm />}
               {tab === 'exams' && canManageAssignments && <AdminExamsSection resources={resourcesQuery.data ?? []} teacherClerkUserId={activeRole === 'teacher' || activeRole === 'admin' ? user?.id : undefined} owner={owner} />}
             {tab === 'course-activation' && (owner || ownerAssistant) && <CourseActivationSettings />}
-               {tab === 'course-content' && canEditCourseContent && <div className="space-y-8" data-testid="section-course-content-management"><section><div className="mb-4"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Dərs idarəetməsi</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Semestr cədvəli</h3><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hər semestr üçün fənni, günü və saatı yazın. Eyni fənnə bir neçə müəllim əlavə etmək olar. Bu cədvəl tələbənin «Dərs Cədvəlim» bölməsində görünür.</p></div><ResourceForm teacherOnly={activeRole === 'teacher' || activeRole === 'admin'} teacherName={fullName} onSaved={() => setLocation('/admin')} /></section>{activeRole !== 'teacher' && <CourseContentEditor teacherOnly={!owner && !ownerAssistant} />}</div>}
+               {tab === 'course-content' && canEditCourseContent && <div className="space-y-8" data-testid="section-course-content-management"><section><div className="mb-4"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Dərs idarəetməsi</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Semestr cədvəli</h3><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hər semestr üçün fənni, günü və saatı yazın. Eyni fənnə bir neçə müəllim əlavə edin və tələbələri qrupa seçin. Tələbə yalnız öz qrupunu görür.</p></div><ResourceForm teacherOnly={activeRole === 'teacher'} teacherName={fullName} onSaved={() => setLocation('/admin')} /></section></div>}
               {tab === 'announcement' && <><button type="button" onClick={() => setIsAnnouncementListOpen((current) => !current)} aria-expanded={isAnnouncementListOpen} className="focus-ring mb-5 inline-flex items-center gap-2.5 rounded-xl border border-[hsl(var(--border))] px-5 py-3.5 text-sm font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-existing-announcements"><Megaphone size={18} /> Mövcud elanlar</button>{isAnnouncementListOpen && <AnnouncementList />}<AnnouncementForm onSaved={() => setLocation('/admin')} /></>}
             {tab === 'article' && <ArticleForm />}
             {tab === 'benefit' && <DailyBenefitForm />}

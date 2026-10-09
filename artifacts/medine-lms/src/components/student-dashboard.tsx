@@ -526,79 +526,19 @@ function UpcomingLessons({ resources, courseNames, onJoin }: { resources: Learni
 }
 
 function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingRequired, onboardingExamId, onOpenOnboardingExam, onOpenCourse }: { profile?: AcademicProfile; scheduleAccessApproved: boolean; onboardingRequired?: boolean; onboardingExamId?: number | null; onOpenOnboardingExam?: (examId?: number) => void; onOpenCourse?: (courseId: number, teacherName?: string | null) => void }) {
-  const [isScheduleEditorOpen, setIsScheduleEditorOpen] = useState(false);
-  const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(null);
   const [showAttendance, setShowAttendance] = useState(false);
   const [showExcuses, setShowExcuses] = useState(false);
   const [excuses, setExcuses] = useState<Array<{ id: number; courseTitle: string; attendanceDate: string; teacherName: string; reason: string; status: string }>>([]);
   const [excusesLoaded, setExcusesLoaded] = useState(false);
   const [selectedScheduleDay, setSelectedScheduleDay] = useState<string | null>(null);
-  const [teacherChoices, setTeacherChoices] = useState<Array<{ resourceId: number; courseId: number; courseTitle: string; teacherName: string; status: string | null; studentCapacity: number; activeChoiceCount: number; isFull: boolean }>>([]);
-  const [teacherChoiceNotice, setTeacherChoiceNotice] = useState('');
-  const [teacherChangeCourseId, setTeacherChangeCourseId] = useState<number | null>(null);
-  const [subjectRemovalRequests, setSubjectRemovalRequests] = useState<Array<{ id: number; courseId: number; courseTitle: string; termNumber: number; status: string; reason: string; rejectionReason: string | null }>>([]);
-  const queryClient = useQueryClient();
-  const scheduleEditorRef = useRef<HTMLDivElement>(null);
   const activeTerm = profile?.currentTermNumber ?? 1;
   const resourcesQuery = useGetResources({ termNumber: activeTerm }, { query: { enabled: Boolean(profile) && scheduleAccessApproved, queryKey: getGetResourcesQueryKey({ termNumber: activeTerm }) } });
-  useEffect(() => {
-    if (!profile || (!isScheduleEditorOpen && selectedSubjectId === null)) return;
-    void fetch(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/student/teacher-choices?termNumber=${activeTerm}`)
-      .then((response) => response.ok ? response.json() : Promise.reject())
-      .then((data) => setTeacherChoices(data))
-      .catch(() => setTeacherChoices([]));
-  }, [profile?.id, activeTerm, isScheduleEditorOpen, selectedSubjectId]);
-  useEffect(() => {
-    if (!profile) return;
-    const loadSubjectRemovalRequests = async () => {
-      try {
-        const response = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/semester-subject-removal-requests`);
-        if (!response.ok) throw new Error('load');
-        const data = await response.json();
-        setSubjectRemovalRequests(Array.isArray(data) ? data.filter((item) => item.termNumber === activeTerm) : []);
-      } catch {
-        setSubjectRemovalRequests([]);
-      }
-    };
-    void loadSubjectRemovalRequests();
-    const timer = window.setInterval(() => void loadSubjectRemovalRequests(), 30000);
-    window.addEventListener('focus', loadSubjectRemovalRequests);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener('focus', loadSubjectRemovalRequests);
-    };
-  }, [profile?.id, activeTerm]);
-  const [hiddenSubjects, setHiddenSubjects] = useState<string[]>([]);
-  const [removalNotice, setRemovalNotice] = useState('');
-  const [removalCourseId, setRemovalCourseId] = useState<number | null>(null);
-  const [removalReason, setRemovalReason] = useState('');
-  useEffect(() => { setHiddenSubjects([]); setRemovalNotice(''); }, [profile?.id, activeTerm]);
   useEffect(() => { setSelectedScheduleDay(null); }, [activeTerm]);
-  useEffect(() => {
-    if (!isScheduleEditorOpen) return;
-    const frame = window.requestAnimationFrame(() => {
-      scheduleEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [isScheduleEditorOpen]);
-  useEffect(() => {
-    const openScheduleEditor = () => setIsScheduleEditorOpen(true);
-    window.addEventListener('open-schedule-editor', openScheduleEditor);
-    return () => window.removeEventListener('open-schedule-editor', openScheduleEditor);
-  }, [profile?.currentTermNumber]);
   if (!profile) return <section className="h-28 animate-pulse rounded-2xl bg-[hsl(var(--muted))]" data-testid="section-academic-profile" />;
   const currentSemesterLabel = profile.semesters.find((item) => item.termNumber === profile.currentTermNumber)?.label ?? `${profile.currentTermNumber}-ci Semestr`;
   const semester = profile.semesters.find((item) => item.termNumber === activeTerm) ?? profile.semesters[0];
-  const visibleSubjects = semester.subjects.filter((subject) => !hiddenSubjects.includes(`${activeTerm}:${subject.courseId}`));
-  const courseNames = new Map(visibleSubjects.map((subject) => [subject.courseId, subject.title]));
+  const courseNames = new Map(semester.subjects.map((subject) => [subject.courseId, subject.title]));
   const termResources = resourcesQuery.data ?? [];
-  const lessonSchedules = new Map<number, string>();
-  termResources.forEach((resource) => {
-    const when = resource.lessonDays.length ? `${resource.lessonDays.map((day) => lessonDayLabels[day] ?? day).join(', ')} · ${resource.lessonTime ?? 'Saat təyin edilməyib'}` : 'Həftəlik cədvəl təyin edilməyib';
-    const line = `${resource.teacherName || 'Müəllim təyin edilməyib'}: ${when}`;
-    const current = lessonSchedules.get(resource.courseId);
-    lessonSchedules.set(resource.courseId, current ? `${current} · ${line}` : line);
-  });
   const todayKey = academyDateParts().weekday;
   const scheduleByDay = Object.entries(lessonDayLabels).map(([day, label]) => ({
     day, label,
@@ -612,43 +552,6 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
     if (response.ok) setExcuses(await response.json());
     setExcusesLoaded(true);
     setShowExcuses(true);
-  };
-  const handleSubjectRemoval = async (courseId: number, isMandatory: boolean) => {
-    if (isMandatory) {
-      setRemovalCourseId((current) => current === courseId ? null : courseId);
-      setRemovalReason('');
-      setRemovalNotice('');
-      return;
-    }
-    if (!window.confirm('Bu ixtiyari dərsi cədvəldən silmək istəyirsiniz?')) return;
-    const response = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/semester-subjects/${courseId}/${activeTerm}`, { method: 'DELETE' });
-    if (response.ok) {
-      setHiddenSubjects((current) => [...current, `${activeTerm}:${courseId}`]);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getGetResourcesQueryKey({ termNumber: activeTerm }) }),
-        queryClient.invalidateQueries({ queryKey: ['/api/dashboard'] }),
-      ]);
-      setRemovalNotice('İxtiyari dərs cədvəldən silindi.');
-    }
-    else setRemovalNotice('Dərs cədvəldən silinə bilmədi.');
-  };
-  const submitSubjectRemoval = async (courseId: number) => {
-    const reason = removalReason.trim();
-    if (reason.length < 3) { setRemovalNotice('Səbəb ən azı 3 simvol olmalıdır.'); return; }
-    const response = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/semester-subject-removal-requests`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courseId, termNumber: activeTerm, reason }) });
-      const data = await response.json().catch(() => ({}));
-      setRemovalNotice(response.ok ? 'İcbari dərsin silinməsi üçün müraciət göndərildi.' : (data.error ?? 'Müraciət göndərilə bilmədi.'));
-    if (response.ok) {
-      setSubjectRemovalRequests((current) => [data, ...current.filter((request) => request.id !== data.id)]);
-      setRemovalCourseId(null);
-      setRemovalReason('');
-    }
-  };
-  const requestTeacherChoice = async (resourceId: number) => {
-    const response = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/student/teacher-choices`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resourceId }) });
-    const data = await response.json().catch(() => ({}));
-    setTeacherChoiceNotice(response.ok ? 'Müəllim seçiminiz təsdiq üçün göndərildi.' : (data.error ?? 'Müəllim seçimi göndərilə bilmədi.'));
-    if (response.ok) setTeacherChoices((current) => current.map((item) => item.resourceId === resourceId ? { ...item, status: 'pending' } : item));
   };
   return (
     <>
@@ -692,18 +595,7 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
             )}
             {scheduleAccessApproved && (
               <div className="mb-6 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.25)] p-4" data-testid="section-daily-schedule">
-             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="break-words text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{currentSemesterLabel}</p><h3 className="mt-1 font-serif text-xl text-[hsl(var(--primary))]">Dərs Cədvəlim</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Akademiyanın bu semestr üçün hazırladığı gün, saat və müəllimlər</p></div><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => setIsScheduleEditorOpen((current) => !current)} className="focus-ring inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--accent))] px-3 py-2 text-[10px] font-black text-[hsl(var(--primary))] shadow-[0_3px_0_hsl(37_83%_52%)] transition hover:-translate-y-0.5" aria-expanded={isScheduleEditorOpen} data-testid="button-edit-schedule"><Settings2 size={14} /> {isScheduleEditorOpen ? 'Düzəlişi bağla' : 'Fənləri idarə et'}</button><CalendarDays className="text-[hsl(var(--secondary-foreground))]" size={19} /></div></div>
-               {removalNotice && <p className="mt-4 rounded-xl bg-[hsl(var(--secondary)/.35)] px-4 py-3 text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{removalNotice}</p>}
-                {subjectRemovalRequests.length > 0 && <div className="mt-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3" data-testid="section-subject-removal-status" aria-live="polite">
-                  <p className="text-xs font-black text-[hsl(var(--primary))]">Fənn silinməsi müraciətləriniz</p>
-                 <div className="mt-2 space-y-2">{subjectRemovalRequests.map((request) => {
-                    const requestSemester = profile.semesters.find((item) => item.termNumber === request.termNumber);
-                    const subjectTitle = requestSemester?.subjects.find((subject) => subject.courseId === request.courseId)?.title || request.courseTitle || `Dərs #${request.courseId}`;
-                    const statusLabel = request.status === 'approved' ? 'Təsdiqlənib — fənn cədvəldən çıxarılıb' : request.status === 'rejected' ? 'Rədd edilib — fənn cədvəldə saxlanılıb' : 'Gözləmədə — müəllimin qərarı gözlənilir';
-                    const statusClass = request.status === 'approved' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : request.status === 'rejected' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-900';
-                    return <div key={request.id} className={`rounded-lg border px-3 py-3 text-xs ${statusClass}`} data-testid={`card-subject-removal-request-${request.id}`}><div className="flex flex-wrap items-start justify-between gap-2"><span className="font-bold">{subjectTitle}</span><span className="font-bold">{request.termNumber}-ci semestr</span></div><p className="mt-1 font-semibold">{statusLabel}</p><p className="mt-2 text-[11px] leading-5">Sizin səbəbiniz: {request.reason}</p>{request.status === 'rejected' && <p className="mt-2 rounded-md bg-white/70 px-2.5 py-2 text-[11px] font-semibold leading-5" data-testid={`text-subject-removal-rejection-reason-${request.id}`}><strong>Müəllimin izahı:</strong> {request.rejectionReason || 'Rədd səbəbi qeyd edilməyib.'}</p>}</div>;
-                 })}</div>
-               </div>}
+             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="break-words text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{currentSemesterLabel}</p><h3 className="mt-1 font-serif text-xl text-[hsl(var(--primary))]">Dərs Cədvəlim</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Yalnız sizə təyin olunmuş müəllim qrupunun gün və saatı</p></div><CalendarDays className="text-[hsl(var(--secondary-foreground))]" size={19} /></div>
               {resourcesQuery.isLoading ? <div className="mt-4 h-20 animate-pulse rounded-xl bg-[hsl(var(--muted))]" /> : <div className="mt-4">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-7">
                   {scheduleByDay.map(({ day, label, lessons }) => { const live = lessons.some((lesson) => lessonIsLive(lesson)); return <button key={day} type="button" onClick={() => setSelectedScheduleDay(day)} className={`focus-ring relative rounded-xl border px-2 py-3 text-center transition hover:-translate-y-0.5 ${day === (selectedScheduleDay ?? todayKey) ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent))] text-[hsl(var(--primary))] shadow-[0_4px_0_hsl(37_83%_52%)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]'}`} aria-expanded={day === (selectedScheduleDay ?? todayKey)} data-testid={`button-schedule-day-${day}`}><span className="block text-xs font-black">{label}</span><span className="mt-1 block text-[10px] font-semibold opacity-70">{lessons.length ? `${lessons.length} dərs` : 'Dərs yoxdur'}</span>{live && <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[hsl(var(--destructive))] px-1.5 py-0.5 text-[9px] font-black text-white"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> CANLI</span>}</button>; })}
@@ -712,58 +604,10 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
               </div>}
             </div>
             )}
-             {scheduleAccessApproved && isScheduleEditorOpen && semester.subjects.length > 0 && <div ref={scheduleEditorRef} className="mt-5 overflow-hidden rounded-xl border border-[hsl(var(--border))]" data-testid="section-schedule-editor">
-             <div className="bg-[hsl(var(--muted)/.45)] px-4 py-3 text-right text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]"><span>Fənnin silinməsi və müəllim dəyişdirilməsi</span></div>
-                 {visibleSubjects.map((subject) => { const choices = teacherChoices.filter((choice) => choice.courseId === subject.courseId); const hasActiveChoice = choices.some((choice) => choice.status === 'pending' || choice.status === 'approved'); return <div key={subject.courseId} className="border-t border-[hsl(var(--border))] px-4 py-3.5"><div className="flex items-center gap-3"><button type="button" onClick={() => setSelectedSubjectId(subject.courseId)} className="focus-ring grid min-w-0 flex-1 grid-cols-[1fr_auto] items-center text-left text-sm" data-testid={`button-subject-${subject.courseId}`}><span className="font-semibold text-[hsl(var(--primary))]">{subject.title}<span className="mt-1 block text-[11px] font-medium text-[hsl(var(--secondary-foreground))]">Həftəlik dərs: {lessonSchedules.get(subject.courseId) ?? 'cədvəl təyin edilməyib'}</span><span className="mt-1 block text-[11px] font-medium text-[hsl(var(--secondary-foreground))]">Qayıb: {subject.absenceCount} · Qayıb faizi: {subject.attendancePercent === null ? '—%' : `${subject.attendancePercent}%`}</span>{subject.gradingComponents?.length ? <span className="mt-2 flex flex-wrap gap-1.5">{subject.gradingComponents.map((component) => <span key={component.name} className="rounded-md bg-[hsl(var(--muted))] px-1.5 py-1 text-[10px] font-semibold">{component.name}: {component.score === null ? '—' : `${component.score}/100`}</span>)}</span> : null}<span className="mt-1 block text-[11px] font-medium text-[hsl(var(--secondary-foreground))]">Kitab və materiallara bax · <ChevronRight className="inline" size={13} /></span></span>{subject.grade === null ? <span className="text-sm font-bold text-[hsl(var(--muted-foreground))]" aria-label="Qiymət daxil edilməyib">—</span> : <span className="rounded-lg bg-[hsl(var(--secondary)/.62)] px-2.5 py-1 text-xs font-bold text-[hsl(var(--secondary-foreground))]">{subject.grade.toFixed(2)} / 5.0</span>}</button><button type="button" onClick={() => setTeacherChangeCourseId((current) => current === subject.courseId ? null : subject.courseId)} className="focus-ring inline-flex shrink-0 items-center gap-1 rounded-lg bg-[hsl(var(--accent))] px-2.5 py-2 text-[10px] font-black text-[hsl(var(--primary))] shadow-[0_3px_0_hsl(37_83%_52%)]" data-testid={`button-change-teacher-${subject.courseId}`}><UsersRound size={14} /> Müəllimi dəyiş</button><button type="button" onClick={() => void handleSubjectRemoval(subject.courseId, subject.isMandatory)} className="focus-ring shrink-0 rounded-lg border border-[hsl(var(--border))] px-2.5 py-2 text-[10px] font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid={`button-remove-subject-${subject.courseId}`}><Trash2 size={14} />{subject.isMandatory ? 'Müraciət et' : 'Cədvəldən sil'}</button></div>{teacherChangeCourseId === subject.courseId && <div className="mt-3 rounded-xl border-2 border-[hsl(var(--accent)/.65)] bg-[hsl(var(--accent)/.12)] p-3"><p className="text-xs font-black text-[hsl(var(--primary))]">Müəllimi dəyiş</p>{choices.length > 1 ? <div className="mt-2 flex flex-wrap gap-2">{choices.map((choice) => { const disabled = choice.status === 'pending' || choice.status === 'approved' || (choice.isFull && !hasActiveChoice); return <button key={choice.resourceId} type="button" disabled={disabled} onClick={() => void requestTeacherChoice(choice.resourceId)} className="focus-ring rounded-lg bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] disabled:opacity-60">{choice.teacherName} · {choice.status === 'pending' ? 'Gözləmədə' : choice.status === 'approved' ? 'Təsdiqlənib' : choice.isFull ? `Qrup doludur (${choice.activeChoiceCount}/${choice.studentCapacity})` : 'Seç'}</button>; })}</div> : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Bu fənn üçün alternativ müəllim seçimi yoxdur.</p>}</div>}{removalCourseId === subject.courseId && subject.isMandatory && <div className="mt-3 rounded-xl bg-[hsl(var(--muted)/.45)] p-3"><textarea value={removalReason} onChange={(event) => setRemovalReason(event.target.value)} rows={3} placeholder="Müraciət səbəbinizi yazın..." className="focus-ring w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs" data-testid={`input-subject-removal-reason-${subject.courseId}`} /><button type="button" onClick={() => void submitSubjectRemoval(subject.courseId)} className="focus-ring mt-2 rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))]" data-testid={`button-submit-subject-removal-${subject.courseId}`}>Müraciəti göndər</button></div>}</div>; })}
-            </div>}
           </div>
        </div>
      </section>
-       {selectedSubjectId !== null && (() => {
-        const subject = semester.subjects.find((item) => item.courseId === selectedSubjectId);
-        const choice = teacherChoices.find((item) => item.courseId === selectedSubjectId && item.status === 'approved')
-          ?? teacherChoices.find((item) => item.courseId === selectedSubjectId && item.status === 'pending');
-        return <CourseDetailModal
-          courseId={selectedSubjectId}
-          teacherName={subject?.instructor || choice?.teacherName || null}
-          teacherChoiceStatus={choice?.status ?? null}
-          onClose={() => setSelectedSubjectId(null)}
-        />;
-      })()}
     </>
-  );
-}
-
-function AllSubjectsMaterialsModal({ semester, resources, isLoading, onClose, onOpenCourse }: {
-  semester: AcademicProfile['semesters'][number];
-  resources: LearningResource[];
-  isLoading: boolean;
-  onClose: () => void;
-  onOpenCourse: (courseId: number) => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-[55] flex items-end justify-center bg-[hsl(var(--primary)/.5)] p-0 backdrop-blur-sm sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="all-subjects-title" data-testid="modal-all-subjects-materials">
-      <button type="button" className="absolute inset-0 cursor-default" aria-label="Pəncərəni bağla" onClick={onClose} />
-      <div className="relative max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-t-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xl)] sm:rounded-[28px] sm:p-8">
-        <button type="button" onClick={onClose} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Fənlər və materiallar pəncərəsini bağla" data-testid="button-close-all-subjects-materials"><X size={18} /></button>
-        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Dərs Cədvəlim · {semester.label}</p>
-        <h2 id="all-subjects-title" className="mt-2 pr-10 font-serif text-3xl text-[hsl(var(--primary))]">Bütün fənlər və materiallar</h2>
-        {isLoading ? <div className="mt-6 h-32 animate-pulse rounded-2xl bg-[hsl(var(--muted))]" /> : semester.subjects.length === 0 ? <p className="mt-6 rounded-2xl border border-dashed border-[hsl(var(--border))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">Bu semestr üzrə fənn yoxdur.</p> : (
-          <div className="mt-6 space-y-3">
-            {semester.subjects.map((subject) => {
-              const subjectResources = resources.filter((resource) => resource.courseId === subject.courseId);
-              return <article key={subject.courseId} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] p-4">
-                <button type="button" onClick={() => onOpenCourse(subject.courseId)} className="focus-ring flex w-full items-start justify-between gap-4 text-left">
-                  <span><span className="block text-base font-bold text-[hsl(var(--primary))]">{subject.title}</span><span className="mt-1 block text-xs text-[hsl(var(--muted-foreground))]">Müəllim: {subject.instructor || 'Müəllim təyin edilməyib'}</span><span className="mt-2 block text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{subjectResources.length ? `${subjectResources.length} material` : 'Material əlavə edilməyib'}</span></span>
-                  <ChevronRight className="mt-1 shrink-0 text-[hsl(var(--secondary-foreground))]" size={18} />
-                </button>
-                {subjectResources.length > 0 && <div className="mt-3 border-t border-[hsl(var(--border))] pt-3">{subjectResources.map((resource) => <p key={resource.id} className="flex items-center gap-2 py-1 text-xs text-[hsl(var(--muted-foreground))]"><FileText size={13} /> {resource.title}</p>)}</div>}
-              </article>;
-            })}
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 

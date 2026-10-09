@@ -3585,59 +3585,59 @@ function TeacherStats({ canEdit }: { canEdit: boolean }) {
   }, []);
 
   return (
-    <section className="mt-8" aria-labelledby="teacher-stats-title" data-testid="teacher-stats">
-      <div className="mb-4 flex items-end justify-between gap-4">
+    <section className="mt-5" aria-labelledby="teacher-stats-title" data-testid="teacher-stats">
+      <div className="mb-2 flex items-end justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--secondary-foreground))]">Akademik icmal</p>
-          <h2 id="teacher-stats-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Tələbə statistikası</h2>
+          <h2 id="teacher-stats-title" className="mt-0.5 font-serif text-xl text-[hsl(var(--primary))]">Tələbə statistikası</h2>
         </div>
         <p className="hidden text-xs text-[hsl(var(--muted-foreground))] sm:block">Təsdiqlənmiş tələbələr üzrə</p>
       </div>
       {profilesQuery.isLoading ? (
-         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {[1, 2, 3].map((item) => <div key={item} className="h-28 animate-pulse rounded-2xl bg-[hsl(var(--muted))]" />)}
+         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {[1, 2, 3].map((item) => <div key={item} className="h-16 animate-pulse rounded-xl bg-[hsl(var(--muted))]" />)}
         </div>
       ) : profilesQuery.isError ? (
         <p className="rounded-2xl border border-[hsl(var(--destructive)/.2)] bg-[hsl(var(--destructive)/.05)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">Tələbə statistikası yüklənə bilmədi.</p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-3">
-           <button type="button" onClick={() => setDirectoryFilter('all')} className="focus-ring flex items-center justify-between gap-3 rounded-2xl bg-[hsl(var(--primary))] p-4 text-left text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5">
+        <div className="grid gap-2 sm:grid-cols-3">
+           <button type="button" onClick={() => setDirectoryFilter('all')} className="focus-ring flex items-center justify-between gap-2 rounded-xl bg-[hsl(var(--primary))] px-3 py-2.5 text-left text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5">
             <span>
-              <span className="grid size-9 place-items-center rounded-xl bg-white/10 text-[hsl(var(--accent))]"><UsersRound size={16} /></span>
-              <span className="mt-4 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--primary-foreground)/.62)]">Ümumi tələbə</span>
-              <span className="mt-1 block font-serif text-4xl leading-none">{profiles.length}</span>
+              <span className="grid size-7 place-items-center rounded-lg bg-white/10 text-[hsl(var(--accent))]"><UsersRound size={14} /></span>
+              <span className="mt-2 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--primary-foreground)/.62)]">Ümumi tələbə</span>
+              <span className="mt-0.5 block font-serif text-2xl leading-none">{profiles.length}</span>
             </span>
-            <span className="flex items-end gap-1" aria-hidden>{[12, 20, 16, 28, 22].map((height) => <span key={height} className="w-1.5 rounded-full bg-white/25" style={{ height }} />)}</span>
+            <span className="flex items-end gap-1" aria-hidden>{[8, 14, 11, 18, 15].map((height) => <span key={height} className="w-1 rounded-full bg-white/25" style={{ height }} />)}</span>
            </button>
-           <button type="button" onClick={() => setDirectoryFilter(1)} className="focus-ring flex items-center justify-between gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
+           <button type="button" onClick={() => setDirectoryFilter(1)} className="focus-ring flex items-center justify-between gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2.5 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
             <span>
-              <span className="grid size-9 place-items-center rounded-xl bg-[#eef8f1] text-[#2f7d4f]"><GraduationCap size={16} /></span>
-              <span className="mt-4 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">1-ci tədris ili</span>
-              <span className="mt-1 block font-serif text-4xl leading-none text-[hsl(var(--primary))]">{firstYearCount}</span>
-              <span className="mt-1 block text-xs text-[hsl(var(--muted-foreground))]">tələbə</span>
+              <span className="grid size-7 place-items-center rounded-lg bg-[#eef8f1] text-[#2f7d4f]"><GraduationCap size={14} /></span>
+              <span className="mt-2 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">1-ci tədris ili</span>
+              <span className="mt-0.5 block font-serif text-2xl leading-none text-[hsl(var(--primary))]">{firstYearCount}</span>
+              <span className="block text-[11px] text-[hsl(var(--muted-foreground))]">tələbə</span>
             </span>
-            <span className="flex items-end gap-1" aria-hidden>{[10, 16, 22, 28].map((height) => <span key={height} className="w-1.5 rounded-full bg-[#8dcea8]" style={{ height }} />)}</span>
+            <span className="flex items-end gap-1" aria-hidden>{[7, 11, 15, 18].map((height) => <span key={height} className="w-1 rounded-full bg-[#8dcea8]" style={{ height }} />)}</span>
            </button>
-           <button type="button" onClick={() => setDirectoryFilter(2)} className="focus-ring flex items-center justify-between gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
+           <button type="button" onClick={() => setDirectoryFilter(2)} className="focus-ring flex items-center justify-between gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2.5 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
             <span>
-              <span className="grid size-9 place-items-center rounded-xl bg-[#eef4ff] text-[#3d63b8]"><GraduationCap size={16} /></span>
-              <span className="mt-4 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">2-ci tədris ili</span>
-              <span className="mt-1 block font-serif text-4xl leading-none text-[hsl(var(--primary))]">{secondYearCount}</span>
-              <span className="mt-1 block text-xs text-[hsl(var(--muted-foreground))]">tələbə</span>
+              <span className="grid size-7 place-items-center rounded-lg bg-[#eef4ff] text-[#3d63b8]"><GraduationCap size={14} /></span>
+              <span className="mt-2 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">2-ci tədris ili</span>
+              <span className="mt-0.5 block font-serif text-2xl leading-none text-[hsl(var(--primary))]">{secondYearCount}</span>
+              <span className="block text-[11px] text-[hsl(var(--muted-foreground))]">tələbə</span>
             </span>
-            <span className="flex items-end gap-1" aria-hidden>{[18, 12, 16, 10].map((height) => <span key={height} className="w-1.5 rounded-full bg-[#d7e2f2]" style={{ height }} />)}</span>
+            <span className="flex items-end gap-1" aria-hidden>{[12, 8, 11, 7].map((height) => <span key={height} className="w-1 rounded-full bg-[#d7e2f2]" style={{ height }} />)}</span>
            </button>
-            {activeTerms.includes(5) && activeTerms.includes(6) && <button type="button" onClick={() => setDirectoryFilter(3)} className="focus-ring rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
-             <GraduationCap size={19} className="text-[hsl(var(--secondary-foreground))]" />
-             <p className="mt-5 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">3-cü tədris ili</p>
-             <p className="mt-1 font-serif text-4xl leading-none text-[hsl(var(--primary))]">{thirdYearCount}</p>
-             <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">tələbə</p>
+            {activeTerms.includes(5) && activeTerms.includes(6) && <button type="button" onClick={() => setDirectoryFilter(3)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2.5 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
+             <GraduationCap size={16} className="text-[hsl(var(--secondary-foreground))]" />
+             <p className="mt-2 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">3-cü tədris ili</p>
+             <p className="mt-0.5 font-serif text-2xl leading-none text-[hsl(var(--primary))]">{thirdYearCount}</p>
+             <p className="text-[11px] text-[hsl(var(--muted-foreground))]">tələbə</p>
             </button>}
-            {activeTerms.includes(7) && activeTerms.includes(8) && <button type="button" onClick={() => setDirectoryFilter(4)} className="focus-ring rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
-             <GraduationCap size={19} className="text-[hsl(var(--secondary-foreground))]" />
-             <p className="mt-5 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">4-cü tədris ili</p>
-             <p className="mt-1 font-serif text-4xl leading-none text-[hsl(var(--primary))]">{fourthYearCount}</p>
-             <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">tələbə</p>
+            {activeTerms.includes(7) && activeTerms.includes(8) && <button type="button" onClick={() => setDirectoryFilter(4)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2.5 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
+             <GraduationCap size={16} className="text-[hsl(var(--secondary-foreground))]" />
+             <p className="mt-2 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">4-cü tədris ili</p>
+             <p className="mt-0.5 font-serif text-2xl leading-none text-[hsl(var(--primary))]">{fourthYearCount}</p>
+             <p className="text-[11px] text-[hsl(var(--muted-foreground))]">tələbə</p>
             </button>}
         </div>
       )}
@@ -3690,7 +3690,7 @@ const adminTabButtonClass = (value: string, active: boolean) =>
   `focus-ring inline-flex max-w-full items-center gap-2 whitespace-normal rounded-full border px-3.5 py-2 text-left text-xs font-bold transition ${active ? 'border-transparent bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]'}`;
 
 const adminTileClass = (_value: string, active: boolean) =>
-  `focus-ring flex min-h-[92px] flex-col items-start justify-between gap-3 rounded-2xl border px-3.5 py-3 text-left text-xs font-bold text-[hsl(var(--primary))] transition hover:-translate-y-0.5 ${active ? 'border-[hsl(var(--primary))] bg-[hsl(var(--accent)/.55)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] hover:bg-[hsl(var(--muted))]'}`;
+  `focus-ring flex min-h-[64px] flex-col items-start justify-center gap-1.5 rounded-xl border px-2.5 py-2 text-left text-[11px] font-bold leading-4 text-[hsl(var(--primary))] transition hover:-translate-y-0.5 ${active ? 'border-[hsl(var(--primary))] bg-[hsl(var(--accent)/.55)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] hover:bg-[hsl(var(--muted))]'}`;
 
 function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: boolean }) {
   const usersQuery = useGetAdminUsers({ query: { queryKey: getGetAdminUsersQueryKey() } });
@@ -4403,9 +4403,9 @@ export function AdminPanel() {
         </div>
       </header>
        <div className="mx-auto min-w-0 max-w-6xl px-4 pt-5 md:px-8">
-         <section className="flex flex-wrap items-center gap-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 shadow-[var(--shadow-xs)] sm:gap-6 sm:px-5" data-testid="section-admin-account">
-           <div className="flex min-w-0 items-center gap-3">
-             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[hsl(var(--border))] font-serif text-sm font-bold text-[hsl(var(--primary))]">{accountCode}</div>
+         <section className="flex flex-wrap items-center gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 shadow-[var(--shadow-xs)] sm:gap-5 sm:px-4" data-testid="section-admin-account">
+           <div className="flex min-w-0 items-center gap-2.5">
+             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[hsl(var(--border))] font-serif text-xs font-bold text-[hsl(var(--primary))]">{accountCode}</div>
              <div className="min-w-0">
                <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">Hesab məlumatları</p>
                <p className="truncate font-bold text-[hsl(var(--primary))]">{fullName}</p>
@@ -4427,15 +4427,15 @@ export function AdminPanel() {
           {!owner && <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Tələbələr və ziyarətçilər üçün dərsləri, elanları, məqalələri, günün faydasını və dərs resurslarını buradan əlavə edin.</p>}
         </div>
         <TeacherStats canEdit={owner || ownerAssistant} />
-        <section className="mt-8 min-w-0 rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-[var(--shadow-sm)] sm:p-6">
-           <h2 className="mb-4 flex items-center gap-2 font-serif text-3xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]"><ShieldCheck size={22} /> İdarə paneli</h2>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-                  {([['announcement', 'Yeni elan', Megaphone, 'announcements'], ['student-notifications', 'Tələbələrə bildiriş', Send, 'announcements'], ['article', 'Məqalə', BookOpenText, 'articles'], ['benefit', 'Günün faydası', Quote, 'dailyBenefits'], ['student-management', 'Tələbələri idarə et', UsersRound, 'students'], ['application', 'Müraciətlər', UsersRound, 'applications'], ['exams', 'İmtahan və testlər', ClipboardList, 'assignments'], ['course-content', 'Tədris proqramı', BookOpenText, 'schedule'], ['users', 'İstifadəçi rolları', UserCog, 'userRoleManagement'], ['course-activation', 'Dərsləri idarə et', BookOpen, 'schedule'], ['statistics', 'Statistika', UsersRound, null], ['audit-history', 'Audit tarixçəsi', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <button key={value} type="button" onClick={() => toggleTab(value)} className={adminTileClass(value, tab === value)} data-testid={`tab-admin-${value}`}><span className="grid size-9 place-items-center rounded-xl bg-white/70"><Icon size={16} /></span><span className="leading-4">{label} {value === 'application' && pendingApplicationCount > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</span></button>)}
-                   {(owner || ownerAssistant) && <button type="button" onClick={() => toggleTab('graduation-certificates')} className={adminTileClass('graduation-certificates', tab === 'graduation-certificates')} data-testid="tab-admin-graduation-certificates"><span className="grid size-9 place-items-center rounded-xl bg-white/70"><FileBadge size={16} /></span><span className="leading-4">Şəhadətnamə idarəsi</span></button>}
-                   {(owner || ownerAssistant || activeRole === 'admin') && <button type="button" onClick={() => toggleTab('schedule-prep')} className={adminTileClass('schedule-prep', tab === 'schedule-prep')} data-testid="tab-admin-schedule-prep"><span className="grid size-9 place-items-center rounded-xl bg-white/70"><CalendarRange size={16} /></span><span className="leading-4">Cədvəl hazırlama</span></button>}
-                   <button type="button" onClick={() => toggleTab('library')} className={adminTileClass('library', tab === 'library')} data-testid="tab-admin-library"><span className="grid size-9 place-items-center rounded-xl bg-white/70"><Library size={16} /></span><span className="leading-4">Mədrəsə Kitabxanası</span></button>
+        <section className="mt-5 min-w-0 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 shadow-[var(--shadow-sm)] sm:p-4">
+           <h2 className="mb-3 flex items-center gap-2 font-serif text-2xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]"><ShieldCheck size={18} /> İdarə paneli</h2>
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+                  {([['announcement', 'Yeni elan', Megaphone, 'announcements'], ['student-notifications', 'Tələbələrə bildiriş', Send, 'announcements'], ['article', 'Məqalə', BookOpenText, 'articles'], ['benefit', 'Günün faydası', Quote, 'dailyBenefits'], ['student-management', 'Tələbələri idarə et', UsersRound, 'students'], ['application', 'Müraciətlər', UsersRound, 'applications'], ['exams', 'İmtahan və testlər', ClipboardList, 'assignments'], ['course-content', 'Tədris proqramı', BookOpenText, 'schedule'], ['users', 'İstifadəçi rolları', UserCog, 'userRoleManagement'], ['course-activation', 'Dərsləri idarə et', BookOpen, 'schedule'], ['statistics', 'Statistika', UsersRound, null], ['audit-history', 'Audit tarixçəsi', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <button key={value} type="button" onClick={() => toggleTab(value)} className={adminTileClass(value, tab === value)} data-testid={`tab-admin-${value}`}><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Icon size={16} /></span><span className="leading-4">{label} {value === 'application' && pendingApplicationCount > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</span></button>)}
+                   {(owner || ownerAssistant) && <button type="button" onClick={() => toggleTab('graduation-certificates')} className={adminTileClass('graduation-certificates', tab === 'graduation-certificates')} data-testid="tab-admin-graduation-certificates"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><FileBadge size={16} /></span><span className="leading-4">Şəhadətnamə idarəsi</span></button>}
+                   {(owner || ownerAssistant || activeRole === 'admin') && <button type="button" onClick={() => toggleTab('schedule-prep')} className={adminTileClass('schedule-prep', tab === 'schedule-prep')} data-testid="tab-admin-schedule-prep"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><CalendarRange size={16} /></span><span className="leading-4">Cədvəl hazırlama</span></button>}
+                   <button type="button" onClick={() => toggleTab('library')} className={adminTileClass('library', tab === 'library')} data-testid="tab-admin-library"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Library size={16} /></span><span className="leading-4">Mədrəsə Kitabxanası</span></button>
             </div>
-               <div className="mb-5 mt-5 flex flex-wrap gap-2 border-t border-[hsl(var(--border))] pt-4">
+               <div className="mb-4 mt-3 flex flex-wrap gap-1.5 border-t border-[hsl(var(--border))] pt-3">
                  <button type="button" onClick={() => toggleTab('schedule')} className={adminTabButtonClass('schedule', tab === 'schedule')} data-testid="tab-admin-schedule"><CalendarRange size={16} /> Mənim cədvəlim</button>
                   <button type="button" onClick={() => toggleTab('teachers-schedule')} className={adminTabButtonClass('teachers-schedule', tab === 'teachers-schedule')} data-testid="tab-admin-teachers-schedule"><CalendarRange size={16} /> Müəllimlər cədvəli</button>
                    <button type="button" onClick={() => toggleTab('messages')} className={adminTabButtonClass('messages', tab === 'messages')} data-testid="tab-admin-messages"><Mail size={16} /> Məsləhətləşmə / Əlaqə {unreadMessageCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unreadMessageCount}</span>}</button>

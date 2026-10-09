@@ -16,6 +16,7 @@ import {
   GraduationCap,
   LogOut,
   Link2,
+  Library,
   Mail,
   Megaphone,
   Plus,
@@ -139,9 +140,10 @@ import { MessageCenter } from '@/components/message-center';
 import { loadUnansweredQuestionCount, QaCenter } from '@/components/qa-center';
 import { AdminExamsSection } from '@/components/exam-module';
 import { GraduateCertificateSection } from '@/components/graduate-certificate';
+import { MedreseLibrary } from '@/components/medrese-library';
 import { formatFullName, formatPersonName } from '@/lib/utils';
 
-type Tab = 'course-content' | 'course-activation' | 'announcement' | 'student-notifications' | 'article' | 'benefit' | 'schedule' | 'teachers-schedule' | 'messages' | 'questions' | 'student-management' | 'application' | 'exams' | 'users' | 'statistics' | 'audit-history' | 'graduation-certificates';
+type Tab = 'course-content' | 'course-activation' | 'announcement' | 'student-notifications' | 'article' | 'benefit' | 'schedule' | 'teachers-schedule' | 'messages' | 'questions' | 'student-management' | 'application' | 'exams' | 'users' | 'statistics' | 'audit-history' | 'graduation-certificates' | 'library';
 
 const emptyCourse: CourseInput = {
   title: '',
@@ -4226,6 +4228,7 @@ export function AdminPanel() {
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
                   {([['announcement', 'Yeni elan', Megaphone, 'announcements'], ['student-notifications', 'Tələbələrə bildiriş', Send, 'announcements'], ['article', 'Məqalə', BookOpenText, 'articles'], ['benefit', 'Günün faydası', Quote, 'dailyBenefits'], ['student-management', 'Tələbələri idarə et', UsersRound, 'students'], ['application', 'Müraciətlər', UsersRound, 'applications'], ['exams', 'İmtahan və testlər', ClipboardList, 'assignments'], ['course-content', 'Tədris proqramı', BookOpenText, 'schedule'], ['users', 'İstifadəçi rolları', UserCog, 'userRoleManagement'], ['course-activation', 'Dərsləri idarə et', BookOpen, 'schedule'], ['statistics', 'Statistika', UsersRound, null], ['audit-history', 'Audit tarixçəsi', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <button key={value} type="button" onClick={() => toggleTab(value)} className={adminTileClass(value, tab === value)} data-testid={`tab-admin-${value}`}><span className="grid size-9 place-items-center rounded-xl bg-white/70"><Icon size={16} /></span><span className="leading-4">{label} {value === 'application' && pendingApplicationCount > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</span></button>)}
                    {(owner || ownerAssistant) && <button type="button" onClick={() => toggleTab('graduation-certificates')} className={adminTileClass('graduation-certificates', tab === 'graduation-certificates')} data-testid="tab-admin-graduation-certificates"><span className="grid size-9 place-items-center rounded-xl bg-white/70"><FileBadge size={16} /></span><span className="leading-4">Şəhadətnamə idarəsi</span></button>}
+                   <button type="button" onClick={() => toggleTab('library')} className={adminTileClass('library', tab === 'library')} data-testid="tab-admin-library"><span className="grid size-9 place-items-center rounded-xl bg-white/70"><Library size={16} /></span><span className="leading-4">Mədrəsə Kitabxanası</span></button>
             </div>
                <div className="mb-5 mt-5 flex flex-wrap gap-2 border-t border-[hsl(var(--border))] pt-4">
                  <button type="button" onClick={() => toggleTab('schedule')} className={adminTabButtonClass('schedule', tab === 'schedule')} data-testid="tab-admin-schedule"><CalendarRange size={16} /> Mənim cədvəlim</button>
@@ -4246,6 +4249,7 @@ export function AdminPanel() {
             {tab === 'statistics' && owner && <><AnalyticsDashboard applications={applicationsQuery.data ?? []} profiles={academicProfilesQuery.data ?? []} resources={resourcesQuery.data ?? []} onRefresh={() => { void Promise.all([applicationsQuery.refetch(), academicProfilesQuery.refetch(), resourcesQuery.refetch()]); }} /><SystemStatisticsSettings /></>}
             {tab === 'audit-history' && owner && <AuditHistory />}
             {tab === 'graduation-certificates' && (owner || ownerAssistant) && <GraduateCertificateSection canRevoke={owner} />}
+            {tab === 'library' && <MedreseLibrary canManage={owner || ownerAssistant || activeRole === 'admin'} />}
              {tab === 'schedule' && <TeacherSchedule ownerName={fullName} />}
               {tab === 'teachers-schedule' && <TeachersSchedule ownerName={fullName} />}
                {tab === 'messages' && <MessageCenter staff />}

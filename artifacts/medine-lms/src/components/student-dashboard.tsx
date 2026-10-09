@@ -17,6 +17,7 @@ import {
   GraduationCap,
   HelpCircle,
   LayoutDashboard,
+  Library,
   LogOut,
   Send,
   Menu,
@@ -34,7 +35,7 @@ import {
 } from 'lucide-react';
 import { useUser } from '@clerk/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { formatFullName } from '@/lib/utils';
+import { MedreseLibrary } from '@/components/medrese-library';
 import { createPortal } from 'react-dom';
 import type { AcademicProfile, Announcement, AssignmentAttachment, AssignmentUploadInput, Course, Dashboard, LearningResource } from '@workspace/api-client-react';
 import { getGetCourseQueryKey, getGetResourcesQueryKey, getGetStudentAssignmentQueryKey, getGetStudentAssignmentsQueryKey, useGetCourse, useGetResources, useGetStudentAssignment, useGetStudentAssignments, useRequestStudentAssignmentUploadUrl, useSubmitAssignment } from '@workspace/api-client-react';
@@ -175,7 +176,7 @@ function BrandMark({ dark = false }: { dark?: boolean }) {
   );
 }
 
-function Sidebar({ onClose, currentSemester, unansweredQuestionCount = 0, onOpenPasswordChange, onOpenMessages, onOpenQuestions, onOpenExams, onOpenProfileEdit, onOpenTranscript }: { onClose?: () => void; currentSemester?: string; unansweredQuestionCount?: number; onOpenPasswordChange: () => void; onOpenMessages: () => void; onOpenQuestions: () => void; onOpenExams: () => void; onOpenProfileEdit: () => void; onOpenTranscript: () => void }) {
+function Sidebar({ onClose, currentSemester, unansweredQuestionCount = 0, onOpenPasswordChange, onOpenMessages, onOpenQuestions, onOpenExams, onOpenProfileEdit, onOpenTranscript, onOpenLibrary }: { onClose?: () => void; currentSemester?: string; unansweredQuestionCount?: number; onOpenPasswordChange: () => void; onOpenMessages: () => void; onOpenQuestions: () => void; onOpenExams: () => void; onOpenProfileEdit: () => void; onOpenTranscript: () => void; onOpenLibrary: () => void }) {
   const [activeNavHref, setActiveNavHref] = useState('#icmal');
   return (
     <aside className="flex h-full w-screen max-w-none shrink-0 flex-col overflow-y-auto bg-[hsl(var(--sidebar))] px-6 py-7 text-[hsl(var(--sidebar-foreground))] lg:w-[264px]">
@@ -254,6 +255,20 @@ function Sidebar({ onClose, currentSemester, unansweredQuestionCount = 0, onOpen
         <Award size={18} strokeWidth={activeNavHref === '#netice-karti' ? 2.4 : 1.8} />
         <span>Nəticə kartı</span>
         {activeNavHref === '#netice-karti' && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[hsl(var(--accent))]" />}
+      </button>
+      <button
+        type="button"
+        onClick={() => { setActiveNavHref('#kitabxana'); onOpenLibrary(); onClose?.(); }}
+        className={`focus-ring group mt-1 flex items-center gap-3 rounded-xl px-3 py-3 text-left text-[13px] font-semibold transition-all duration-200 ${
+          activeNavHref === '#kitabxana'
+            ? 'bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))] shadow-[inset_3px_0_0_hsl(var(--accent))]'
+            : 'text-[hsl(var(--sidebar-foreground)/.68)] hover:bg-[hsl(var(--sidebar-accent)/.7)] hover:text-[hsl(var(--sidebar-foreground))]'
+        }`}
+        data-testid="button-open-library-sidebar"
+      >
+        <Library size={18} strokeWidth={activeNavHref === '#kitabxana' ? 2.4 : 1.8} />
+        <span>Mədrəsə Kitabxanası</span>
+        {activeNavHref === '#kitabxana' && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[hsl(var(--accent))]" />}
       </button>
       <button
         type="button"
@@ -1146,6 +1161,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
   const [menuOpen, setMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
   const [showExams, setShowExams] = useState(false);
@@ -1240,7 +1256,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
   if (isLoading && !dashboard && !courses && !announcements) {
     return (
       <div className="grain min-h-[100dvh] bg-[hsl(var(--background))]">
-         <div className="hidden min-h-[100dvh] lg:flex"><Sidebar currentSemester={currentSemester} unansweredQuestionCount={unansweredQuestionCount} onOpenPasswordChange={() => setShowPasswordChange(true)} onOpenMessages={() => setShowMessages((current) => !current)} onOpenQuestions={() => setShowQuestions((current) => !current)} onOpenExams={() => setShowExams((current) => !current)} onOpenProfileEdit={() => setShowProfileEdit((current) => !current)} onOpenTranscript={() => setShowTranscript(true)} /></div>
+         <div className="hidden min-h-[100dvh] lg:flex"><Sidebar currentSemester={currentSemester} unansweredQuestionCount={unansweredQuestionCount} onOpenPasswordChange={() => setShowPasswordChange(true)} onOpenMessages={() => setShowMessages((current) => !current)} onOpenQuestions={() => setShowQuestions((current) => !current)} onOpenExams={() => setShowExams((current) => !current)} onOpenProfileEdit={() => setShowProfileEdit((current) => !current)} onOpenTranscript={() => setShowTranscript(true)} onOpenLibrary={() => setShowLibrary(true)} /></div>
         <div className="lg:hidden"><MobileHeader studentName={studentName} onOpen={() => setMenuOpen(true)} onNotifications={() => setShowNotifications((value) => !value)} onLogout={onLogout} hasNewNotification={hasNewNotification} /></div>
         <LoadingState />
       </div>
@@ -1250,7 +1266,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
   if (hasError && !dashboard && !courses && !announcements) {
     return (
       <div className="grain min-h-[100dvh] bg-[hsl(var(--background))]">
-         <div className="hidden min-h-[100dvh] lg:flex"><Sidebar currentSemester={currentSemester} unansweredQuestionCount={unansweredQuestionCount} onOpenPasswordChange={() => setShowPasswordChange(true)} onOpenMessages={() => setShowMessages((current) => !current)} onOpenQuestions={() => setShowQuestions((current) => !current)} onOpenExams={() => setShowExams((current) => !current)} onOpenProfileEdit={() => setShowProfileEdit((current) => !current)} onOpenTranscript={() => setShowTranscript(true)} /></div>
+         <div className="hidden min-h-[100dvh] lg:flex"><Sidebar currentSemester={currentSemester} unansweredQuestionCount={unansweredQuestionCount} onOpenPasswordChange={() => setShowPasswordChange(true)} onOpenMessages={() => setShowMessages((current) => !current)} onOpenQuestions={() => setShowQuestions((current) => !current)} onOpenExams={() => setShowExams((current) => !current)} onOpenProfileEdit={() => setShowProfileEdit((current) => !current)} onOpenTranscript={() => setShowTranscript(true)} onOpenLibrary={() => setShowLibrary(true)} /></div>
         <div className="lg:hidden"><MobileHeader studentName={studentName} onOpen={() => setMenuOpen(true)} onNotifications={() => setShowNotifications((value) => !value)} onLogout={onLogout} hasNewNotification={hasNewNotification} /></div>
         <ErrorState onRetry={onRetry} />
       </div>
@@ -1259,11 +1275,11 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
 
   return (
     <div className="grain min-h-[100dvh] bg-[hsl(var(--background))]">
-        <div className="fixed inset-y-0 left-0 z-40 hidden lg:block"><Sidebar unansweredQuestionCount={unansweredQuestionCount} onOpenPasswordChange={() => setShowPasswordChange(true)} onOpenMessages={() => setShowMessages((current) => !current)} onOpenQuestions={() => setShowQuestions((current) => !current)} onOpenExams={() => setShowExams((current) => !current)} onOpenProfileEdit={() => setShowProfileEdit((current) => !current)} onOpenTranscript={() => setShowTranscript(true)} /></div>
+        <div className="fixed inset-y-0 left-0 z-40 hidden lg:block"><Sidebar unansweredQuestionCount={unansweredQuestionCount} onOpenPasswordChange={() => setShowPasswordChange(true)} onOpenMessages={() => setShowMessages((current) => !current)} onOpenQuestions={() => setShowQuestions((current) => !current)} onOpenExams={() => setShowExams((current) => !current)} onOpenProfileEdit={() => setShowProfileEdit((current) => !current)} onOpenTranscript={() => setShowTranscript(true)} onOpenLibrary={() => setShowLibrary(true)} /></div>
       {menuOpen && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
           <div className="absolute inset-0 bg-[hsl(var(--primary)/.42)] backdrop-blur-sm" onClick={() => setMenuOpen(false)} />
-            <div className="relative h-full shadow-[var(--shadow-xl)]"><Sidebar onClose={() => setMenuOpen(false)} currentSemester={currentSemester} unansweredQuestionCount={unansweredQuestionCount} onOpenPasswordChange={() => setShowPasswordChange(true)} onOpenMessages={() => setShowMessages((current) => !current)} onOpenQuestions={() => setShowQuestions((current) => !current)} onOpenExams={() => setShowExams((current) => !current)} onOpenProfileEdit={() => setShowProfileEdit((current) => !current)} onOpenTranscript={() => setShowTranscript(true)} /></div>
+            <div className="relative h-full shadow-[var(--shadow-xl)]"><Sidebar onClose={() => setMenuOpen(false)} currentSemester={currentSemester} unansweredQuestionCount={unansweredQuestionCount} onOpenPasswordChange={() => setShowPasswordChange(true)} onOpenMessages={() => setShowMessages((current) => !current)} onOpenQuestions={() => setShowQuestions((current) => !current)} onOpenExams={() => setShowExams((current) => !current)} onOpenProfileEdit={() => setShowProfileEdit((current) => !current)} onOpenTranscript={() => setShowTranscript(true)} onOpenLibrary={() => setShowLibrary(true)} /></div>
         </div>
       )}
       <div className="lg:pl-[264px]">
@@ -1314,7 +1330,15 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
             <AnnouncementsSection announcements={resolvedAnnouncements} />
           </div>
         </main>
-         {showTranscript && academicProfile && (
+         {showLibrary && (
+           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[hsl(var(--primary)/.5)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="library-title" data-testid="modal-student-library">
+             <div className="relative max-h-[92dvh] w-full max-w-3xl overflow-y-auto rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-5 shadow-[var(--shadow-xl)] md:p-8">
+               <button type="button" onClick={() => setShowLibrary(false)} className="focus-ring absolute right-5 top-5 z-10 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Kitabxananı bağla" data-testid="button-close-student-library"><X size={18} /></button>
+               <div id="library-title" className="sr-only">Mədrəsə Kitabxanası</div>
+               <MedreseLibrary />
+             </div>
+           </div>
+         )}
            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[hsl(var(--primary)/.5)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="transcript-title" data-testid="modal-student-transcript">
              <div className="relative max-h-[92dvh] w-full max-w-6xl overflow-y-auto rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 shadow-[var(--shadow-xl)] md:p-5">
                <button type="button" onClick={() => setShowTranscript(false)} className="focus-ring absolute right-5 top-5 z-10 rounded-full bg-[hsl(var(--card)/.9)] p-2 text-[hsl(var(--muted-foreground))] shadow-[var(--shadow-xs)] hover:bg-[hsl(var(--muted))]" aria-label="Nəticə kartını bağla" data-testid="button-close-student-transcript"><X size={18} /></button>

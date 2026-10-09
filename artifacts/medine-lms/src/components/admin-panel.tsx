@@ -2079,21 +2079,6 @@ function CourseContentEditor({ initialCourseId, teacherOnly = false }: { initial
             </Field>
             <Field label="Ümumi dərs sayı"><input required min="0" type="number" className={inputClass} value={form.totalLessons} disabled={isLoading} onChange={(event) => setForm({ ...form, totalLessons: Number(event.target.value) })} data-testid="input-edit-course-total-lessons" /></Field>
           </div>
-          <Field label="Dərs haqqında">
-            <textarea required rows={4} className={`${inputClass} resize-y`} value={form.description} disabled={isLoading} onChange={(event) => setForm({ ...form, description: event.target.value })} data-testid="textarea-edit-course-description" />
-          </Field>
-          <Field label="Tədris proqramı" hint="Hər mövzunu yeni sətirdə yazın.">
-            <textarea rows={5} className={`${inputClass} resize-y`} value={form.curriculum} disabled={isLoading} onChange={(event) => setForm({ ...form, curriculum: event.target.value })} data-testid="textarea-edit-course-curriculum" />
-            <button type="submit" className={`${buttonClass} mt-3`} disabled={isLoading || isSaving} data-testid="button-save-course-curriculum">{isSaving ? 'Yadda saxlanılır...' : 'Tədris proqramını yadda saxla'}</button>
-          </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Növbəti dərs">
-              <input className={inputClass} value={form.nextLesson} disabled={isLoading} onChange={(event) => setForm({ ...form, nextLesson: event.target.value })} data-testid="input-edit-course-next-lesson" />
-            </Field>
-            <Field label="Növbəti dərsin təsviri">
-              <textarea required rows={3} className={`${inputClass} resize-y`} value={form.lessonDescription} disabled={isLoading} onChange={(event) => setForm({ ...form, lessonDescription: event.target.value })} data-testid="textarea-edit-course-lesson-description" />
-            </Field>
-          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="PDF linki"><input type="url" className={inputClass} value={form.pdfUrl} disabled={isLoading} onChange={(event) => setForm({ ...form, pdfUrl: event.target.value })} /></Field>
             <Field label="Telegram linki"><input type="url" className={inputClass} value={form.telegramUrl} disabled={isLoading} onChange={(event) => setForm({ ...form, telegramUrl: event.target.value })} /></Field>
@@ -2168,9 +2153,7 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
   const [isSaving, setIsSaving] = useState(false);
   const [isSemesterDatesOpen, setIsSemesterDatesOpen] = useState(false);
   const [showSelectedSubjects, setShowSelectedSubjects] = useState(false);
-  const [isCourseCardOpen, setIsCourseCardOpen] = useState(false);
   const [courseLinks, setCourseLinks] = useState({ pdfUrl: '', telegramUrl: '', zoomUrl: '', googleMeetUrl: '', lessonUrl: '' });
-  const [cardContent, setCardContent] = useState({ title: '', description: '', nextLesson: '', lessonDescription: '', curriculum: '' });
   const [resourceStudents, setResourceStudents] = useState<ResourceStudent[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
   const [unavailableStudentIds, setUnavailableStudentIds] = useState<number[]>([]);
@@ -2218,15 +2201,7 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
     if (isAddingAssignment) return;
     const course = coursesQuery.data?.find((item) => item.id === Number(form.courseId));
     if (course) {
-      const courseCard = course as typeof course & { description?: string | null; nextLesson?: string | null; lessonDescription?: string | null; curriculum?: string[] | null };
       setCourseTotalLessons(course.totalLessons ?? 0);
-      setCardContent({
-        title: courseCard.title ?? '',
-        description: courseCard.description ?? '',
-        nextLesson: courseCard.nextLesson ?? '',
-        lessonDescription: courseCard.lessonDescription ?? '',
-        curriculum: courseCard.curriculum?.join('\n') ?? '',
-      });
       setCourseLinks({
         pdfUrl: course.pdfUrl ?? '',
         telegramUrl: course.telegramUrl ?? '',
@@ -2405,10 +2380,10 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
             zoomUrl: courseLinks.zoomUrl || null,
             googleMeetUrl: courseLinks.googleMeetUrl || null,
             lessonUrl: courseLinks.lessonUrl || null,
-            description: cardContent.description || `${subjectName.trim()} dərsi üzrə tədris materialları.`,
-            curriculum: cardContent.curriculum.split('\n').map((item) => item.trim()).filter(Boolean),
-            lessonDescription: cardContent.lessonDescription || 'Bu dərs üçün növbəti dərs müəyyən edilməyib.',
-            nextLesson: cardContent.nextLesson || null,
+            description: `${subjectName.trim()} dərsi.`,
+            curriculum: [],
+            lessonDescription: '',
+            nextLesson: null,
             lessonDays: form.lessonDays,
             lessonTime: form.lessonTime,
           },
@@ -2427,11 +2402,6 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-               ...((isNewSubject ? subjectName : cardContent.title).trim() ? { title: (isNewSubject ? subjectName : cardContent.title).trim() } : {}),
-               description: cardContent.description,
-               curriculum: cardContent.curriculum.split('\n').map((item) => item.trim()).filter(Boolean),
-               lessonDescription: cardContent.lessonDescription,
-               nextLesson: cardContent.nextLesson || null,
               pdfUrl: uploadedPdfUrl ?? (courseLinks.pdfUrl || null),
               telegramUrl: courseLinks.telegramUrl || null,
               zoomUrl: courseLinks.zoomUrl || null,
@@ -2469,7 +2439,6 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
        setForm({ courseId: form.courseId, termNumber: form.termNumber, kind: form.kind, title: '', body: '', url: '', lessonDays: form.lessonDays, lessonTime: form.lessonTime, isMandatory: form.isMandatory, teacherClerkUserId: form.teacherClerkUserId, studentCapacity: form.studentCapacity });
       setSubjectName('');
        setCourseTotalLessons(0);
-       setCardContent({ title: '', description: '', nextLesson: '', lessonDescription: '', curriculum: '' });
       setPdfFile(null);
       if (pdfInput.current) pdfInput.current.value = '';
       setIsNewSubject(false);
@@ -2498,7 +2467,7 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
       </Field>
       <div><div className="flex items-start justify-between gap-3"><div>{editingId !== null && <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Dərs və kitab məlumatını redaktə et</h3>}</div>{focusedSelectedSubjectId !== null && <button type="button" onClick={() => { setFocusedSelectedSubjectId(null); setEditingId(null); setSelectedEditorPosition(null); setIsSelectedEditorOpen(false); }} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Düzənləməni bağla"><X size={18} /></button>}</div></div>
        {!isNewSubject && <Field label="Dərsin adı">
-        <select required={editingId === null} className={inputClass} value={form.courseId} onChange={(e) => { setIsAddingAssignment(Boolean(e.target.value)); setEditingId(null); setForm({ ...form, courseId: e.target.value, teacherClerkUserId: '', title: '', body: '', url: '' }); setCardContent({ title: '', description: '', nextLesson: '', lessonDescription: '', curriculum: '' }); setCourseLinks({ pdfUrl: '', telegramUrl: '', zoomUrl: '', googleMeetUrl: '', lessonUrl: '' }); }} data-testid="select-resource-course">
+        <select required={editingId === null} className={inputClass} value={form.courseId} onChange={(e) => { setIsAddingAssignment(Boolean(e.target.value)); setEditingId(null); setForm({ ...form, courseId: e.target.value, teacherClerkUserId: '', title: '', body: '', url: '' }); setCourseLinks({ pdfUrl: '', telegramUrl: '', zoomUrl: '', googleMeetUrl: '', lessonUrl: '' }); }} data-testid="select-resource-course">
            <option value="">Dərs seçin</option>
           {(coursesQuery.data ?? []).map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
         </select>
@@ -2530,23 +2499,6 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
       <Field label="Dərs sayı" hint="0 və ya daha böyük tam ədəd">
         <input min="0" step="1" type="number" className={inputClass} value={courseTotalLessons} onChange={(event) => setCourseTotalLessons(Math.max(0, Math.trunc(Number(event.target.value) || 0)))} data-testid="input-resource-course-total-lessons" />
       </Field>
-      {(isNewSubject || form.courseId) && <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-4" data-testid="section-course-card-content">
-        <button type="button" onClick={() => setIsCourseCardOpen((open) => !open)} className="focus-ring flex w-full items-center justify-between gap-3 text-left text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]" aria-expanded={isCourseCardOpen} data-testid="button-toggle-course-card">
-          <span>Dərs kartı</span><ChevronDown size={16} className={`transition-transform ${isCourseCardOpen ? 'rotate-180' : ''}`} />
-        </button>
-        {isCourseCardOpen && <div className="mt-4 space-y-4">
-        <Field label="Dərsin təsviri">
-          <textarea rows={3} className={`${inputClass} resize-y`} value={cardContent.description} onChange={(event) => setCardContent({ ...cardContent, description: event.target.value })} placeholder="Tələbə kartında görünəcək qısa təsvir" data-testid="textarea-resource-course-description" />
-        </Field>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Növbəti dərs"><input className={inputClass} value={cardContent.nextLesson} onChange={(event) => setCardContent({ ...cardContent, nextLesson: event.target.value })} data-testid="input-resource-next-lesson" /></Field>
-          <Field label="Növbəti dərsin təsviri"><textarea rows={2} className={`${inputClass} resize-y`} value={cardContent.lessonDescription} onChange={(event) => setCardContent({ ...cardContent, lessonDescription: event.target.value })} data-testid="textarea-resource-lesson-description" /></Field>
-        </div>
-        <Field label="Tədris proqramı" hint="Hər mövzunu yeni sətirdə yazın.">
-          <textarea rows={5} className={`${inputClass} resize-y`} value={cardContent.curriculum} onChange={(event) => setCardContent({ ...cardContent, curriculum: event.target.value })} placeholder={'Mövzu 1\nMövzu 2\nMövzu 3'} data-testid="textarea-resource-course-curriculum" />
-        </Field>
-        </div>}
-      </div>}
       <Field label="Müəllim" hint={teacherOnly ? 'Bu dərs avtomatik olaraq sizin müəllim hesabınıza bağlanacaq.' : 'Yalnız aktiv müəllim rolu olan hesablar göstərilir.'}>
         <select required className={inputClass} value={teacherOnly ? (user?.id ?? '') : form.teacherClerkUserId} disabled={teacherOnly} onChange={(e) => setForm({ ...form, teacherClerkUserId: e.target.value })} data-testid="select-resource-teacher">
           {teacherOnly

@@ -90,6 +90,8 @@ async function run() {
     "/api/resources/1/file",
     "/api/admin/teachers",
     "/api/admin/teacher-schedule?termNumber=1",
+    "/api/admin/teacher-schedule.pdf",
+    "/api/student/schedule.pdf",
     "/api/admin/resources?termNumber=1",
     "/api/admin/resources/1/students",
     "/api/attendance-excuses",

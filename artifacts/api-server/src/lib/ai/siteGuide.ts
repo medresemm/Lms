@@ -50,11 +50,12 @@ export const GUIDE_TOPICS: GuideTopic[] = [
     id: "schedule",
     modes: ["student"],
     title: "Dərs cədvəlinə baxmaq",
-    keywords: ["cedvel", "cizelge", "ders vaxt", "ders saat", "dersler ne vaxt", "hansi gun", "dersim"],
+    keywords: ["cedvel", "cizelge", "ders vaxt", "ders saat", "dersler ne vaxt", "hansi gun", "dersim", "cedveli yukle", "cedvel pdf"],
     steps: [
       "Menyuda «Dərs Cədvəlim» bölməsini seçin.",
       "Həftənin günlərindən birini seçin — həmin gün üçün dərslər, saat və müəllim adı görünəcək. Dərs gedirsə «CANLI» işarəsi çıxır.",
       "Dərsin linkləri və kitabı üçün dərs kartında «PDF və bütün linklərə bax» düyməsini basın.",
+      "Həftəlik cədvəli çap etmək və ya saxlamaq üçün «Dərs Cədvəlim» başlığının yanındakı «PDF yüklə (A5)» düyməsini basın — cədvəl A5 vərəqində, Akademiyanın loqosu ilə yüklənir.",
     ],
     tips: [
       "Cədvəl bağlıdırsa və «Dərs cədvəlinə giriş gözləmədədir» yazılıbsa, akademiya əməkdaşının təsdiqini gözləyin.",

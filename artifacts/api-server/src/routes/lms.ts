@@ -218,6 +218,10 @@ import { createApplicationUploadUrl, createAssignmentUploadUrl, createCourseUplo
 import { sendApplicationDecisionEmail, sendGraduationCertificateEmail, sendSubjectRemovalDecisionEmail, sendStudentNotificationEmail } from "../lib/applicationEmail.js";
 import { deleteAllAuditEvents, deleteAuditEvent, listAuditEvents, recordAuditEvent } from "../lib/audit.js";
 import { buildGraduationCertificatePdf } from "../lib/graduationCertificatePdf.js";
+import { buildSchedulePdf, buildWeeklySchedule, formatScheduleBook, meetingPlatformName, scheduleFileName, type ScheduleLessonInput } from "../lib/schedulePdf.js";
+import { fullLibraryCatalog, loadCourseBooksRows } from "../lib/library/courseBooksRepo.js";
+import { resolveCourseBooks } from "../lib/library/courseBooks.js";
+import { matchResourceBook } from "../lib/library/resourceBooks.js";
 
 const router: IRouter = Router();
 const uploadAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -2482,6 +2486,32 @@ router.post("/student/notifications/:notificationId/dismiss", requireApprovedStu
   } catch (error) { next(error); }
 });
 
+/** Tələbənin həmin semestrdə görə biləcəyi dərs qrupları (Dərs Cədvəlim ilə eyni qayda). Link vaxtı yoxlanmır. */
+async function studentScheduleResources(profileId: number, termNumber: number) {
+  const resources = await db.select().from(resourcesTable)
+    .where(eq(resourcesTable.termNumber, termNumber))
+    .orderBy(asc(resourcesTable.id));
+  const selections = await db.select({ courseId: studentCourseSelectionsTable.courseId, selected: studentCourseSelectionsTable.selected })
+    .from(studentCourseSelectionsTable)
+    .where(and(eq(studentCourseSelectionsTable.profileId, profileId), eq(studentCourseSelectionsTable.termNumber, termNumber)));
+  const approvedChoices = await db.select({ resourceId: studentTeacherChoicesTable.resourceId })
+    .from(studentTeacherChoicesTable)
+    .where(and(eq(studentTeacherChoicesTable.profileId, profileId), eq(studentTeacherChoicesTable.status, "approved")));
+  const approvedResourceIds = new Set(approvedChoices.map((choice) => choice.resourceId));
+  const removedCourseIds = new Set(selections.filter((selection) => !selection.selected).map((selection) => selection.courseId));
+  const grouped = new Map<number, typeof resources>();
+  for (const resource of resources) {
+    if (removedCourseIds.has(resource.courseId) || !resource.teacherClerkUserId) continue;
+    const group = grouped.get(resource.courseId) ?? [];
+    group.push(resource);
+    grouped.set(resource.courseId, group);
+  }
+  return Array.from(grouped.values()).flatMap((group) => {
+    const assigned = group.filter((resource) => approvedResourceIds.has(resource.id));
+    return assigned.length ? assigned : group.length === 1 ? group : [];
+  });
+}
+
 router.get("/resources", requireApprovedStudent, async (req, res, next) => {
   try {
     const termNumber = Number(req.query.termNumber);
@@ -2498,30 +2528,91 @@ router.get("/resources", requireApprovedStudent, async (req, res, next) => {
       return;
     }
     await ensureSeeded();
-    const resources = await db.select().from(resourcesTable)
-      .where(eq(resourcesTable.termNumber, termNumber))
-      .orderBy(asc(resourcesTable.id));
-    const selections = await db.select({ courseId: studentCourseSelectionsTable.courseId, selected: studentCourseSelectionsTable.selected })
-      .from(studentCourseSelectionsTable)
-      .where(and(eq(studentCourseSelectionsTable.profileId, studentProfile.id), eq(studentCourseSelectionsTable.termNumber, termNumber)));
-    const approvedChoices = await db.select({ resourceId: studentTeacherChoicesTable.resourceId })
-      .from(studentTeacherChoicesTable)
-      .where(and(eq(studentTeacherChoicesTable.profileId, studentProfile.id), eq(studentTeacherChoicesTable.status, "approved")));
-    const approvedResourceIds = new Set(approvedChoices.map((choice) => choice.resourceId));
-    const removedCourseIds = new Set(selections.filter((selection) => !selection.selected).map((selection) => selection.courseId));
-    const grouped = new Map<number, typeof resources>();
-    for (const resource of resources) {
-      if (removedCourseIds.has(resource.courseId) || !resource.teacherClerkUserId) continue;
-      const group = grouped.get(resource.courseId) ?? [];
-      group.push(resource);
-      grouped.set(resource.courseId, group);
-    }
-    const visible = Array.from(grouped.values()).flatMap((group) => {
-      const assigned = group.filter((resource) => approvedResourceIds.has(resource.id));
-      const chosen = assigned.length ? assigned : group.length === 1 ? group : [];
-      return chosen.map((resource) => resourceLinkIsExpired(resource) ? { ...resource, url: null, expiresAt: null } : resource);
-    });
+    const visible = (await studentScheduleResources(studentProfile.id, termNumber))
+      .map((resource) => resourceLinkIsExpired(resource) ? { ...resource, url: null, expiresAt: null } : resource);
     res.json(GetResourcesResponse.parse(await studentResourceViews(visible)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Cədvəl PDF-i üçün dərs sətirləri: fənn adı, müəllim, onlayn platforma və bağlı kitablar. */
+async function scheduleLessonInputs(
+  resources: Array<typeof resourcesTable.$inferSelect>,
+  options: { teacherName?: (resource: typeof resourcesTable.$inferSelect) => string | null; termLabels?: boolean } = {},
+): Promise<ScheduleLessonInput[]> {
+  const lessons = resources.filter((resource) => resource.lessonDays.length > 0);
+  if (!lessons.length) return [];
+  const courseIds = Array.from(new Set(lessons.map((resource) => resource.courseId)));
+  const [courseRows, names, booksResult, catalog] = await Promise.all([
+    db.select().from(coursesTable).where(inArray(coursesTable.id, courseIds)),
+    options.teacherName ? Promise.resolve(new Map<string, string | null>()) : teacherNameMap(lessons.map((resource) => resource.teacherClerkUserId ?? "")),
+    loadCourseBooksRows(courseIds).catch(() => ({ available: false, rows: [] as Awaited<ReturnType<typeof loadCourseBooksRows>>["rows"] })),
+    fullLibraryCatalog().catch(() => []),
+  ]);
+  const courses = new Map(courseRows.map((course) => [course.id, course]));
+  return lessons.map((resource) => {
+    const course = courses.get(resource.courseId);
+    const assigned = booksResult.rows.find((row) => row.courseId === resource.courseId && row.termNumber === resource.termNumber);
+    let books = assigned?.books.length ? resolveCourseBooks(assigned.books, catalog).map((view) => formatScheduleBook(view)) : [];
+    if (!books.length) {
+      const match = matchResourceBook(resource, catalog);
+      if (match) books = [formatScheduleBook({ bookShortTitle: match.bookShortTitle, chapterTitle: match.chapterTitle, printedFrom: match.printedFrom, printedTo: match.printedTo })];
+    }
+    const meetingUrl = [resource.url, course?.zoomUrl, course?.googleMeetUrl, course?.lessonUrl].find((url) => isMeetingUrl(url));
+    return {
+      courseId: resource.courseId,
+      subject: course?.title?.trim() || resource.title,
+      lessonDays: resource.lessonDays,
+      lessonTime: resource.lessonTime,
+      teacher: options.teacherName ? options.teacherName(resource) : resource.teacherClerkUserId ? names.get(resource.teacherClerkUserId) ?? null : null,
+      onlinePlatform: meetingPlatformName(meetingUrl ?? null),
+      books,
+      termLabel: options.termLabels ? termDetails(resource.termNumber).label : null,
+    };
+  });
+}
+
+function sendSchedulePdf(res: Parameters<RequestHandler>[1], pdf: Buffer, filename: string) {
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Content-Length", pdf.length);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.send(pdf);
+}
+
+// Tələbənin öz həftəlik dərs cədvəli — A5 PDF. Yalnız giriş etmiş tələbənin öz məlumatı.
+router.get("/student/schedule.pdf", requireApprovedStudent, async (req, res, next) => {
+  try {
+    const { userId } = getAuth(req);
+    const studentProfile = userId ? await getApprovedStudentProfile(userId) : null;
+    if (!studentProfile) {
+      res.status(403).json({ error: "Tələbə profili tapılmadı." });
+      return;
+    }
+    const access = await scheduleAccessState(studentProfile);
+    if (!access.approved) {
+      res.status(403).json({ error: "Dərs cədvəlinə giriş hələ təsdiqlənməyib." });
+      return;
+    }
+    const termNumber = currentTermNumber(studentProfile);
+    const activeTerms = await getActiveTermNumbers();
+    await ensureSeeded();
+    const resources = activeTerms.includes(termNumber) ? await studentScheduleResources(studentProfile.id, termNumber) : [];
+    const [application] = await db.select({ firstName: applicationsTable.firstName, lastName: applicationsTable.lastName })
+      .from(applicationsTable).where(eq(applicationsTable.id, studentProfile.applicationId)).limit(1);
+    const studentName = application ? `${application.firstName} ${application.lastName}`.trim() : "Tələbə";
+    const days = buildWeeklySchedule(await scheduleLessonInputs(resources));
+    const pdf = await buildSchedulePdf({
+      title: "Həftəlik dərs cədvəli",
+      personLabel: "Tələbə",
+      personName: studentName || "Tələbə",
+      personNumber: `T${String(studentProfile.studentNumber).padStart(4, "0")}`,
+      semesterLabel: termDetails(termNumber).label,
+      generatedAt: new Date(),
+      days,
+    });
+    sendSchedulePdf(res, pdf, scheduleFileName("Ders-cedveli", `T${String(studentProfile.studentNumber).padStart(4, "0")}`));
   } catch (error) {
     next(error);
   }
@@ -4161,6 +4252,37 @@ router.get("/admin/teacher-schedule", requireTeacher, async (req, res, next) => 
       .where(and(eq(resourcesTable.termNumber, termNumber), eq(resourcesTable.teacherClerkUserId, teacherClerkUserId)))
       .orderBy(asc(resourcesTable.id));
     res.json(await resourceViews(resources));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Müəllimin «Mənim cədvəlim» bölməsi — A5 PDF (yalnız özünə təyin olunmuş dərslər, bütün semestrlər).
+router.get("/admin/teacher-schedule.pdf", requireTeacher, async (req, res, next) => {
+  try {
+    const teacherClerkUserId = getAuth(req).userId;
+    if (!teacherClerkUserId) {
+      res.status(401).json({ error: "Müəllim hesabı tapılmadı." });
+      return;
+    }
+    const resources = await db.select().from(resourcesTable)
+      .where(eq(resourcesTable.teacherClerkUserId, teacherClerkUserId))
+      .orderBy(asc(resourcesTable.termNumber), asc(resourcesTable.id));
+    const clerkUser = await getClerkUser(teacherClerkUserId);
+    const teacherName = (clerkUser ? clerkDisplayName(clerkUser) : "") || "Müəllim";
+    const terms = Array.from(new Set(resources.filter((resource) => resource.lessonDays.length).map((resource) => resource.termNumber))).sort((a, b) => a - b);
+    const days = buildWeeklySchedule(await scheduleLessonInputs(resources, { teacherName: () => teacherName, termLabels: terms.length > 1 }));
+    const pdf = await buildSchedulePdf({
+      title: "Həftəlik dərs cədvəli",
+      personLabel: "Müəllim",
+      personName: teacherName,
+      personNumber: null,
+      semesterLabel: terms.length ? terms.map((term) => termDetails(term).label).join(", ") : "—",
+      generatedAt: new Date(),
+      days,
+      showTermOnLessons: terms.length > 1,
+    });
+    sendSchedulePdf(res, pdf, scheduleFileName("Muellim-cedveli", teacherName));
   } catch (error) {
     next(error);
   }

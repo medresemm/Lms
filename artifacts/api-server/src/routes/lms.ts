@@ -487,11 +487,12 @@ export function roleForClerkUser(clerkUser: NonNullable<Awaited<ReturnType<typeo
 
 export function ownerDisplayNameParts(clerkUser: NonNullable<Awaited<ReturnType<typeof getClerkUser>>>) {
   const configuredName = process.env.SYSTEM_OWNER_NAME?.trim();
+  const usableName = configuredName && !/^VITE_SYSTEM_OWNER_NAME$/i.test(configuredName) && !/^SYSTEM_OWNER_NAME$/i.test(configuredName) ? configuredName : "";
   const isOwner = roleForClerkUser(clerkUser) === "owner";
-  if (!configuredName || !isOwner) {
+  if (!usableName || !isOwner) {
     return { firstName: clerkUser.firstName ?? "", lastName: clerkUser.lastName ?? "" };
   }
-  const [firstName, ...lastNameParts] = configuredName.split(/\s+/);
+  const [firstName, ...lastNameParts] = usableName.split(/\s+/);
   return { firstName, lastName: lastNameParts.join(" ") };
 }
 
@@ -661,7 +662,7 @@ export const requireTeacher: RequestHandler = async (req, res, next) => {
     const teacherManagementRestricted = role === "teacher"
       && (req.path.startsWith("/admin/users") || req.path.startsWith("/admin/course-activation"));
     if (teacherManagementRestricted) {
-      res.status(403).json({ error: "Bu bölməyə yalnız sahib və sahib köməkçisi daxil ola bilər." });
+      res.status(403).json({ error: "Bu bölməyə yalnız sahib və idarə heyəti daxil ola bilər." });
       return;
     }
     if (role === "owner_assistant" && req.path === "/admin/resources" && req.method === "GET" &&
@@ -729,13 +730,13 @@ const requireCertificateManager: RequestHandler = async (req, res, next) => {
       next();
       return;
     }
-    res.status(403).json({ error: "Şəhadətnamələri yalnız sahib və sahib köməkçisi idarə edə bilər." });
+    res.status(403).json({ error: "Şəhadətnamələri yalnız sahib və idarə heyəti idarə edə bilər." });
   } catch (error) {
     next(error);
   }
 };
 
-/** Kitabxananı idarə edən: sahib, sahib köməkçisi və ya «admin» rolu (admin panelindəki canManage ilə eyni). */
+/** Kitabxananı idarə edən: sahib, idarə heyəti və ya «admin» rolu (admin panelindəki canManage ilə eyni). */
 export async function userCanManageLibrary(userId: string) {
   const clerkUser = await getClerkUser(userId);
   if (await userIsSystemOwner(userId, clerkUser)) return true;
@@ -754,14 +755,14 @@ export const requireLibraryManager: RequestHandler = async (req, res, next) => {
       next();
       return;
     }
-    res.status(403).json({ error: "Kitabxananı yalnız sahib, sahib köməkçisi və admin idarə edə bilər." });
+    res.status(403).json({ error: "Kitabxananı yalnız sahib, idarə heyəti və admin idarə edə bilər." });
   } catch (error) {
     next(error);
   }
 };
 
 /**
- * Dərs kitablarını kim dəyişə bilər: sahib, sahib köməkçisi, admin — istənilən dərs;
+ * Dərs kitablarını kim dəyişə bilər: sahib, idarə heyəti, admin — istənilən dərs;
  * müəllim — yalnız həmin fənn + semestrdə ona təyin olunmuş qrup varsa.
  */
 export async function userCanEditCourseBooks(userId: string, courseId: number, termNumber: number) {
@@ -798,7 +799,7 @@ export function requireOwnerOrAssistantPermission(permission: RolePermission): R
       next();
       return;
     }
-    res.status(403).json({ error: "Bu əməliyyat üçün sahib köməkçisinə uyğun icazə verilməyib." });
+    res.status(403).json({ error: "Bu əməliyyat üçün idarə heyətinə uyğun icazə verilməyib." });
   } catch (error) {
     next(error);
   }
@@ -4328,7 +4329,7 @@ router.patch("/admin/resources/:resourceId", requireTeacher, async (req, res, ne
       return;
     }
     if (!canManageAnyResource && teacherClerkUserId !== actorId) {
-      res.status(403).json({ error: "Müəllim təyinatını yalnız sahib və sahib köməkçisi dəyişə bilər." });
+      res.status(403).json({ error: "Müəllim təyinatını yalnız sahib və idarə heyəti dəyişə bilər." });
       return;
     }
     if (url) {
@@ -7275,7 +7276,7 @@ router.post("/admin/applications/:applicationId/decision", requireTeacher, async
     if (userId) {
       const actingUser = await getClerkUser(userId);
       if (metadataRole(actingUser?.publicMetadata) === "owner_assistant") {
-        res.status(403).json({ error: "Sahib köməkçisi yalnız müəllim təyinatını idarə edə bilər." });
+        res.status(403).json({ error: "İdarə heyəti yalnız müəllim təyinatını idarə edə bilər." });
         return;
       }
     }

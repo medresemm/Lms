@@ -60,10 +60,10 @@ const OVERDUE = ["gecikmis", "gecikmis", "vaxti kecmis", "muddeti kecmis", "geci
 const LIST_WORDS = ["siyahi", "liste", "list", "hamisi", "butun", "goster", "kimler", "hansilar", "olanlar"];
 const RESULT_WORDS = ["netice", "sonuc", "bal", "faiz", "natice"];
 const ROLE_LABELS: Record<string, string> = {
-  owner: "Sahib", owner_assistant: "Sahib köməkçisi", admin: "Admin", teacher: "Müəllim", supervisor: "Nəzarətçi",
+  owner: "Sahib", owner_assistant: "İdarə heyəti", admin: "Admin", teacher: "Müəllim", supervisor: "Nəzarətçi",
 };
 const ROLE_WORDS: Array<[string, string[]]> = [
-  ["owner_assistant", ["komekci", "assistent", "owner assistant"]],
+  ["owner_assistant", ["idare heyeti", "idarə heyəti", "komekci", "assistent", "owner assistant"]],
   ["supervisor", ["nezaretci", "supervayzer", "supervisor"]],
   ["admin", ["admin", "adminler"]],
   ["teacher", ["muellim", "ogretmen", "hoca", "ustad"]],
@@ -564,7 +564,7 @@ async function staffBranch(ctx: AdminAiContext, parsed: ParsedMessage, isCount: 
     // Heyət siyahısı yalnız sahib/sahib köməkçisinə açıqdır; müəllim sayı isə «Cədvəl» icazəsi ilə görünür.
     const teachers = await ctx.teachers();
     if (teachers && has(parsed, ENTITY.teacher)) return teacherBranch(ctx, parsed, new Set(["teacher"]), isCount);
-    return reply(["Heyət siyahısı yalnız sahib və «İstifadəçi idarəetməsi» icazəsi olan sahib köməkçisi üçün açıqdır."], ["Neçə müəllim var?", "Ümumi statistika"]);
+    return reply(["Heyət siyahısı yalnız sahib və «İstifadəçi idarəetməsi» icazəsi olan idarə heyəti üçün açıqdır."], ["Neçə müəllim var?", "Ümumi statistika"]);
   }
   const roleFilter = ROLE_WORDS.find(([, words]) => has(parsed, words))?.[0] ?? null;
   const pool = roleFilter ? staff.filter((member) => member.role === roleFilter) : staff;

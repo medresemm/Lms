@@ -807,7 +807,7 @@ const auditValueLabels: Record<string, string> = {
   teacher: 'Müəllim',
   supervisor: 'Nəzarətçi',
   owner: 'Sahib',
-  owner_assistant: 'Sahib köməkçisi',
+  owner_assistant: 'İdarə heyəti',
   admin: 'İdarəçi',
   pdf: 'PDF',
   telegram: 'Telegram',
@@ -3661,7 +3661,7 @@ function TeacherStats({ canEdit }: { canEdit: boolean }) {
 const roleLabels: Record<AdminUser['role'], string> = {
   none: 'Adi istifadəçi',
   owner: 'Sistem sahibi',
-  owner_assistant: 'Sahib köməkçisi',
+  owner_assistant: 'İdarə heyəti',
   teacher: 'Müəllim',
   supervisor: 'Nəzarətçi',
   admin: 'Köhnə admin rolu',
@@ -3808,7 +3808,7 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
   return (
     <div className="space-y-4" data-testid="owner-role-management">
       <div className="rounded-2xl bg-[hsl(var(--accent)/.35)] p-4 text-sm leading-6 text-[hsl(var(--primary))]">
-        Buradan qeydiyyatdan keçmiş istifadəçilərə müəllim, nəzarətçi və ya sahib köməkçisi rolu verə bilərsiniz. Sistem sahibi sabitdir və bu bölmədən dəyişdirilə bilməz.
+        Buradan qeydiyyatdan keçmiş istifadəçilərə müəllim, nəzarətçi və ya idarə heyəti rolu verə bilərsiniz. Sistem sahibi sabitdir və bu bölmədən dəyişdirilə bilməz.
       </div>
          <div className="grid gap-4 md:grid-cols-3" data-testid="staff-role-summary">
          <section className="order-2 rounded-2xl border border-[hsl(var(--primary))] bg-[hsl(var(--primary))] p-5 text-[hsl(var(--primary-foreground))]" data-testid="teacher-summary">
@@ -3816,8 +3816,8 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
             {expandedSummaryRole === 'teacher' && (teachers.length ? <div className="mt-5 flex flex-wrap gap-2">{teachers.map((teacher, index) => <button type="button" key={teacher.id} onClick={() => setViewingUser(teacher)} className="focus-ring rounded-full bg-[hsl(var(--primary-foreground)/.12)] px-3 py-1.5 text-xs font-semibold hover:bg-[hsl(var(--primary-foreground)/.22)]">{teacher.role === 'owner' ? 'Sahib' : formatTeacherNumber(index)} · {adminUserName(teacher)}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--primary-foreground)/.65)]">Hələ müəllim təyin edilməyib.</p>)}
          </section>
           <section className="order-1 rounded-2xl border border-[hsl(var(--secondary)/.75)] bg-[hsl(var(--secondary)/.48)] p-5 shadow-[var(--shadow-xs)]" data-testid="owner-assistant-summary">
-           <button type="button" onClick={() => setExpandedSummaryRole((current) => current === 'assistant' ? null : 'assistant')} aria-expanded={expandedSummaryRole === 'assistant'} className="focus-ring flex w-full items-start justify-between gap-4 rounded-xl text-left"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Sahib köməkçiləri</p><h3 className="mt-2 font-serif text-3xl text-[hsl(var(--primary))]">{ownerAssistants.length}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{expandedSummaryRole === 'assistant' ? 'adları gizlət' : 'adları görmək üçün basın'}</p></div><UserCog className="text-[hsl(var(--secondary-foreground))]" size={24} /></button>
-            {expandedSummaryRole === 'assistant' && (ownerAssistants.length ? <div className="mt-5 flex flex-wrap gap-2">{ownerAssistants.map((assistant, index) => <button type="button" key={assistant.id} onClick={() => setViewingUser(assistant)} className="focus-ring rounded-full bg-[hsl(var(--muted))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--border))]">{formatOwnerAssistantNumber(index)} · {adminUserName(assistant)}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--muted-foreground))]">Hələ sahib köməkçisi təyin edilməyib.</p>)}
+           <button type="button" onClick={() => setExpandedSummaryRole((current) => current === 'assistant' ? null : 'assistant')} aria-expanded={expandedSummaryRole === 'assistant'} className="focus-ring flex w-full items-start justify-between gap-4 rounded-xl text-left"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">İdarə heyəti</p><h3 className="mt-2 font-serif text-3xl text-[hsl(var(--primary))]">{ownerAssistants.length}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{expandedSummaryRole === 'assistant' ? 'adları gizlət' : 'adları görmək üçün basın'}</p></div><UserCog className="text-[hsl(var(--secondary-foreground))]" size={24} /></button>
+            {expandedSummaryRole === 'assistant' && (ownerAssistants.length ? <div className="mt-5 flex flex-wrap gap-2">{ownerAssistants.map((assistant, index) => <button type="button" key={assistant.id} onClick={() => setViewingUser(assistant)} className="focus-ring rounded-full bg-[hsl(var(--muted))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--border))]">{formatOwnerAssistantNumber(index)} · {adminUserName(assistant)}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--muted-foreground))]">Hələ idarə heyəti təyin edilməyib.</p>)}
          </section>
           <section className="order-3 rounded-2xl border border-[hsl(var(--accent)/.8)] bg-[hsl(var(--accent)/.22)] p-5 shadow-[var(--shadow-xs)]" data-testid="supervisor-summary">
            <button type="button" onClick={() => setExpandedSummaryRole((current) => current === 'supervisor' ? null : 'supervisor')} aria-expanded={expandedSummaryRole === 'supervisor'} className="focus-ring flex w-full items-start justify-between gap-4 rounded-xl text-left"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Nəzarətçilər</p><h3 className="mt-2 font-serif text-3xl text-[hsl(var(--primary))]">{supervisors.length}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{expandedSummaryRole === 'supervisor' ? 'adları gizlət' : 'adları görmək üçün basın'}</p></div><ShieldCheck className="text-[hsl(var(--secondary-foreground))]" size={24} /></button>
@@ -3829,7 +3829,7 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
         <button type="button" onClick={() => setPermissionRole('teacher')} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-configure-teacher-permissions">Müəllim rollarını təyin et</button>
         <button type="button" onClick={() => setPermissionRole('supervisor')} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-configure-supervisor-permissions">Nəzarətçi rollarını təyin et</button>
        </div>}
-      <button type="button" disabled={!canConfigurePermissions} onClick={() => setPermissionRole('owner_assistant')} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-manage-owner-assistant-roles">Sahib köməkçisinin ümumi icazələri</button>
+      <button type="button" disabled={!canConfigurePermissions} onClick={() => setPermissionRole('owner_assistant')} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-manage-owner-assistant-roles">İdarə heyətinin ümumi icazələri</button>
       {users.length === 0 ? (
         <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-7 text-center text-sm text-[hsl(var(--muted-foreground))]">Hələ qeydiyyatdan keçən istifadəçi yoxdur.</p>
       ) : (
@@ -3854,7 +3854,7 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
                     <label className="min-w-48 flex-1">
                       <span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Səlahiyyət</span>
                       <select value={role} onChange={(event) => setDraftRoles((current) => ({ ...current, [user.id]: event.target.value as typeof role }))} className={inputClass} data-testid={`select-user-role-${user.id}`}>
-                        <option value={UserRoleUpdateInputRole.owner_assistant} data-testid="option-role-owner-assistant">Sahib köməkçisi</option>
+                        <option value={UserRoleUpdateInputRole.owner_assistant} data-testid="option-role-owner-assistant">İdarə heyəti</option>
                         <option value={UserRoleUpdateInputRole.teacher}>Müəllim</option>
                         <option value={UserRoleUpdateInputRole.supervisor}>Nəzarətçi</option>
                         <option value={UserRoleUpdateInputRole.none}>Adi istifadəçi</option>
@@ -3882,7 +3882,7 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">Sahib icazələri</p>
-                <h4 id="role-permissions-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{permissionRole === 'teacher' ? 'Müəllim rollarını təyin et' : permissionRole === 'supervisor' ? 'Nəzarətçi rollarını təyin et' : 'Sahib köməkçisi rollarını idarə et'}</h4>
+                <h4 id="role-permissions-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{permissionRole === 'teacher' ? 'Müəllim rollarını təyin et' : permissionRole === 'supervisor' ? 'Nəzarətçi rollarını təyin et' : 'İdarə heyəti rollarını idarə et'}</h4>
                  <p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Bu seçim fərdi icazəsi olmayan həmin roldakı istifadəçilər üçün ümumi səlahiyyət profilini müəyyən edir.</p>
               </div>
               <button type="button" onClick={() => setPermissionRole(null)} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Bağla"><X size={18} /></button>
@@ -3919,8 +3919,8 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">Fərdi səlahiyyətlər</p>
-                <h4 id="individual-permissions-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{adminUserName(permissionUser)} · {permissionUser.role === 'teacher' ? 'Müəllim' : permissionUser.role === 'supervisor' ? 'Nəzarətçi' : 'Sahib köməkçisi'}</h4>
-                <p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Bu seçim yalnız seçilmiş sahib köməkçisinə tətbiq olunur və digər sahib köməkçilərinin icazələrini dəyişmir.</p>
+                <h4 id="individual-permissions-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{adminUserName(permissionUser)} · {permissionUser.role === 'teacher' ? 'Müəllim' : permissionUser.role === 'supervisor' ? 'Nəzarətçi' : 'İdarə heyəti'}</h4>
+                <p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Bu seçim yalnız seçilmiş idarə heyəti üzvünə tətbiq olunur və digər üzvlərin icazələrini dəyişmir.</p>
               </div>
               <button type="button" onClick={() => setPermissionUser(null)} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Bağla"><X size={18} /></button>
             </div>
@@ -4181,7 +4181,7 @@ type PanelPreviewRole = 'owner_assistant' | 'teacher' | 'supervisor' | 'user';
 
 function PanelPreview({ role, ownerName, onClose }: { role: PanelPreviewRole; ownerName: string; onClose: () => void }) {
   const details: Record<PanelPreviewRole, { label: string; title: string; description: string }> = {
-    owner_assistant: { label: 'Sahib köməkçisi paneli', title: 'Sahib köməkçisinin ana səhifəsi', description: 'Bu görünüş sahib köməkçisinə açılan icazələrə uyğun idarəetmə sahəsini yoxlamaq üçündür.' },
+    owner_assistant: { label: 'İdarə heyəti paneli', title: 'İdarə heyətinin ana səhifəsi', description: 'Bu görünüş idarə heyətinə açılan icazələrə uyğun idarəetmə sahəsini yoxlamaq üçündür.' },
     teacher: { label: 'Müəllim paneli', title: 'Müəllimin ana səhifəsi', description: 'Müəllimin cədvəl, tələbə əlaqəsi və sual-cavab bölmələrini yoxlayın.' },
     supervisor: { label: 'Nəzarətçi paneli', title: 'Nəzarətçinin ana səhifəsi', description: 'Nəzarətçinin tələbə və müraciət nəzarəti görünüşünü yoxlayın.' },
     user: { label: 'İstifadəçi paneli', title: 'İstifadəçinin ana səhifəsi', description: 'Tələbənin dərs cədvəli, elanlar və şəxsi məlumat görünüşünü yoxlayın.' },
@@ -4209,7 +4209,7 @@ function PanelPreview({ role, ownerName, onClose }: { role: PanelPreviewRole; ow
           <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)]">
             <div className="mb-5 flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">İcmal</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{current.title}</h3></div><Eye className="text-[hsl(var(--secondary-foreground))]" size={20} /></div>
             {role === 'teacher' && <><p className="mb-4 text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">Müəllim görünüşü</p><TeacherSchedule ownerName={ownerName} /></>}
-            {role === 'owner_assistant' && <><p className="mb-4 text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">Sahib köməkçisi görünüşü</p><div className="grid gap-3 sm:grid-cols-2"><PreviewCard title="Müraciətlər" text="Tələbə müraciətlərinə baxış" /><PreviewCard title="Semestr cədvəli" text="Dərs və materiallara nəzarət" /><PreviewCard title="Müəllim təyinatı" text="Açıq icazələrə əsasən" /><PreviewCard title="Mesajlar" text="Tələbə və müəllimlərlə əlaqə" /></div></>}
+            {role === 'owner_assistant' && <><p className="mb-4 text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">İdarə heyəti görünüşü</p><div className="grid gap-3 sm:grid-cols-2"><PreviewCard title="Müraciətlər" text="Tələbə müraciətlərinə baxış" /><PreviewCard title="Semestr cədvəli" text="Dərs və materiallara nəzarət" /><PreviewCard title="Müəllim təyinatı" text="Açıq icazələrə əsasən" /><PreviewCard title="Mesajlar" text="Tələbə və müəllimlərlə əlaqə" /></div></>}
             {role === 'supervisor' && <><p className="mb-4 text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">Nəzarətçi görünüşü</p><div className="grid gap-3 sm:grid-cols-2"><PreviewCard title="Tələbələr" text="Akademik məlumatlara baxış" /><PreviewCard title="Müraciətlər" text="Qəbul prosesini izləyin" /><PreviewCard title="Elanlar" text="Akademiya yenilikləri" /></div></>}
             {role === 'user' && <><p className="mb-4 text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">İstifadəçi görünüşü</p><div className="grid gap-3 sm:grid-cols-2"><PreviewCard title="Dərs Cədvəlim" text="Fənlər və materiallar" /><PreviewCard title="Həftəlik cədvəl" text="Gündəlik dərslərə baxış" /><PreviewCard title="Yeniliklər" text="Elan və məqalələr" /><PreviewCard title="Profilim" text="Şəxsi məlumatlar" /></div></>}
           </section>
@@ -4349,9 +4349,11 @@ export function AdminPanel() {
     return () => { active = false; window.clearInterval(timer); };
   }, []);
   const clerkFullName = user?.fullName?.trim() || [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim();
-  const displayName = owner ? (import.meta.env.VITE_SYSTEM_OWNER_NAME?.trim() || profileName || clerkFullName || firstName) : (profileName || clerkFullName || firstName);
+  const configuredOwnerName = import.meta.env.VITE_SYSTEM_OWNER_NAME?.trim();
+  const ownerName = configuredOwnerName && configuredOwnerName !== 'SYSTEM_OWNER_NAME' && configuredOwnerName !== 'VITE_SYSTEM_OWNER_NAME' ? configuredOwnerName : '';
+  const displayName = owner ? (ownerName || profileName || clerkFullName || firstName) : (profileName || clerkFullName || firstName);
   const fullName = owner
-    ? (import.meta.env.VITE_SYSTEM_OWNER_NAME?.trim() || profileName || clerkFullName || firstName)
+    ? (ownerName || profileName || clerkFullName || firstName)
     : (profileName || clerkFullName || firstName);
   const rolePermissions = new Set(accountProfileQuery.data?.rolePermissions ?? []);
   const canManageAssignments = owner || rolePermissions.has('assignments') && (activeRole === 'teacher' || activeRole === 'admin' || activeRole === 'owner_assistant');
@@ -4403,7 +4405,7 @@ export function AdminPanel() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <Link href="/user-portal" className="focus-ring flex min-w-0 items-center gap-2.5 rounded-xl" data-testid="link-admin-back">
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[hsl(var(--accent))] font-serif text-lg font-bold text-[hsl(var(--primary))]">M</div>
-             <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Mədinə</p><p className="truncate text-sm font-bold leading-tight text-[hsl(var(--primary))]">{owner ? 'Sahib paneli' : ownerAssistant ? 'Sahib köməkçisi paneli' : activeRole === 'supervisor' ? 'Nəzarətçi paneli' : 'Müəllim paneli'}</p></div>
+             <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Mədinə</p><p className="truncate text-sm font-bold leading-tight text-[hsl(var(--primary))]">{owner ? 'Sahib paneli' : ownerAssistant ? 'İdarə heyəti paneli' : activeRole === 'supervisor' ? 'Nəzarətçi paneli' : 'Müəllim paneli'}</p></div>
           </Link>
           <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
             <HomeLink compact />
@@ -4429,7 +4431,7 @@ export function AdminPanel() {
            </div>
            <div className="sm:border-l sm:border-[hsl(var(--border))] sm:pl-6">
               <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">Status</p>
-               <p className="mt-0.5 flex items-center gap-1.5 text-sm font-bold text-[hsl(var(--primary))]"><span className="h-2 w-2 rounded-full bg-emerald-500" />{owner ? 'Sistem sahibi' : ownerAssistant ? 'Sahib köməkçisi' : metadataRole === 'supervisor' ? 'Nəzarətçi' : 'Müəllim'}</p>
+               <p className="mt-0.5 flex items-center gap-1.5 text-sm font-bold text-[hsl(var(--primary))]"><span className="h-2 w-2 rounded-full bg-emerald-500" />{owner ? 'Sistem sahibi' : ownerAssistant ? 'İdarə heyəti' : metadataRole === 'supervisor' ? 'Nəzarətçi' : 'Müəllim'}</p>
            </div>
          </section>
        </div>

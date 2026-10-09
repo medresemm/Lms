@@ -8,7 +8,7 @@
 //   yoxdursa (lokal) faylı birbaşa axınla verir. Cache-Control: no-store.
 // - GET /api/library/course-books — dərslərə bağlanmış kitablar (təsdiqlənmiş tələbə və heyət);
 //   PUT /api/library/course-books/:courseId/:termNumber — sahib / köməkçi / admin və ya həmin dərsin müəllimi.
-// - /api/library/admin/* — yalnız sahib / sahib köməkçisi / admin: PDF yükləmə (birbaşa imzalı PUT), metadata, silmə.
+// - /api/library/admin/* — yalnız sahib / idarə heyəti / admin: PDF yükləmə (birbaşa imzalı PUT), metadata, silmə.
 // Şəkillər ictimai qovluqda deyil: API paketinə daxil edilib (vercel.json → includeFiles: src/assets/**).
 import { Router, type IRouter, type RequestHandler } from "express";
 import { getAuth } from "@clerk/express";
@@ -323,7 +323,7 @@ router.put("/library/course-books/:courseId/:termNumber", noStore, async (req, r
       return;
     }
     if (!(await userCanEditCourseBooks(userId, courseId, termNumber))) {
-      res.status(403).json({ error: "Bu dərsin kitablarını yalnız sahib, sahib köməkçisi, admin və ya dərsin müəllimi dəyişə bilər." });
+      res.status(403).json({ error: "Bu dərsin kitablarını yalnız sahib, idarə heyəti, admin və ya dərsin müəllimi dəyişə bilər." });
       return;
     }
     const [course] = await db.select({ id: coursesTable.id, title: coursesTable.title }).from(coursesTable).where(eq(coursesTable.id, courseId)).limit(1);
@@ -357,7 +357,7 @@ router.put("/library/course-books/:courseId/:termNumber", noStore, async (req, r
 });
 
 // ---------------------------------------------------------------------------
-// İdarəetmə (sahib / sahib köməkçisi / admin)
+// İdarəetmə (sahib / idarə heyəti / admin)
 
 function uploadsUnavailable(res: Parameters<RequestHandler>[1], message: string) {
   res.status(503).json({ error: message, code: "LIBRARY_UPLOADS_UNAVAILABLE" });

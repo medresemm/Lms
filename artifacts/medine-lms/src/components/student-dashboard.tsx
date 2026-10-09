@@ -42,6 +42,7 @@ import { ArticlesLink, HomeLink } from '@/components/home-link';
 import { MessageCenter } from '@/components/message-center';
 import { loadUnansweredQuestionCount, QaCenter } from '@/components/qa-center';
 import { StudentExamsLauncher, StudentExamsSection } from '@/components/exam-module';
+import { AiAssistant, AiAssistantLauncher } from '@/components/ai-assistant';
 
 type ScheduleAccessSnapshot = {
   approved?: boolean;
@@ -1400,6 +1401,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [unansweredQuestionCount, setUnansweredQuestionCount] = useState(0);
   const [showQuestions, setShowQuestions] = useState(false);
+  const [showAi, setShowAi] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [activeNotification, setActiveNotification] = useState<StudentNotification | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
@@ -1662,6 +1664,14 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
               <button type="button" onClick={() => setShowQuestions(false)} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Sual-cavab pəncərəsini bağla" data-testid="button-close-questions"><X size={18} /></button>
               <div id="questions-title" className="mb-4 pr-10 font-serif text-2xl text-[hsl(var(--primary))]">Açıq suallar və cavablar</div>
               <QaCenter canAsk onUnansweredCountChange={setUnansweredQuestionCount} />
+            </div>
+          </div>
+        )}
+        {!showAi && <AiAssistantLauncher onClick={() => setShowAi(true)} />}
+        {showAi && (
+          <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/70 p-0 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-label="Mədinə AI" data-testid="modal-ai-assistant" onKeyDown={(event) => { if (event.key === 'Escape') setShowAi(false); }}>
+            <div className="h-[100dvh] w-full max-w-3xl sm:h-[92dvh]">
+              <AiAssistant mode="student" onClose={() => setShowAi(false)} />
             </div>
           </div>
         )}

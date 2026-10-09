@@ -257,13 +257,13 @@ function parseActiveTermNumbers(value: string | null | undefined) {
   }
 }
 
-async function getActiveTermNumbers() {
+export async function getActiveTermNumbers() {
   const [settings] = await db.select({ semesterDates: applicationSettingsTable.semesterDates })
     .from(applicationSettingsTable).where(eq(applicationSettingsTable.id, 1)).limit(1);
   return parseActiveTermNumbers(settings?.semesterDates);
 }
 
-async function getSemesterDates(): Promise<SemesterDateEntry[]> {
+export async function getSemesterDates(): Promise<SemesterDateEntry[]> {
   const [settings] = await db.select({ semesterDates: applicationSettingsTable.semesterDates })
     .from(applicationSettingsTable).where(eq(applicationSettingsTable.id, 1)).limit(1);
   const dates = parseSemesterDates(settings?.semesterDates);
@@ -281,7 +281,7 @@ async function getApplicationWindow(): Promise<ApplicationWindow> {
   return getApplicationWindowStatus(opensAt, closesAt);
 }
 
-async function getAdmissionExamRequired() {
+export async function getAdmissionExamRequired() {
   const [settings] = await db.select({ admissionExamRequired: applicationSettingsTable.admissionExamRequired })
     .from(applicationSettingsTable).where(eq(applicationSettingsTable.id, 1)).limit(1);
   return settings?.admissionExamRequired ?? false;
@@ -378,7 +378,7 @@ export const requireApprovedStudent: RequestHandler = async (req, res, next) => 
   }
 };
 
-function metadataRole(metadata: unknown) {
+export function metadataRole(metadata: unknown) {
   if (!metadata || typeof metadata !== "object" || !("role" in metadata)) return null;
   const role = (metadata as { role?: unknown }).role;
   return role === "admin" || role === "teacher" || role === "supervisor" || role === "owner_assistant" ? role : null;
@@ -405,7 +405,7 @@ const userProfileAuditFields = [
 type UserProfileAuditField = typeof userProfileAuditFields[number];
 type UserProfileSnapshot = Record<UserProfileAuditField, string | null>;
 
-async function getClerkUser(userId: string) {
+export async function getClerkUser(userId: string) {
   const cached = clerkUserCache.get(userId);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
@@ -471,7 +471,7 @@ function userProfileDiff(previous: UserProfileSnapshot, next: UserProfileSnapsho
   };
 }
 
-async function userIsSystemOwner(userId: string, clerkUser?: Awaited<ReturnType<typeof getClerkUser>>) {
+export async function userIsSystemOwner(userId: string, clerkUser?: Awaited<ReturnType<typeof getClerkUser>>) {
   const ownerEmail = normalizedEmail(process.env.SYSTEM_OWNER_EMAIL);
   if (!ownerEmail) return false;
   const user = clerkUser === undefined ? await getClerkUser(userId) : clerkUser;
@@ -526,7 +526,7 @@ async function canManageResourceRoster(userId: string, resource: typeof resource
   return metadataRole(clerkUser?.publicMetadata) === "owner_assistant" || resource.teacherClerkUserId === userId;
 }
 
-const rolePermissionKeys = [
+export const rolePermissionKeys = [
   "applications",
   "students",
   "grading",
@@ -540,7 +540,7 @@ const rolePermissionKeys = [
   "teacherAssignment",
   "userRoleManagement",
 ] as const;
-type RolePermission = typeof rolePermissionKeys[number];
+export type RolePermission = typeof rolePermissionKeys[number];
 type ClerkUser = Awaited<ReturnType<typeof clerkClient.users.getUser>>;
 const clerkCacheTtlMs = 15_000;
 const clerkUserCache = new Map<string, { expiresAt: number; value: ClerkUser | null }>();
@@ -555,7 +555,7 @@ function resourceLinkExpiresAt(url: string | null) {
   return url ? new Date(Date.now() + resourceLinkLifetimeMs) : null;
 }
 
-function resourceLinkIsExpired(resource: { url: string | null; expiresAt: Date | null }) {
+export function resourceLinkIsExpired(resource: { url: string | null; expiresAt: Date | null }) {
   return Boolean(resource.url && resource.expiresAt && resource.expiresAt.getTime() <= Date.now());
 }
 
@@ -607,7 +607,7 @@ async function sharedRolePermissions(role: "teacher" | "supervisor" | "owner_ass
   return request;
 }
 
-async function permissionsForClerkUser(
+export async function permissionsForClerkUser(
   clerkUser: NonNullable<Awaited<ReturnType<typeof getClerkUser>>>,
   role: "teacher" | "supervisor" | "owner_assistant" | "admin",
 ) {
@@ -901,7 +901,7 @@ const demoArticles = [
 
 let seedPromise: Promise<void> | undefined;
 
-async function ensureSeeded() {
+export async function ensureSeeded() {
   if (!seedPromise) {
     seedPromise = (async () => {
       const [existingCourses, existingResources, existingSettings] = await Promise.all([
@@ -1023,7 +1023,7 @@ function clerkDisplayName(user: NonNullable<Awaited<ReturnType<typeof getClerkUs
   return [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || "Müəllim";
 }
 
-async function activeTeachers() {
+export async function activeTeachers() {
   const users = await getClerkDirectory();
   const applicationRows = users.length
     ? await db.select({
@@ -1062,7 +1062,7 @@ async function activeTeachers() {
     });
 }
 
-async function teacherNameMap(ids: string[]) {
+export async function teacherNameMap(ids: string[]) {
   const uniqueIds = Array.from(new Set(ids.filter((id): id is string => Boolean(id))));
   if (!uniqueIds.length) return new Map<string, string | null>();
   const applicationRows = await db.select({
@@ -1088,7 +1088,7 @@ async function teacherNameMap(ids: string[]) {
   }));
 }
 
-async function resourceViews(rows: Array<typeof resourcesTable.$inferSelect>) {
+export async function resourceViews(rows: Array<typeof resourcesTable.$inferSelect>) {
   const ids = Array.from(new Set(rows.map((row) => row.teacherClerkUserId).filter((id): id is string => Boolean(id))));
   const names = await teacherNameMap(ids);
   return rows.map((row) => ({
@@ -1147,7 +1147,7 @@ function scheduledLessonCount(startDate: string | null, endDate: string | null, 
   return count;
 }
 
-function calculateAttendancePercent(
+export function calculateAttendancePercent(
   records: Array<{ status: string }>,
   schedule?: { startDate: string | null; endDate: string | null; lessonDays: string[] },
 ) {
@@ -1160,7 +1160,7 @@ function calculateAttendancePercent(
   return null;
 }
 
-function gradePointsToFiveScale(gradePoints: number) {
+export function gradePointsToFiveScale(gradePoints: number) {
   return gradePoints > 100 ? gradePoints / 100 : gradePoints / 20;
 }
 
@@ -1243,7 +1243,7 @@ async function cleanupRejectedApplicationFiles(application: typeof applicationsT
   }));
 }
 
-function termDetails(termNumber: number) {
+export function termDetails(termNumber: number) {
   const courseYear = Math.ceil(termNumber / 2);
   const semester = termNumber % 2 === 0 ? 2 : 1;
   const ordinalSuffixes = ['-ci', '-ci', '-cü', '-cü', '-ci', '-cı', '-ci', '-ci'];
@@ -1255,11 +1255,11 @@ function termDetails(termNumber: number) {
   };
 }
 
-function currentTermNumber(profile: typeof studentAcademicProfilesTable.$inferSelect) {
+export function currentTermNumber(profile: typeof studentAcademicProfilesTable.$inferSelect) {
   return (profile.courseYear - 1) * 2 + profile.semester;
 }
 
-async function getApprovedStudentProfile(userId: string) {
+export async function getApprovedStudentProfile(userId: string) {
   const [row] = await db.select({ profile: studentAcademicProfilesTable }).from(studentAcademicProfilesTable)
     .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
     .where(and(eq(studentAcademicProfilesTable.clerkUserId, userId), eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)))
@@ -1325,7 +1325,7 @@ function termToCoursePosition(termNumber: number) {
   };
 }
 
-async function buildAcademicProfile(
+export async function buildAcademicProfile(
   profile: typeof studentAcademicProfilesTable.$inferSelect,
   application: typeof applicationsTable.$inferSelect,
   visibleThroughTerm = 4,
@@ -1425,11 +1425,11 @@ async function buildAcademicProfile(
   };
 }
 
-async function getCourses() {
+export async function getCourses() {
   return db.select().from(coursesTable).orderBy(asc(coursesTable.id));
 }
 
-async function getStudentVisibleCourseIds(
+export async function getStudentVisibleCourseIds(
   profile: Awaited<ReturnType<typeof getApprovedStudentProfile>>,
   courseRows: Awaited<ReturnType<typeof getCourses>>,
 ) {
@@ -1455,7 +1455,7 @@ async function getStudentVisibleCourseIds(
     .map((course) => course.id));
 }
 
-async function getAnnouncements() {
+export async function getAnnouncements() {
   return db.select().from(announcementsTable).orderBy(desc(announcementsTable.id));
 }
 
@@ -2616,7 +2616,7 @@ function scheduledLessonStartUtc(date: string, time: string) {
   return Date.UTC(year, month - 1, day, hour - 4, minute);
 }
 
-async function studentMayAttendResource(profileId: number, resource: typeof resourcesTable.$inferSelect) {
+export async function studentMayAttendResource(profileId: number, resource: typeof resourcesTable.$inferSelect) {
   const [selection] = await db.select({ selected: studentCourseSelectionsTable.selected })
     .from(studentCourseSelectionsTable)
     .where(and(
@@ -2681,7 +2681,7 @@ async function submissionView(submission: typeof assignmentSubmissionsTable.$inf
   };
 }
 
-async function assignmentView(assignment: typeof assignmentsTable.$inferSelect, profileId?: number) {
+export async function assignmentView(assignment: typeof assignmentsTable.$inferSelect, profileId?: number) {
   const [course, teacher, attachments, submission] = await Promise.all([
     db.select({ title: coursesTable.title }).from(coursesTable).where(eq(coursesTable.id, assignment.courseId)).limit(1),
     teacherNameMap([assignment.teacherClerkUserId]),
@@ -2724,7 +2724,7 @@ async function canManageAssignment(userId: string, assignment: typeof assignment
   return Boolean(resource && await canManageResourceRoster(userId, resource));
 }
 
-async function examResource(exam: typeof examsTable.$inferSelect) {
+export async function examResource(exam: typeof examsTable.$inferSelect) {
   if (exam.resourceId <= 0) return undefined;
   const [resource] = await db.select().from(resourcesTable).where(eq(resourcesTable.id, exam.resourceId)).limit(1);
   return resource;
@@ -2880,7 +2880,7 @@ function calculateExamResult(
   };
 }
 
-async function loadExamResult(examId: number, answers: Record<string, number>) {
+export async function loadExamResult(examId: number, answers: Record<string, number>) {
   const questions = await db.select({ id: examQuestionsTable.id }).from(examQuestionsTable)
     .where(eq(examQuestionsTable.examId, examId));
   const options = questions.length
@@ -6418,7 +6418,7 @@ router.get("/admin/academic-profiles", requireTeacher, async (_req, res, next) =
   }
 });
 
-async function getAcademicProfileForAdmin(profileId: number) {
+export async function getAcademicProfileForAdmin(profileId: number) {
   const [row] = await db.select({
     profile: studentAcademicProfilesTable,
     application: applicationsTable,

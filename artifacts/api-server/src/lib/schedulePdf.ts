@@ -67,8 +67,6 @@ export interface ScheduleLessonInput {
   /** "HH:MM" və ya gün → saat JSON xəritəsi ({"monday":"18:00"}), Bakı vaxtı ilə. */
   lessonTime: string | null;
   teacher: string | null;
-  /** Dərs onlayn keçirilirsə platforma adı (Zoom, Google Meet …), əks halda null. */
-  onlinePlatform: string | null;
   /** «Kitab — fəsil (s. 12–20)» kimi hazır sətirlər. */
   books: readonly string[];
   /** Müəllim cədvəlində fərqli semestrlər qarışıq ola bilər. */
@@ -79,7 +77,6 @@ export interface ScheduleLessonRow {
   subject: string;
   time: string | null;
   teacher: string | null;
-  mode: string;
   books: string[];
   termLabel: string | null;
 }
@@ -106,16 +103,11 @@ export function lessonTimeForDay(lessonTime: string | null | undefined, day: str
   return /^\d{2}:\d{2}$/.test(value) ? value : null;
 }
 
-export function lessonModeLabel(onlinePlatform: string | null) {
-  return onlinePlatform ? `Onlayn · ${onlinePlatform}` : "Əyani (onlayn link yoxdur)";
-}
-
 export function meetingPlatformName(url: string | null | undefined) {
   if (!url) return null;
   if (/zoom/i.test(url)) return "Zoom";
   if (/meet\.google/i.test(url)) return "Google Meet";
   if (/teams\.microsoft|teams\.live/i.test(url)) return "Microsoft Teams";
-  if (/^https?:\/\//i.test(url) || url.startsWith("/api/")) return "onlayn link";
   return null;
 }
 
@@ -143,7 +135,6 @@ export function buildWeeklySchedule(lessons: readonly ScheduleLessonInput[]): Sc
         subject: lesson.subject.trim() || "Dərs",
         time: lessonTimeForDay(lesson.lessonTime, day),
         teacher: lesson.teacher?.trim() || null,
-        mode: lessonModeLabel(lesson.onlinePlatform),
         books: lesson.books.map((book) => book.trim()).filter(Boolean),
         termLabel: lesson.termLabel ?? null,
       }))
@@ -426,7 +417,7 @@ function drawInfoBox(document: Doc, input: SchedulePdfInput, y: number) {
 
 function lessonParts(lesson: ScheduleLessonRow, showTerm: boolean) {
   const textWidth = contentWidth - timeColumn - 10;
-  const meta = [lesson.teacher ? `Müəllim: ${isolate(lesson.teacher)}` : "Müəllim təyin edilməyib", lesson.mode, showTerm && lesson.termLabel ? lesson.termLabel : null]
+  const meta = [lesson.teacher ? `Müəllim: ${isolate(lesson.teacher)}` : "Müəllim təyin edilməyib", showTerm && lesson.termLabel ? lesson.termLabel : null]
     .filter(Boolean).join(" · ");
   return { textWidth, meta };
 }

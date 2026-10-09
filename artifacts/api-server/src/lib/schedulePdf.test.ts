@@ -20,9 +20,9 @@ import {
 } from "./schedulePdf.js";
 
 const lessons: ScheduleLessonInput[] = [
-  { courseId: 1, subject: "Fiqh", lessonDays: ["monday", "thursday"], lessonTime: JSON.stringify({ monday: "18:00", thursday: "19:30" }), teacher: "Ustad Əli Şükürov", onlinePlatform: "Zoom", books: [formatScheduleBook({ bookShortTitle: "Şərhu Mənhəcis-Salikin", chapterTitle: "باب نواقض الوضوء", printedFrom: 55, printedTo: 56 })] },
-  { courseId: 2, subject: "Ərəb dili (النحو)", lessonDays: ["monday"], lessonTime: "08:30", teacher: "Ustad Ömər", onlinePlatform: null, books: [] },
-  { courseId: 3, subject: "العقيدة الطحاوية (شرح)", lessonDays: ["saturday"], lessonTime: "10:00", teacher: null, onlinePlatform: "Google Meet", books: [] },
+  { courseId: 1, subject: "Fiqh", lessonDays: ["monday", "thursday"], lessonTime: JSON.stringify({ monday: "18:00", thursday: "19:30" }), teacher: "Ustad Əli Şükürov", books: [formatScheduleBook({ bookShortTitle: "Şərhu Mənhəcis-Salikin", chapterTitle: "باب نواقض الوضوء", printedFrom: 55, printedTo: 56 })] },
+  { courseId: 2, subject: "Ərəb dili (النحو)", lessonDays: ["monday"], lessonTime: "08:30", teacher: "Ustad Ömər", books: [] },
+  { courseId: 3, subject: "العقيدة الطحاوية (شرح)", lessonDays: ["saturday"], lessonTime: "10:00", teacher: null, books: [] },
 ];
 
 function mediaBoxes(pdf: Buffer) {
@@ -81,7 +81,6 @@ test("çox dərs olanda bütün səhifələr yenə A5 olur", async () => {
     lessonDays: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].slice(0, 1 + (index % 7)),
     lessonTime: `${String(8 + (index % 12)).padStart(2, "0")}:00`,
     teacher: `Müəllim ${index}`,
-    onlinePlatform: index % 2 ? "Zoom" : null,
     books: [formatScheduleBook({ bookShortTitle: "شرح منهج السالكين", chapterTitle: "باب الطهارة (فصل)", printedFrom: 1, printedTo: 9 })],
   }));
   const pdf = await samplePdf({ days: buildWeeklySchedule(many) });
@@ -127,9 +126,12 @@ test("həftə Bazar ertəsindən başlayır, dərslər saata görə, boş günl�
   assert.equal(days[3].lessons[0].time, "19:30");
   assert.equal(days[1].lessons.length, 0);
   assert.equal(days[6].lessons.length, 0);
-  assert.equal(days[0].lessons[0].mode, "Əyani (onlayn link yoxdur)");
-  assert.equal(days[0].lessons[1].mode, "Onlayn · Zoom");
   assert.equal(days[5].lessons[0].teacher, null);
+  for (const day of days) {
+    for (const lesson of day.lessons) {
+      assert.equal("mode" in lesson, false);
+    }
+  }
 });
 
 test("dərs saatı: tək saat və gün → saat xəritəsi", () => {
@@ -144,10 +146,24 @@ test("hazırlanma tarixi Bakı vaxtı ilə", () => {
   assert.equal(formatScheduleGeneratedAt(new Date("2026-10-09T22:40:00Z")), "10.10.2026, 02:40");
 });
 
-test("platforma adları", () => {
+test("platforma adları (PDF-də göstərilmir; yalnız link tanıma)", () => {
   assert.equal(meetingPlatformName("https://us02web.zoom.us/j/123"), "Zoom");
   assert.equal(meetingPlatformName("https://meet.google.com/abc-defg-hij"), "Google Meet");
+  assert.equal(meetingPlatformName("https://example.com/room"), null);
   assert.equal(meetingPlatformName(null), null);
+});
+
+test("PDF-də Əyani / Qiyabi / Onlayn format etiketi yoxdur", async () => {
+  const pdf = await samplePdf();
+  const text = pdf.toString("utf8");
+  for (const banned of ["Əyani", "Qiyabi", "Onlayn ·", "onlayn link yoxdur", "Əyani (onlayn"]) {
+    assert.equal(text.includes(banned), false, `PDF-də qadağan olunmuş söz: ${banned}`);
+  }
+  const days = buildWeeklySchedule(lessons);
+  const dumped = JSON.stringify(days);
+  for (const banned of ["Əyani", "Qiyabi", "Onlayn ·", "onlayn link yoxdur"]) {
+    assert.equal(dumped.includes(banned), false, `cədvəl məlumatında qadağan olunmuş söz: ${banned}`);
+  }
 });
 
 test("kitab sətri: ərəb hissələri izolə olunur, mötərizə qarışmır", () => {

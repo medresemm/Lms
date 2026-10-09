@@ -218,7 +218,7 @@ import { createApplicationUploadUrl, createAssignmentUploadUrl, createCourseUplo
 import { sendApplicationDecisionEmail, sendGraduationCertificateEmail, sendSubjectRemovalDecisionEmail, sendStudentNotificationEmail } from "../lib/applicationEmail.js";
 import { deleteAllAuditEvents, deleteAuditEvent, listAuditEvents, recordAuditEvent } from "../lib/audit.js";
 import { buildGraduationCertificatePdf } from "../lib/graduationCertificatePdf.js";
-import { buildSchedulePdf, buildWeeklySchedule, formatScheduleBook, meetingPlatformName, scheduleFileName, type ScheduleLessonInput } from "../lib/schedulePdf.js";
+import { buildSchedulePdf, buildWeeklySchedule, formatScheduleBook, scheduleFileName, type ScheduleLessonInput } from "../lib/schedulePdf.js";
 import { fullLibraryCatalog, loadCourseBooksRows } from "../lib/library/courseBooksRepo.js";
 import { resolveCourseBooks } from "../lib/library/courseBooks.js";
 import { matchResourceBook } from "../lib/library/resourceBooks.js";
@@ -2559,14 +2559,12 @@ async function scheduleLessonInputs(
       const match = matchResourceBook(resource, catalog);
       if (match) books = [formatScheduleBook({ bookShortTitle: match.bookShortTitle, chapterTitle: match.chapterTitle, printedFrom: match.printedFrom, printedTo: match.printedTo })];
     }
-    const meetingUrl = [resource.url, course?.zoomUrl, course?.googleMeetUrl, course?.lessonUrl].find((url) => isMeetingUrl(url));
     return {
       courseId: resource.courseId,
       subject: course?.title?.trim() || resource.title,
       lessonDays: resource.lessonDays,
       lessonTime: resource.lessonTime,
       teacher: options.teacherName ? options.teacherName(resource) : resource.teacherClerkUserId ? names.get(resource.teacherClerkUserId) ?? null : null,
-      onlinePlatform: meetingPlatformName(meetingUrl ?? null),
       books,
       termLabel: options.termLabels ? termDetails(resource.termNumber).label : null,
     };

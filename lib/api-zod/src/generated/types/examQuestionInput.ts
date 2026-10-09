@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ExamQuestionType } from './examQuestionType';
 
 export interface ExamQuestionInput {
   /**
@@ -12,16 +13,18 @@ export interface ExamQuestionInput {
      * @maxLength 2000
      */
   prompt: string;
+  type?: ExamQuestionType;
   /**
-     * @minItems 2
      * @maxItems 8
      * @items.minLength 1
      * @items.maxLength 500
      */
-  options: string[];
+  options?: string[];
   /**
      * @minimum 0
      * @maximum 7
      */
-  correctOptionIndex: number;
+  correctOptionIndex?: number;
+  maxPoints?: number | null;
+  modelAnswer?: string | null;
 }

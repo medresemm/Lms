@@ -530,6 +530,25 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ExamReviewResult" }
+  /admin/exams/{examId}/submissions/{profileId}/grade:
+    post:
+      operationId: gradeExamSubmission
+      tags: [lms]
+      summary: Grade the open-ended answers of a student's test
+      parameters:
+        - { name: examId, in: path, required: true, schema: { type: number } }
+        - { name: profileId, in: path, required: true, schema: { type: number } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExamGradeInput" }
+      responses:
+        "200":
+          description: Graded test submission
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminExamSubmission" }
   /assignment-attachments/{attachmentId}:
     get:
       operationId: getAssignmentAttachment
@@ -2434,27 +2453,49 @@ components:
         id: { type: number }
         label: { type: string }
         position: { type: number, minimum: 0 }
+    ExamQuestionType:
+      type: string
+      enum: [choice, open]
+    ExamLanguage:
+      type: string
+      enum: [az, ar]
     ExamQuestion:
       type: object
-      required: [id, prompt, position, options]
+      required: [id, prompt, position, options, type, maxPoints]
       properties:
         id: { type: number }
         prompt: { type: string }
         position: { type: number, minimum: 0 }
+        type: { $ref: "#/components/schemas/ExamQuestionType" }
+        maxPoints: { type: number, minimum: 1 }
         options:
           type: array
-          minItems: 2
           items: { $ref: "#/components/schemas/ExamOption" }
     ExamResult:
       type: object
-      required: [correctCount, totalQuestions, percentage]
+      required: [correctCount, totalQuestions, percentage, score, maxScore, autoScore, manualScore, openQuestionCount, status]
       properties:
         correctCount: { type: number, minimum: 0 }
         totalQuestions: { type: number, minimum: 0 }
         percentage: { type: number, minimum: 0, maximum: 100 }
+        score: { type: number, minimum: 0 }
+        maxScore: { type: number, minimum: 0 }
+        autoScore: { type: number, minimum: 0 }
+        manualScore: { type: number, minimum: 0 }
+        openQuestionCount: { type: number, minimum: 0 }
+        status: { type: string, enum: [graded, pending_review] }
+    ExamOpenGrade:
+      type: object
+      required: [points, comment]
+      properties:
+        points: { type: number, minimum: 0 }
+        comment:
+          oneOf:
+            - { type: string }
+            - { type: "null" }
     ExamSubmission:
       type: object
-      required: [id, examId, profileId, answers, submittedAt, result]
+      required: [id, examId, profileId, answers, openAnswers, openGrades, reviewedAt, submittedAt, result]
       properties:
         id: { type: number }
         examId: { type: number }
@@ -2462,12 +2503,22 @@ components:
         answers:
           type: object
           additionalProperties: { type: number }
+        openAnswers:
+          type: object
+          additionalProperties: { type: string }
+        openGrades:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/ExamOpenGrade" }
+        reviewedAt:
+          oneOf:
+            - { type: string, format: date-time }
+            - { type: "null" }
         submittedAt: { type: string, format: date-time }
         result:
           $ref: "#/components/schemas/ExamResult"
     Exam:
       type: object
-      required: [id, courseId, resourceId, termNumber, courseTitle, teacherName, title, description, status, isOnboarding, durationMinutes, startedAt, createdAt, updatedAt, questions, submission]
+      required: [id, courseId, resourceId, termNumber, courseTitle, teacherName, title, description, status, isOnboarding, language, durationMinutes, startedAt, createdAt, updatedAt, questions, submission]
       properties:
         id: { type: number }
         courseId: { type: number }
@@ -2479,6 +2530,7 @@ components:
         description: { type: string }
         status: { type: string, enum: [open, closed] }
         isOnboarding: { type: boolean }
+        language: { $ref: "#/components/schemas/ExamLanguage" }
         durationMinutes:
           oneOf:
             - { type: number, minimum: 1, maximum: 240 }
@@ -2498,15 +2550,23 @@ components:
             - type: "null"
     ExamQuestionInput:
       type: object
-      required: [prompt, options, correctOptionIndex]
+      required: [prompt]
       properties:
         prompt: { type: string, minLength: 1, maxLength: 2000 }
+        type: { $ref: "#/components/schemas/ExamQuestionType" }
         options:
           type: array
-          minItems: 2
           maxItems: 8
           items: { type: string, minLength: 1, maxLength: 500 }
         correctOptionIndex: { type: number, minimum: 0, maximum: 7 }
+        maxPoints:
+          oneOf:
+            - { type: number, minimum: 1, maximum: 100 }
+            - { type: "null" }
+        modelAnswer:
+          oneOf:
+            - { type: string, maxLength: 4000 }
+            - { type: "null" }
     ExamInput:
       type: object
       required: [title, description, questions]
@@ -2516,6 +2576,7 @@ components:
         description: { type: string, minLength: 1, maxLength: 12000 }
         status: { type: string, enum: [open, closed] }
         isOnboarding: { type: boolean }
+        language: { $ref: "#/components/schemas/ExamLanguage" }
         durationMinutes:
           oneOf:
             - { type: number, minimum: 1, maximum: 240 }
@@ -2532,6 +2593,7 @@ components:
         description: { type: string, minLength: 1, maxLength: 12000 }
         status: { type: string, enum: [open, closed] }
         isOnboarding: { type: boolean }
+        language: { $ref: "#/components/schemas/ExamLanguage" }
         durationMinutes:
           oneOf:
             - { type: number, minimum: 1, maximum: 240 }
@@ -2548,25 +2610,33 @@ components:
         answers:
           type: object
           additionalProperties: { type: number, minimum: 1 }
+        openAnswers:
+          type: object
+          additionalProperties: { type: string, maxLength: 10000 }
     AdminExam:
       allOf:
         - $ref: "#/components/schemas/Exam"
         - type: object
-          required: [teacherClerkUserId, submissionCount, questions]
+          required: [teacherClerkUserId, submissionCount, pendingReviewCount, questions]
           properties:
             teacherClerkUserId: { type: string }
             submissionCount: { type: number, minimum: 0 }
+            pendingReviewCount: { type: number, minimum: 0 }
             questions:
               type: array
               items:
                 allOf:
                   - $ref: "#/components/schemas/ExamQuestion"
                   - type: object
-                    required: [correctOptionId]
+                    required: [correctOptionId, modelAnswer]
                     properties:
                       correctOptionId:
                         oneOf:
                           - { type: number, minimum: 1 }
+                          - { type: "null" }
+                      modelAnswer:
+                        oneOf:
+                          - { type: string }
                           - { type: "null" }
     AdminExamSubmission:
       allOf:
@@ -2581,6 +2651,21 @@ components:
             answerLabels:
               type: object
               additionalProperties: { type: string }
+    ExamGradeInput:
+      type: object
+      required: [grades]
+      properties:
+        grades:
+          type: object
+          additionalProperties:
+            type: object
+            required: [points]
+            properties:
+              points: { type: number, minimum: 0, maximum: 100 }
+              comment:
+                oneOf:
+                  - { type: string, maxLength: 2000 }
+                  - { type: "null" }
     ExamResendResult:
       type: object
       required: [examId, profileId, resent]

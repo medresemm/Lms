@@ -53,6 +53,7 @@ import {
   roleForClerkUser,
   teacherNameMap,
   loadExamResult,
+  loadExamStructure,
   metadataRole,
   permissionsForClerkUser,
   requireApprovedStudent,
@@ -64,6 +65,7 @@ import {
   termDetails,
   userIsSystemOwner,
 } from "./lms.js";
+import { computeExamScore, maskPendingScore, parseStoredAnswers } from "../lib/examContent.js";
 import { answerLibrary, resolveLibraryMessage } from "../lib/library/search.js";
 import { searchableLibraryBooks } from "../lib/library/uploadedBooks.js";
 import { answerCourseBooks, courseBooksFromResources, detectCourseBooksQuestion, suggestedLibraryBooks, termLabel, type StudentCourseRef } from "../lib/library/courseBooks.js";
@@ -448,6 +450,7 @@ function buildStudentContext(profile: ProfileRow, application: ApplicationRow): 
       )).limit(1);
       // Bağlanmış və cavab verilməmiş testləri göstərmirik (UI-da da görünmür).
       if (exam.status !== "open" && !submission) continue;
+      const structure = await loadExamStructure(exam.id);
       visible.push({
         id: exam.id,
         courseTitle: exam.isOnboarding ? "Ümumi qəbul testi" : titles.get(exam.courseId) || `Fənn #${exam.courseId}`,
@@ -455,7 +458,9 @@ function buildStudentContext(profile: ProfileRow, application: ApplicationRow): 
         status: exam.status === "closed" ? "closed" : "open",
         isOnboarding: exam.isOnboarding,
         durationMinutes: exam.durationMinutes,
-        result: submission ? await loadExamResult(exam.id, submission.answers) : null,
+        // Tələbəyə yoxlama bitənə qədər bal göstərilmir (sayt da göstərmir).
+        result: submission ? maskPendingScore(computeExamScore(structure.scoring, parseStoredAnswers(submission.answers))) : null,
+        openQuestionCount: structure.scoring.filter((question) => question.kind === "open").length,
         submittedAt: submission?.submittedAt ?? null,
       });
     }
@@ -838,17 +843,15 @@ function buildAdminContext(permissions: ReadonlySet<string>, isOwner: boolean, r
   });
 
   const examsOverview = memo(async () => {
-    const [exams, questions, options, submissions, titles, names] = await Promise.all([
+    const [exams, submissions, titles, names] = await Promise.all([
       db.select().from(examsTable).orderBy(desc(examsTable.id)),
-      db.select({ id: examQuestionsTable.id, examId: examQuestionsTable.examId }).from(examQuestionsTable),
-      db.select({ id: examOptionsTable.id, questionId: examOptionsTable.questionId }).from(examOptionsTable).where(eq(examOptionsTable.isCorrect, true)),
       db.select().from(examSubmissionsTable),
       courseTitles(),
       profileNames(),
     ]);
-    const correctByQuestion = new Map(options.map((option) => [option.questionId, option.id]));
+    const structures = new Map(await Promise.all(exams.map(async (exam) => [exam.id, await loadExamStructure(exam.id)] as const)));
     return exams.map((exam) => {
-      const examQuestions = questions.filter((question) => question.examId === exam.id);
+      const scoring = structures.get(exam.id)?.scoring ?? [];
       return {
         id: exam.id,
         courseTitle: exam.isOnboarding ? "Ümumi qəbul testi" : titles.get(exam.courseId) || `Fənn #${exam.courseId}`,
@@ -856,18 +859,13 @@ function buildAdminContext(permissions: ReadonlySet<string>, isOwner: boolean, r
         termNumber: exam.termNumber,
         isOnboarding: exam.isOnboarding,
         status: exam.status,
-        results: submissions.filter((submission) => submission.examId === exam.id).map((submission) => {
-          const correctCount = examQuestions.reduce((count, question) => count + (submission.answers[String(question.id)] === correctByQuestion.get(question.id) ? 1 : 0), 0);
-          const totalQuestions = examQuestions.length;
-          return {
-            studentName: names.get(submission.profileId)?.name ?? "Tələbə",
-            studentNumber: names.get(submission.profileId)?.studentNumber ?? null,
-            correctCount,
-            totalQuestions,
-            percentage: totalQuestions ? Math.round((correctCount / totalQuestions) * 100) : 0,
-            submittedAt: submission.submittedAt,
-          };
-        }).sort((a, b) => b.percentage - a.percentage),
+        openQuestionCount: scoring.filter((question) => question.kind === "open").length,
+        results: submissions.filter((submission) => submission.examId === exam.id).map((submission) => ({
+          studentName: names.get(submission.profileId)?.name ?? "Tələbə",
+          studentNumber: names.get(submission.profileId)?.studentNumber ?? null,
+          ...computeExamScore(scoring, parseStoredAnswers(submission.answers)),
+          submittedAt: submission.submittedAt,
+        })).sort((a, b) => b.percentage - a.percentage),
       };
     });
   });

@@ -4,6 +4,7 @@
 // sözlərə görə niyyətlərə (intent) ayrılır və cavab yalnız ötürülən kontekstin (StudentAiContext və ya
 // AdminAiContext) qaytardığı LMS məlumatlarından qurulur. Tələbə kontekstində başqa tələbəyə aid məlumat
 // almaq üçün heç bir metod yoxdur. Mühərrik heç nə saxlamır və mesaj mətnini log etmir.
+import { examIsPendingReview, examResultText } from "./examText.js";
 import type {
   AdminAiContext,
   AiAssignment,
@@ -182,16 +183,23 @@ async function studentExams(ctx: StudentAiContext, courseFilter: Set<number> | n
   const exams = (await ctx.exams()).filter((exam) => !titleFilter || titleFilter.has(exam.courseTitle));
   if (!exams.length) return blockReply([{ type: "text", text: "Hazırda sizə açıq imtahan və ya test yoxdur." }], ["Tapşırıqlarım", "Qiymətlərim"]);
   const waiting = exams.filter((exam) => exam.status === "open" && !exam.result);
+  const reviewing = exams.filter((exam) => exam.result && examIsPendingReview(exam.result));
+  const withOpen = exams.some((exam) => (exam.openQuestionCount ?? 0) > 0);
+  const intro = waiting.length ? `Sizi ${plural(waiting.length, "test")} gözləyir. Kabinetdə «İmtahan və testlər» bölməsindən başlaya bilərsiniz.` : `${plural(exams.length, "test")} üzrə məlumatınız:`;
+  const notes = [
+    reviewing.length ? `${plural(reviewing.length, "test")} yoxlanılır: açıq suallara müəllim bal verəndən sonra yekun nəticə burada və «İmtahan və testlər» bölməsində görünəcək.` : null,
+    withOpen && waiting.length ? "Açıq suallarda cavabı xanaya özünüz yazırsınız (ərəbcə də yaza bilərsiniz); seçimli suallar avtomatik, açıq suallar müəllim tərəfindən qiymətləndirilir." : null,
+  ].filter((line): line is string => Boolean(line));
   return blockReply([
-    { type: "text", text: waiting.length ? `Sizi ${plural(waiting.length, "test")} gözləyir. Kabinetdə «İmtahan və testlər» bölməsindən başlaya bilərsiniz.` : `${plural(exams.length, "test")} üzrə məlumatınız:` },
+    { type: "text", text: [intro, ...notes].join("\n") },
     {
       type: "card",
       title: "İmtahan və testlər",
       items: exams.slice(0, 40).map((exam) => ({
         title: exam.title,
-        meta: [exam.courseTitle, exam.isOnboarding ? "qəbul testi" : null, exam.durationMinutes ? `${exam.durationMinutes} dəqiqə` : null].filter((part): part is string => Boolean(part)),
+        meta: [exam.courseTitle, exam.isOnboarding ? "qəbul testi" : null, (exam.openQuestionCount ?? 0) > 0 ? `${exam.openQuestionCount} açıq sual` : null, exam.durationMinutes ? `${exam.durationMinutes} dəqiqə` : null].filter((part): part is string => Boolean(part)),
         badge: exam.result
-          ? { text: `${exam.result.correctCount}/${exam.result.totalQuestions} düzgün (${exam.result.percentage}%)`, tone: "good" }
+          ? examIsPendingReview(exam.result) ? { text: "yoxlanılır", tone: "warn" } : { text: examResultText(exam.result), tone: "good" }
           : exam.status === "open" ? { text: "hələ verməmisiniz", tone: "warn" } : { text: "bağlanıb", tone: "muted" },
       })),
     },

@@ -4,6 +4,7 @@
 // etmir və cavabları LMS-in öz məlumatlarından deterministik qaydada qurur. Gələcəkdə real dil modeli
 // qoşmaq lazım olsa, yeni provayder bu interfeysi tətbiq edib `MEDINE_AI_PROVIDER` env dəyişəni ilə
 // seçilə bilər. Provayder heç nə saxlamamalıdır: söhbət tarixçəsi yalnız brauzerdə (localStorage) qalır.
+import type { AiExamScore } from "./examText.js";
 import { internalAiProvider } from "./internalProvider.js";
 import type { AiBlock } from "./blocks.js";
 
@@ -91,7 +92,8 @@ export interface AiExam {
   status: "open" | "closed";
   isOnboarding: boolean;
   durationMinutes: number | null;
-  result: { correctCount: number; totalQuestions: number; percentage: number } | null;
+  result: AiExamScore | null;
+  openQuestionCount?: number;
   submittedAt: Date | string | null;
 }
 
@@ -130,7 +132,7 @@ export interface AiStudentDetails {
   termLabel: string;
   semesters: AiSemester[];
   assignments: Array<{ courseTitle: string; title: string; dueAt: Date; maxScore: number; submissionStatus: string | null; score: number | null }>;
-  exams: Array<{ courseTitle: string; title: string; isOnboarding: boolean; percentage: number; correctCount: number; totalQuestions: number; submittedAt: Date | string | null }>;
+  exams: Array<AiExamScore & { courseTitle: string; title: string; isOnboarding: boolean; submittedAt: Date | string | null }>;
 }
 
 export interface AiCourseInfo {
@@ -222,7 +224,8 @@ export interface AiExamOverview {
   termNumber: number;
   isOnboarding: boolean;
   status: string;
-  results: Array<{ studentName: string; studentNumber: number | null; percentage: number; correctCount: number; totalQuestions: number; submittedAt: Date | string | null }>;
+  openQuestionCount?: number;
+  results: Array<AiExamScore & { studentName: string; studentNumber: number | null; submittedAt: Date | string | null }>;
 }
 
 export interface AiNoticeItem {

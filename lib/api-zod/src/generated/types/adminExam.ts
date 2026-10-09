@@ -12,5 +12,7 @@ export type AdminExam = Exam & {
   teacherClerkUserId: string;
   /** @minimum 0 */
   submissionCount: number;
+  /** @minimum 0 */
+  pendingReviewCount: number;
   questions: AdminExamQuestionsItem[];
 };

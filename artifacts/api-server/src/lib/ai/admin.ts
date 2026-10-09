@@ -4,6 +4,8 @@
 // kurslar, müraciətlər, tapşırıqlar, testlər, elanlar/bildirişlər, üzrlər, sual-cavab.
 // Hər məlumat növü öz icazəsi ilə qorunur (server kontekstində icazə yoxdursa metod null qaytarır).
 // Mühərrik heç nə saxlamır; bütün hesablamalar sorğu daxilində yaddaşda aparılır.
+import { examIsPendingReview, examResultText } from "./examText.js";
+import { ARABIC_LETTERS, arabicSearchKey } from "../examContent.js";
 import type {
   AdminAiContext,
   AiApplication,
@@ -247,7 +249,7 @@ function studentDetailsReply(details: AiStudentDetails): AiReply {
   if (details.exams.length) {
     lines.push("", `Test nəticələri (${details.exams.length}):`);
     for (const exam of details.exams.slice(0, 8)) {
-      lines.push(`• ${exam.title} — ${exam.courseTitle}${exam.isOnboarding ? " (qəbul testi)" : ""}: ${exam.correctCount}/${exam.totalQuestions} (${exam.percentage}%) · ${formatDate(exam.submittedAt)}`);
+      lines.push(`• ${exam.title} — ${exam.courseTitle}${exam.isOnboarding ? " (qəbul testi)" : ""}: ${examResultText(exam, true)} · ${formatDate(exam.submittedAt)}`);
     }
   }
   return reply(lines, ["Tələbə axtar", "Ümumi statistika"]);
@@ -724,8 +726,10 @@ async function assignmentBranch(ctx: AdminAiContext, parsed: ParsedMessage, enti
 }
 
 function examSummary(exam: AiExamOverview) {
-  const average = exam.results.length ? Math.round(exam.results.reduce((sum, item) => sum + item.percentage, 0) / exam.results.length) : null;
-  return `• ${exam.title} — ${exam.courseTitle}${exam.isOnboarding ? " (qəbul testi)" : ` · ${termLabel(exam.termNumber)}`} · ${STATUS_LABELS[exam.status] ?? exam.status} · ${exam.results.length} nəticə${average !== null ? ` · orta: ${average}%` : ""}`;
+  const graded = exam.results.filter((item) => !examIsPendingReview(item));
+  const pending = exam.results.length - graded.length;
+  const average = graded.length ? Math.round(graded.reduce((sum, item) => sum + item.percentage, 0) / graded.length) : null;
+  return `• ${exam.title} — ${exam.courseTitle}${exam.isOnboarding ? " (qəbul testi)" : ` · ${termLabel(exam.termNumber)}`} · ${STATUS_LABELS[exam.status] ?? exam.status}${(exam.openQuestionCount ?? 0) > 0 ? ` · ${exam.openQuestionCount} açıq sual` : ""} · ${exam.results.length} nəticə${pending ? ` · yoxlama gözləyir: ${pending}` : ""}${average !== null ? ` · orta: ${average}%` : ""}`;
 }
 
 async function examBranch(ctx: AdminAiContext, parsed: ParsedMessage, isCount: boolean): Promise<AiReply> {
@@ -737,7 +741,14 @@ async function examBranch(ctx: AdminAiContext, parsed: ParsedMessage, isCount: b
   let list = byCourse.items;
   let narrowed = false;
   const nameTokens = residualTokens(parsed).filter((token) => !byCourse.consumed.has(token));
-  if (nameTokens.length) {
+  // Ərəbcə test adları: hərəkələrə və əlif formalarına baxmadan axtarılır (saxlanılan mətnə toxunulmur).
+  const arabicQuery = ARABIC_LETTERS.test(parsed.raw) ? arabicSearchKey(parsed.raw.replace(/[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s]/g, " ")) : "";
+  const arabicHits = arabicQuery ? list.filter((exam) => {
+    const title = arabicSearchKey(exam.title);
+    return Boolean(title) && (title.includes(arabicQuery) || arabicQuery.includes(title));
+  }) : [];
+  if (arabicHits.length) { list = arabicHits; narrowed = true; }
+  else if (nameTokens.length) {
     const matches = bestMatches(rankItems(list, nameTokens, (exam) => [exam.title]));
     if (matches.length) { list = matches.map((entry) => entry.item); narrowed = true; }
   }
@@ -747,7 +758,7 @@ async function examBranch(ctx: AdminAiContext, parsed: ParsedMessage, isCount: b
     for (const exam of list) {
       lines.push(examSummary(exam).slice(2));
       if (!exam.results.length) lines.push("  Hələ nəticə yoxdur.");
-      bullet(lines, exam.results.map((result) => `  – ${result.studentName}${result.studentNumber ? ` (${studentCode(result.studentNumber)})` : ""}: ${result.correctCount}/${result.totalQuestions} (${result.percentage}%)`), 25);
+      bullet(lines, exam.results.map((result) => `  – ${result.studentName}${result.studentNumber ? ` (${studentCode(result.studentNumber)})` : ""}: ${examResultText(result, true)}`), 25);
       lines.push("");
     }
     return reply(lines, ["Testlər", "Ortalaması 60-dan aşağı olanlar"]);

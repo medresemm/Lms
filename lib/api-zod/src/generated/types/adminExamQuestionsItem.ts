@@ -9,4 +9,5 @@ import type { ExamQuestion } from './examQuestion';
 
 export type AdminExamQuestionsItem = ExamQuestion & ({
   correctOptionId: number | null;
+  modelAnswer: string | null;
 });

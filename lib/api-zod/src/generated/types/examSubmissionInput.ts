@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ExamSubmissionInputAnswers } from './examSubmissionInputAnswers';
+import type { ExamSubmissionInputOpenAnswers } from './examSubmissionInputOpenAnswers';
 
 export interface ExamSubmissionInput {
   answers: ExamSubmissionInputAnswers;
+  openAnswers?: ExamSubmissionInputOpenAnswers;
 }

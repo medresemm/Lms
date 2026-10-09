@@ -79,6 +79,7 @@ import type {
   DeleteAdminStudent400,
   DeleteAdminStudent404,
   Exam,
+  ExamGradeInput,
   ExamInput,
   ExamResendResult,
   ExamReviewResult,
@@ -337,7 +338,7 @@ export const getResolveStudentNumberUrl = () => {
 }
 
 /**
- * @summary Resolve a student number to the student's email address
+ * @summary Resolve a student number after the password is verified
  */
 export const resolveStudentNumber = async (resolveStudentNumberInput: ResolveStudentNumberInput, options?: Parameters<typeof customFetch>[1]): Promise<ResolveStudentNumberResult> => {
 
@@ -386,7 +387,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ResolveStudentNumberMutationError = ErrorType<unknown>
 
     /**
- * @summary Resolve a student number to the student's email address
+ * @summary Resolve a student number after the password is verified
  */
 export const useResolveStudentNumber = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveStudentNumber>>, TError,{data: BodyType<ResolveStudentNumberInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -2660,6 +2661,80 @@ export const useApproveExamSubmission = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getApproveExamSubmissionMutationOptions(options));
+    }
+
+export const getGradeExamSubmissionUrl = (examId: number,
+    profileId: number,) => {
+
+
+
+
+  return `/api/admin/exams/${examId}/submissions/${profileId}/grade`
+}
+
+/**
+ * @summary Grade the open-ended answers of a student's test
+ */
+export const gradeExamSubmission = async (examId: number,
+    profileId: number,
+    examGradeInput: ExamGradeInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminExamSubmission> => {
+
+  return customFetch<AdminExamSubmission>(getGradeExamSubmissionUrl(examId,profileId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(examGradeInput)
+  }
+);}
+
+
+
+
+
+export const getGradeExamSubmissionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof gradeExamSubmission>>, TError,{examId: number;profileId: number;data: BodyType<ExamGradeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof gradeExamSubmission>>, TError,{examId: number;profileId: number;data: BodyType<ExamGradeInput>}, TContext> => {
+
+const mutationKey = ['gradeExamSubmission'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof gradeExamSubmission>>, {examId: number;profileId: number;data: BodyType<ExamGradeInput>}> = (props) => {
+          const {examId,profileId,data} = props ?? {};
+
+          return  gradeExamSubmission(examId,profileId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GradeExamSubmissionMutationResult = NonNullable<Awaited<ReturnType<typeof gradeExamSubmission>>>
+    export type GradeExamSubmissionMutationBody = BodyType<ExamGradeInput>
+    export type GradeExamSubmissionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Grade the open-ended answers of a student's test
+ */
+export const useGradeExamSubmission = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof gradeExamSubmission>>, TError,{examId: number;profileId: number;data: BodyType<ExamGradeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof gradeExamSubmission>>,
+        TError,
+        {examId: number;profileId: number;data: BodyType<ExamGradeInput>},
+        TContext
+      > => {
+      return useMutation(getGradeExamSubmissionMutationOptions(options));
     }
 
 export const getGetAssignmentAttachmentUrl = (attachmentId: number,) => {

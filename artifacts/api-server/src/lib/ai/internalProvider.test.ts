@@ -198,3 +198,28 @@ test("admin guide lists only the sections the current account actually has", asy
   const noAnnouncements = text(await ask("Elanı necə yayımlayım?", adminContext(["students"], { role: "owner_assistant" })));
   assert.match(noAnnouncements, /«Yeni elan» bölməsi sizin hesabınızda açıq deyil/);
 });
+
+test("tests with open questions: student sees 'yoxlanılır', admin sees pending review and points", async () => {
+  const student = studentContext();
+  student.exams = async () => [
+    { id: 2, courseTitle: "Fiqh", title: "اختبار الطهارة", status: "open", isOnboarding: false, durationMinutes: null, openQuestionCount: 2, submittedAt: new Date(),
+      result: { correctCount: 0, totalQuestions: 5, percentage: 0, score: 0, maxScore: 13, openQuestionCount: 2, status: "pending_review" } },
+    { id: 3, courseTitle: "Quran", title: "Təcvid yazılı", status: "open", isOnboarding: false, durationMinutes: null, openQuestionCount: 1, submittedAt: new Date(),
+      result: { correctCount: 2, totalQuestions: 3, percentage: 80, score: 5.5, maxScore: 7, openQuestionCount: 1, status: "graded" } },
+  ];
+  const reply = (await ask("imtahanlarım", student)).reply;
+  assert.match(reply, /اختبار الطهارة/);
+  assert.match(reply, /yoxlanılır/);
+  assert.match(reply, /5\.5 \/ 7 bal \(80%\)/);
+  assert.doesNotMatch(reply, /LMS/);
+
+  const admin = adminContext();
+  admin.examsOverview = async () => [
+    { id: 2, courseTitle: "Fiqh", title: "اختبار الطَّهَارَة", termNumber: 1, isOnboarding: false, status: "open", openQuestionCount: 2, results: [
+      { studentName: "Aişə Həsənova", studentNumber: 12, correctCount: 1, totalQuestions: 5, percentage: 0, score: 1, maxScore: 13, openQuestionCount: 2, status: "pending_review", submittedAt: new Date() },
+    ] },
+  ];
+  const adminReply = (await ask("اختبار الطهارة test nəticələri", admin)).reply;
+  assert.match(adminReply, /yoxlama gözləyir: 1/);
+  assert.match(adminReply, /Aişə Həsənova[^\n]*yoxlanılır/);
+});

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ExamLanguage } from './examLanguage';
 import type { ExamQuestion } from './examQuestion';
 import type { ExamStatus } from './examStatus';
 import type { ExamSubmission } from './examSubmission';
@@ -24,6 +25,7 @@ export interface Exam {
   description: string;
   status: ExamStatus;
   isOnboarding: boolean;
+  language: ExamLanguage;
   durationMinutes: number | null;
   startedAt: Date | null;
   createdAt: Date;

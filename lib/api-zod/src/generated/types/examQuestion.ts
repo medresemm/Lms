@@ -6,12 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ExamOption } from './examOption';
+import type { ExamQuestionType } from './examQuestionType';
 
 export interface ExamQuestion {
   id: number;
   prompt: string;
   /** @minimum 0 */
   position: number;
-  /** @minItems 2 */
+  type: ExamQuestionType;
+  /** @minimum 1 */
+  maxPoints: number;
   options: ExamOption[];
 }

@@ -344,14 +344,40 @@ export interface ExamOption {
   position: number;
 }
 
+export type ExamQuestionType = typeof ExamQuestionType[keyof typeof ExamQuestionType];
+
+
+export const ExamQuestionType = {
+  choice: 'choice',
+  open: 'open',
+} as const;
+
+export type ExamLanguage = typeof ExamLanguage[keyof typeof ExamLanguage];
+
+
+export const ExamLanguage = {
+  az: 'az',
+  ar: 'ar',
+} as const;
+
 export interface ExamQuestion {
   id: number;
   prompt: string;
   /** @minimum 0 */
   position: number;
-  /** @minItems 2 */
+  type: ExamQuestionType;
+  /** @minimum 1 */
+  maxPoints: number;
   options: ExamOption[];
 }
+
+export type ExamResultStatus = typeof ExamResultStatus[keyof typeof ExamResultStatus];
+
+
+export const ExamResultStatus = {
+  graded: 'graded',
+  pending_review: 'pending_review',
+} as const;
 
 export interface ExamResult {
   /** @minimum 0 */
@@ -363,15 +389,39 @@ export interface ExamResult {
      * @maximum 100
      */
   percentage: number;
+  /** @minimum 0 */
+  score: number;
+  /** @minimum 0 */
+  maxScore: number;
+  /** @minimum 0 */
+  autoScore: number;
+  /** @minimum 0 */
+  manualScore: number;
+  /** @minimum 0 */
+  openQuestionCount: number;
+  status: ExamResultStatus;
+}
+
+export interface ExamOpenGrade {
+  /** @minimum 0 */
+  points: number;
+  comment: string | null;
 }
 
 export type ExamSubmissionAnswers = {[key: string]: number};
+
+export type ExamSubmissionOpenAnswers = {[key: string]: string};
+
+export type ExamSubmissionOpenGrades = {[key: string]: ExamOpenGrade};
 
 export interface ExamSubmission {
   id: number;
   examId: number;
   profileId: number;
   answers: ExamSubmissionAnswers;
+  openAnswers: ExamSubmissionOpenAnswers;
+  openGrades: ExamSubmissionOpenGrades;
+  reviewedAt: string | null;
   submittedAt: string;
   result: ExamResult;
 }
@@ -399,6 +449,7 @@ export interface Exam {
   description: string;
   status: ExamStatus;
   isOnboarding: boolean;
+  language: ExamLanguage;
   durationMinutes: number | null;
   startedAt: string | null;
   createdAt: string;
@@ -413,18 +464,20 @@ export interface ExamQuestionInput {
      * @maxLength 2000
      */
   prompt: string;
+  type?: ExamQuestionType;
   /**
-     * @minItems 2
      * @maxItems 8
      * @items.minLength 1
      * @items.maxLength 500
      */
-  options: string[];
+  options?: string[];
   /**
      * @minimum 0
      * @maximum 7
      */
-  correctOptionIndex: number;
+  correctOptionIndex?: number;
+  maxPoints?: number | null;
+  modelAnswer?: string | null;
 }
 
 export type ExamInputStatus = typeof ExamInputStatus[keyof typeof ExamInputStatus];
@@ -450,6 +503,7 @@ export interface ExamInput {
   description: string;
   status?: ExamInputStatus;
   isOnboarding?: boolean;
+  language?: ExamLanguage;
   durationMinutes?: number | null;
   /**
      * @minItems 1
@@ -479,6 +533,7 @@ export interface ExamUpdate {
   description?: string;
   status?: ExamUpdateStatus;
   isOnboarding?: boolean;
+  language?: ExamLanguage;
   durationMinutes?: number | null;
   /**
      * @minItems 1
@@ -489,18 +544,24 @@ export interface ExamUpdate {
 
 export type ExamSubmissionInputAnswers = {[key: string]: number};
 
+export type ExamSubmissionInputOpenAnswers = {[key: string]: string};
+
 export interface ExamSubmissionInput {
   answers: ExamSubmissionInputAnswers;
+  openAnswers?: ExamSubmissionInputOpenAnswers;
 }
 
 export type AdminExamQuestionsItem = ExamQuestion & ({
   correctOptionId: number | null;
+  modelAnswer: string | null;
 });
 
 export type AdminExam = Exam & {
   teacherClerkUserId: string;
   /** @minimum 0 */
   submissionCount: number;
+  /** @minimum 0 */
+  pendingReviewCount: number;
   questions: AdminExamQuestionsItem[];
 };
 
@@ -521,6 +582,19 @@ export type AdminExamSubmission = ExamSubmission & {
   reviewStatus: AdminExamSubmissionReviewStatus;
   answerLabels: AdminExamSubmissionAnswerLabels;
 };
+
+export type ExamGradeInputGrades = {[key: string]: {
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  points: number;
+  comment?: string | null;
+}};
+
+export interface ExamGradeInput {
+  grades: ExamGradeInputGrades;
+}
 
 export interface ExamResendResult {
   examId: number;

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ExamResultStatus } from './examResultStatus';
 
 export interface ExamResult {
   /** @minimum 0 */
@@ -16,4 +17,15 @@ export interface ExamResult {
      * @maximum 100
      */
   percentage: number;
+  /** @minimum 0 */
+  score: number;
+  /** @minimum 0 */
+  maxScore: number;
+  /** @minimum 0 */
+  autoScore: number;
+  /** @minimum 0 */
+  manualScore: number;
+  /** @minimum 0 */
+  openQuestionCount: number;
+  status: ExamResultStatus;
 }

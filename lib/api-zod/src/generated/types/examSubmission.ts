@@ -7,12 +7,17 @@
  */
 import type { ExamResult } from './examResult';
 import type { ExamSubmissionAnswers } from './examSubmissionAnswers';
+import type { ExamSubmissionOpenAnswers } from './examSubmissionOpenAnswers';
+import type { ExamSubmissionOpenGrades } from './examSubmissionOpenGrades';
 
 export interface ExamSubmission {
   id: number;
   examId: number;
   profileId: number;
   answers: ExamSubmissionAnswers;
+  openAnswers: ExamSubmissionOpenAnswers;
+  openGrades: ExamSubmissionOpenGrades;
+  reviewedAt: Date | null;
   submittedAt: Date;
   result: ExamResult;
 }

@@ -1,4 +1,23 @@
 import { Router, type IRouter, type RequestHandler } from "express";
+import {
+  EXAM_META_POSITION,
+  ExamValidationError,
+  applyOpenGrades,
+  buildStoredAnswers,
+  computeExamScore,
+  encodeQuestionMeta,
+  examLanguageFromMetas,
+  maskPendingScore,
+  needsMetaRow,
+  normalizeExamQuestionInputs,
+  parseStoredAnswers,
+  splitQuestionOptions,
+  validateSubmissionAnswers,
+  type ExamLanguage,
+  type ExamQuestionMeta,
+  type NormalizedExamQuestion,
+  type ScoringQuestion,
+} from "../lib/examContent.js";
 import { clerkClient, getAuth } from "@clerk/express";
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
@@ -179,6 +198,8 @@ import {
   GetExamSubmissionsResponse,
   ResendExamToStudentResponse,
   ApproveExamSubmissionResponse,
+  GradeExamSubmissionBody,
+  GradeExamSubmissionResponse,
   GetTeachersResponse,
   GetMessagesResponse,
   CreateMessageBody,
@@ -2709,25 +2730,20 @@ router.post("/exams/:examId/submissions", requireApprovedStudent, async (req, re
     const attempt = await ensureExamAttempt(exam.id, profile.id);
     const expired = exam.durationMinutes !== null
       && Date.now() >= attempt.startedAt.getTime() + exam.durationMinutes * 60_000;
-    const questions = await db.select().from(examQuestionsTable).where(eq(examQuestionsTable.examId, examId));
-    const questionIds = new Set(questions.map((question) => String(question.id)));
-    const answerKeys = Object.keys(input.answers);
-    if ((!expired && answerKeys.length !== questions.length) || answerKeys.some((questionId) => !questionIds.has(questionId))) {
-      res.status(400).json({ error: "Bütün sualları cavablandırın və yalnız bu testin suallarını göndərin." });
+    const structure = await loadExamStructure(examId);
+    const validated = validateSubmissionAnswers(
+      structure.questions.map((question) => ({
+        id: question.id,
+        kind: question.meta.kind,
+        optionIds: new Set(question.choices.map((option) => option.id)),
+      })),
+      input.answers,
+      input.openAnswers ?? {},
+      expired,
+    );
+    if (!validated.ok) {
+      res.status(400).json({ error: validated.error });
       return;
-    }
-    const optionRows = await db.select().from(examOptionsTable).where(inArray(examOptionsTable.questionId, questions.map((question) => question.id)));
-    const validOptionsByQuestion = new Map<number, Set<number>>();
-    for (const option of optionRows) {
-      const valid = validOptionsByQuestion.get(option.questionId) ?? new Set<number>();
-      valid.add(option.id);
-      validOptionsByQuestion.set(option.questionId, valid);
-    }
-    for (const [questionId, optionId] of Object.entries(input.answers)) {
-      if (!validOptionsByQuestion.get(Number(questionId))?.has(optionId)) {
-        res.status(400).json({ error: "Cavab variantlarından biri bu testə aid deyil." });
-        return;
-      }
     }
     const [existing] = await db.select({ id: examSubmissionsTable.id }).from(examSubmissionsTable).where(and(
       eq(examSubmissionsTable.examId, examId),
@@ -2740,10 +2756,9 @@ router.post("/exams/:examId/submissions", requireApprovedStudent, async (req, re
     const [submission] = await db.insert(examSubmissionsTable).values({
       examId,
       profileId: profile.id,
-      answers: input.answers,
+      answers: buildStoredAnswers({ choices: validated.choices, open: validated.open, review: null }) as Record<string, number>,
     }).returning();
     if (!submission) throw new Error("Test cavabları yadda saxlanmadı.");
-    const result = calculateExamResult(questions, optionRows, submission.answers);
     await recordAuditEvent({
       eventType: "exam.submission.created",
       actorClerkUserId: profile.clerkUserId,
@@ -2752,7 +2767,7 @@ router.post("/exams/:examId/submissions", requireApprovedStudent, async (req, re
       details: { examId },
       deduplicationKey: `exam.submission:${submission.id}`,
     });
-    res.status(201).json(SubmitExamResponse.parse({ ...submission, result }));
+    res.status(201).json(SubmitExamResponse.parse(examSubmissionView(submission, structure, false)));
   } catch (error) { next(error); }
 });
 
@@ -2997,56 +3012,73 @@ async function scheduleAccessState(profile: typeof studentAcademicProfilesTable.
   };
 }
 
-class ExamValidationError extends Error {}
-
-function normalizeExamQuestions(questions: Array<{ prompt: string; options: string[]; correctOptionIndex: number }>) {
-  return questions.map((question) => {
-    const prompt = question.prompt.trim();
-    const options = question.options.map((option) => option.trim());
-    const duplicateOptions = new Set(options.map((option) => option.toLocaleLowerCase("az")));
-    if (duplicateOptions.size !== options.length) {
-      throw new ExamValidationError("Bir sualın cavab variantları təkrarlana bilməz.");
-    }
-    if (!prompt || options.some((option) => !option)) {
-      throw new ExamValidationError("Sual və cavab variantları boş qala bilməz.");
-    }
-    if (!Number.isInteger(question.correctOptionIndex) || question.correctOptionIndex < 0 || question.correctOptionIndex >= options.length) {
-      throw new ExamValidationError("Hər sual üçün düzgün cavab variantı seçilməlidir.");
-    }
-    return { prompt, options, correctOptionIndex: question.correctOptionIndex };
-  });
+export interface ExamStructureQuestion {
+  id: number;
+  prompt: string;
+  position: number;
+  meta: ExamQuestionMeta;
+  choices: Array<typeof examOptionsTable.$inferSelect>;
+  correctOptionId: number | null;
 }
 
-function calculateExamResult(
-  questions: Array<{ id: number }>,
-  options: Array<{ id: number; questionId: number; isCorrect: boolean }>,
-  answers: Record<string, number>,
-) {
-  const correctOptionByQuestion = new Map(
-    options.filter((option) => option.isCorrect).map((option) => [option.questionId, option.id]),
-  );
-  const correctCount = questions.reduce((count, question) => (
-    count + (answers[String(question.id)] === correctOptionByQuestion.get(question.id) ? 1 : 0)
-  ), 0);
-  const totalQuestions = questions.length;
+export interface ExamStructure {
+  questions: ExamStructureQuestion[];
+  language: ExamLanguage;
+  scoring: ScoringQuestion[];
+}
+
+/** Testin sualları, variantları və gizli meta sətirləri (sual növü, bal, dil). */
+export async function loadExamStructure(examId: number): Promise<ExamStructure> {
+  const questionRows = await db.select().from(examQuestionsTable).where(eq(examQuestionsTable.examId, examId)).orderBy(asc(examQuestionsTable.position));
+  const optionRows = questionRows.length
+    ? await db.select().from(examOptionsTable).where(inArray(examOptionsTable.questionId, questionRows.map((question) => question.id)))
+    : [];
+  const byQuestion = new Map<number, typeof examOptionsTable.$inferSelect[]>();
+  for (const option of optionRows) {
+    const current = byQuestion.get(option.questionId) ?? [];
+    current.push(option);
+    byQuestion.set(option.questionId, current);
+  }
+  const questions = questionRows.map((question) => {
+    const { meta, choices } = splitQuestionOptions(byQuestion.get(question.id) ?? []);
+    const sorted = [...choices].sort((left, right) => left.position - right.position);
+    return {
+      id: question.id,
+      prompt: question.prompt,
+      position: question.position,
+      meta,
+      choices: meta.kind === "open" ? [] : sorted,
+      correctOptionId: meta.kind === "open" ? null : sorted.find((option) => option.isCorrect)?.id ?? null,
+    };
+  });
   return {
-    correctCount,
-    totalQuestions,
-    percentage: totalQuestions ? Math.round((correctCount / totalQuestions) * 100) : 0,
+    questions,
+    language: examLanguageFromMetas(questions.map((question) => question.meta)),
+    scoring: questions.map((question) => ({ id: question.id, kind: question.meta.kind, maxPoints: question.meta.maxPoints, correctOptionId: question.correctOptionId })),
   };
 }
 
-export async function loadExamResult(examId: number, answers: Record<string, number>) {
-  const questions = await db.select({ id: examQuestionsTable.id }).from(examQuestionsTable)
-    .where(eq(examQuestionsTable.examId, examId));
-  const options = questions.length
-    ? await db.select({
-      id: examOptionsTable.id,
-      questionId: examOptionsTable.questionId,
-      isCorrect: examOptionsTable.isCorrect,
-    }).from(examOptionsTable).where(inArray(examOptionsTable.questionId, questions.map((question) => question.id)))
-    : [];
-  return calculateExamResult(questions, options, answers);
+/** Yekun nəticə (seçimli avtomatik + açıq suallar müəllim balı). Status "pending_review" ola bilər. */
+export async function loadExamResult(examId: number, answers: unknown) {
+  const structure = await loadExamStructure(examId);
+  return computeExamScore(structure.scoring, parseStoredAnswers(answers));
+}
+
+function examSubmissionView(submission: typeof examSubmissionsTable.$inferSelect, structure: ExamStructure, forStudent: boolean) {
+  const parsed = parseStoredAnswers(submission.answers);
+  const score = computeExamScore(structure.scoring, parsed);
+  const released = !forStudent || score.status === "graded";
+  return {
+    id: submission.id,
+    examId: submission.examId,
+    profileId: submission.profileId,
+    answers: parsed.choices,
+    openAnswers: parsed.open,
+    openGrades: released ? parsed.review?.grades ?? {} : {},
+    reviewedAt: released && parsed.review ? new Date(parsed.review.reviewedAt) : null,
+    submittedAt: submission.submittedAt,
+    result: forStudent ? maskPendingScore(score) : score,
+  };
 }
 
 function seededQuestionOrder<T extends { id: number }>(questions: T[], seed: string) {
@@ -3063,41 +3095,31 @@ function seededQuestionOrder<T extends { id: number }>(questions: T[], seed: str
   ));
 }
 
-async function examQuestionViews(examId: number, includeCorrect = false, shuffleSeed?: string) {
-  const [questions, options] = await Promise.all([
-    db.select().from(examQuestionsTable).where(eq(examQuestionsTable.examId, examId)).orderBy(asc(examQuestionsTable.position)),
-    db.select().from(examOptionsTable).where(inArray(
-      examOptionsTable.questionId,
-      (await db.select({ id: examQuestionsTable.id }).from(examQuestionsTable).where(eq(examQuestionsTable.examId, examId))).map((question) => question.id),
-    )),
-  ]);
-  const byQuestion = new Map<number, typeof examOptionsTable.$inferSelect[]>();
-  for (const option of options) {
-    const current = byQuestion.get(option.questionId) ?? [];
-    current.push(option);
-    byQuestion.set(option.questionId, current);
-  }
-  const orderedQuestions = shuffleSeed ? seededQuestionOrder(questions, shuffleSeed) : questions;
+function examQuestionViews(structure: ExamStructure, includeCorrect = false, shuffleSeed?: string) {
+  const orderedQuestions = shuffleSeed ? seededQuestionOrder(structure.questions, shuffleSeed) : structure.questions;
   return orderedQuestions.map((question) => ({
     id: question.id,
     prompt: question.prompt,
     position: question.position,
-    options: (byQuestion.get(question.id) ?? []).sort((a, b) => a.position - b.position).map((option) => ({
+    type: question.meta.kind,
+    maxPoints: question.meta.maxPoints,
+    options: question.choices.map((option) => ({
       id: option.id,
       label: option.label,
       position: option.position,
     })),
     ...(includeCorrect ? {
-      correctOptionId: (byQuestion.get(question.id) ?? []).find((option) => option.isCorrect)?.id ?? null,
+      correctOptionId: question.correctOptionId,
+      modelAnswer: question.meta.modelAnswer,
     } : {}),
   }));
 }
 
 async function examView(exam: typeof examsTable.$inferSelect, profileId?: number, includeCorrect = false) {
-  const [course, teacher, questions, submission, attempt] = await Promise.all([
+  const [course, teacher, structure, submission, attempt] = await Promise.all([
     db.select({ title: coursesTable.title }).from(coursesTable).where(eq(coursesTable.id, exam.courseId)).limit(1),
     teacherNameMap([exam.teacherClerkUserId]),
-    examQuestionViews(exam.id, includeCorrect, profileId === undefined ? undefined : `${exam.id}:${profileId}`),
+    loadExamStructure(exam.id),
     profileId === undefined
       ? Promise.resolve([])
       : db.select().from(examSubmissionsTable).where(and(
@@ -3111,7 +3133,7 @@ async function examView(exam: typeof examsTable.$inferSelect, profileId?: number
         eq(examAttemptsTable.profileId, profileId),
       )).limit(1),
   ]);
-  const result = submission[0] ? await loadExamResult(exam.id, submission[0].answers) : null;
+  const questions = examQuestionViews(structure, includeCorrect, profileId === undefined ? undefined : `${exam.id}:${profileId}`);
   return {
     id: exam.id,
     courseId: exam.courseId,
@@ -3123,19 +3145,13 @@ async function examView(exam: typeof examsTable.$inferSelect, profileId?: number
     description: exam.description,
     status: exam.status === "closed" ? "closed" as const : "open" as const,
     isOnboarding: exam.isOnboarding,
+    language: structure.language,
     durationMinutes: exam.durationMinutes,
     startedAt: attempt[0]?.startedAt ?? null,
     createdAt: exam.createdAt,
     updatedAt: exam.updatedAt,
     questions,
-    submission: submission[0] ? {
-      id: submission[0].id,
-      examId: submission[0].examId,
-      profileId: submission[0].profileId,
-      answers: submission[0].answers,
-      submittedAt: submission[0].submittedAt,
-      result,
-    } : null,
+    submission: submission[0] ? examSubmissionView(submission[0], structure, profileId !== undefined && !includeCorrect) : null,
   };
 }
 
@@ -3146,16 +3162,23 @@ async function canManageExam(userId: string, exam: typeof examsTable.$inferSelec
 }
 
 async function adminExamView(exam: typeof examsTable.$inferSelect) {
-  const [submissionCount] = await db.select({ count: sql<number>`count(*)` })
-    .from(examSubmissionsTable).where(eq(examSubmissionsTable.examId, exam.id));
+  const [submissions, structure] = await Promise.all([
+    db.select({ answers: examSubmissionsTable.answers }).from(examSubmissionsTable).where(eq(examSubmissionsTable.examId, exam.id)),
+    loadExamStructure(exam.id),
+  ]);
+  const hasOpen = structure.scoring.some((question) => question.kind === "open");
+  const pendingReviewCount = hasOpen
+    ? submissions.filter((submission) => computeExamScore(structure.scoring, parseStoredAnswers(submission.answers)).status === "pending_review").length
+    : 0;
   return {
     ...(await examView(exam, undefined, true)),
     teacherClerkUserId: exam.teacherClerkUserId,
-    submissionCount: Number(submissionCount?.count ?? 0),
+    submissionCount: submissions.length,
+    pendingReviewCount,
   };
 }
 
-async function replaceExamQuestions(examId: number, questions: Array<{ prompt: string; options: string[]; correctOptionIndex: number }>) {
+async function replaceExamQuestions(examId: number, questions: NormalizedExamQuestion[]) {
   const oldQuestions = await db.select({ id: examQuestionsTable.id }).from(examQuestionsTable).where(eq(examQuestionsTable.examId, examId));
   if (oldQuestions.length) {
     await db.delete(examOptionsTable).where(inArray(examOptionsTable.questionId, oldQuestions.map((question) => question.id)));
@@ -3168,12 +3191,42 @@ async function replaceExamQuestions(examId: number, questions: Array<{ prompt: s
       position,
     }).returning();
     if (!created) throw new Error("Test sualı yadda saxlanmadı.");
-    await db.insert(examOptionsTable).values(question.options.map((label, optionPosition) => ({
+    const rows = question.options.map((label, optionPosition) => ({
       questionId: created.id,
       label,
       position: optionPosition,
       isCorrect: optionPosition === question.correctOptionIndex,
-    })));
+    }));
+    if (needsMetaRow(question.meta)) {
+      rows.push({ questionId: created.id, label: encodeQuestionMeta(question.meta), position: EXAM_META_POSITION, isCorrect: false });
+    }
+    if (rows.length) await db.insert(examOptionsTable).values(rows);
+  }
+}
+
+/** Açıq sualların yoxlanışı bitəndə tələbəyə saytda bildiriş göndərilir. */
+async function notifyExamGraded(exam: typeof examsTable.$inferSelect, profileId: number, score: { score: number; maxScore: number; percentage: number }) {
+  await db.insert(studentNotificationsTable).values({
+    title: "Test nəticəniz hazırdır",
+    body: `«${exam.title}» testindəki açıq suallar yoxlanıldı. Nəticəniz: ${score.score} / ${score.maxScore} bal (${score.percentage}%). «İmtahan və testlər» bölməsində baxa bilərsiniz.`,
+    targetTerms: [],
+    targetProfileIds: [profileId],
+    destination: "home",
+    senderClerkUserId: exam.teacherClerkUserId,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+/** Sualları dəyişmədən (cavablar qorunsun deyə) yalnız testin dilini yeniləyir. */
+async function updateExamLanguage(examId: number, language: ExamLanguage) {
+  const structure = await loadExamStructure(examId);
+  if (structure.language === language) return;
+  for (const question of structure.questions) {
+    await db.delete(examOptionsTable).where(and(eq(examOptionsTable.questionId, question.id), eq(examOptionsTable.position, EXAM_META_POSITION)));
+    const meta = { ...question.meta, language };
+    if (needsMetaRow(meta)) {
+      await db.insert(examOptionsTable).values({ questionId: question.id, label: encodeQuestionMeta(meta), position: EXAM_META_POSITION, isCorrect: false });
+    }
   }
 }
 
@@ -4759,7 +4812,7 @@ router.post("/admin/exams", requireTeacher, async (req, res, next) => {
       res.status(403).json({ error: "Qəbul testini yalnız sistem sahibi idarə edə bilər." });
       return;
     }
-    const questions = normalizeExamQuestions(input.questions);
+    const questions = normalizeExamQuestionInputs(input.questions, input.language ?? "az");
     const [exam] = await db.insert(examsTable).values({
       courseId: resource?.courseId ?? 0,
       resourceId: resource?.id ?? 0,
@@ -4778,7 +4831,7 @@ router.post("/admin/exams", requireTeacher, async (req, res, next) => {
       actorClerkUserId: actorId,
       targetType: "exam",
       targetId: exam.id,
-      details: { resourceId: resource?.id ?? null, isOnboarding: input.isOnboarding ?? false, questionCount: questions.length },
+      details: { resourceId: resource?.id ?? null, isOnboarding: input.isOnboarding ?? false, questionCount: questions.length, openQuestionCount: questions.filter((question) => question.meta.kind === "open").length, language: input.language ?? "az" },
       deduplicationKey: `exam.created:${exam.id}`,
     });
     res.status(201).json(CreateExamResponse.parse(await adminExamView(exam)));
@@ -4808,7 +4861,8 @@ router.patch("/admin/exams/:examId", requireTeacher, async (req, res, next) => {
       res.status(403).json({ error: "Qəbul testini yalnız sistem sahibi idarə edə bilər." });
       return;
     }
-    const questions = input.questions ? normalizeExamQuestions(input.questions) : undefined;
+    const language = input.language ?? (await loadExamStructure(existing.id)).language;
+    const questions = input.questions ? normalizeExamQuestionInputs(input.questions, language) : undefined;
     const [exam] = await db.update(examsTable).set({
       ...(input.title === undefined ? {} : { title: input.title.trim() }),
       ...(input.description === undefined ? {} : { description: input.description.trim() }),
@@ -4819,6 +4873,7 @@ router.patch("/admin/exams/:examId", requireTeacher, async (req, res, next) => {
     }).where(eq(examsTable.id, examId)).returning();
     if (!exam) throw new Error("Test yenilənmədi.");
     if (questions) await replaceExamQuestions(exam.id, questions);
+    else if (input.language !== undefined) await updateExamLanguage(exam.id, input.language);
     await recordAuditEvent({
       eventType: "exam.updated",
       actorClerkUserId: actorId,
@@ -4875,6 +4930,40 @@ router.delete("/admin/exams/:examId", requireTeacher, async (req, res, next) => 
   }
 });
 
+async function adminExamSubmissionView(
+  exam: typeof examsTable.$inferSelect,
+  submission: typeof examSubmissionsTable.$inferSelect,
+  structure: ExamStructure,
+) {
+  const [profile] = await db.select().from(studentAcademicProfilesTable).where(eq(studentAcademicProfilesTable.id, submission.profileId)).limit(1);
+  const [application] = profile
+    ? await db.select().from(applicationsTable).where(eq(applicationsTable.id, profile.applicationId)).limit(1)
+    : [];
+  if (!profile || !application) return null;
+  const [assignment] = exam.isOnboarding
+    ? await db.select({ reviewStatus: onboardingExamAssignmentsTable.reviewStatus })
+      .from(onboardingExamAssignmentsTable)
+      .where(and(
+        eq(onboardingExamAssignmentsTable.examId, exam.id),
+        eq(onboardingExamAssignmentsTable.profileId, submission.profileId),
+      )).limit(1)
+    : [];
+  const view = examSubmissionView(submission, structure, false);
+  const optionLabels = new Map(structure.questions.flatMap((question) => question.choices.map((option) => [option.id, option.label] as const)));
+  const questionNumbers = new Map(structure.questions.map((question, index) => [question.id, index + 1]));
+  return {
+    ...view,
+    studentName: `${application.firstName} ${application.lastName}`.trim(),
+    studentNumber: profile.studentNumber,
+    email: application.email,
+    reviewStatus: exam.isOnboarding ? assignment?.reviewStatus ?? "pending" : "approved",
+    answerLabels: Object.fromEntries(Object.entries(view.answers).map(([questionId, optionId]) => [
+      questionId,
+      `${questionNumbers.get(Number(questionId)) ?? "?"}. ${optionLabels.get(optionId) ?? "Variant tapılmadı"}`,
+    ])),
+  };
+}
+
 router.get("/admin/exams/:examId/submissions", requireTeacher, async (req, res, next) => {
   try {
     const { examId } = GetExamSubmissionsParams.parse(req.params);
@@ -4884,49 +4973,73 @@ router.get("/admin/exams/:examId/submissions", requireTeacher, async (req, res, 
       res.status(404).json({ error: "Test tapılmadı." });
       return;
     }
-    const [questions, submissions] = await Promise.all([
-      db.select().from(examQuestionsTable).where(eq(examQuestionsTable.examId, examId)),
+    const [structure, submissions] = await Promise.all([
+      loadExamStructure(examId),
       db.select().from(examSubmissionsTable).where(eq(examSubmissionsTable.examId, examId)).orderBy(desc(examSubmissionsTable.submittedAt)),
     ]);
-    const options = questions.length
-      ? await db.select().from(examOptionsTable).where(inArray(examOptionsTable.questionId, questions.map((question) => question.id)))
-      : [];
-    const optionLabels = new Map(options.map((option) => [option.id, option.label]));
-    const questionNumbers = new Map(questions.map((question, index) => [question.id, index + 1]));
     const result = [];
     for (const submission of submissions) {
-      const [profile] = await db.select().from(studentAcademicProfilesTable).where(eq(studentAcademicProfilesTable.id, submission.profileId)).limit(1);
-      const [application] = profile
-        ? await db.select().from(applicationsTable).where(eq(applicationsTable.id, profile.applicationId)).limit(1)
-        : [];
-      if (!profile || !application) continue;
-      const [assignment] = exam.isOnboarding
-        ? await db.select({ reviewStatus: onboardingExamAssignmentsTable.reviewStatus })
-          .from(onboardingExamAssignmentsTable)
-          .where(and(
-            eq(onboardingExamAssignmentsTable.examId, examId),
-            eq(onboardingExamAssignmentsTable.profileId, submission.profileId),
-          )).limit(1)
-        : [];
-      result.push({
-        id: submission.id,
-        examId: submission.examId,
-        profileId: submission.profileId,
-        answers: submission.answers,
-        submittedAt: submission.submittedAt,
-         result: calculateExamResult(questions, options, submission.answers),
-        studentName: `${application.firstName} ${application.lastName}`.trim(),
-        studentNumber: profile.studentNumber,
-        email: application.email,
-        reviewStatus: exam.isOnboarding ? assignment?.reviewStatus ?? "pending" : "approved",
-        answerLabels: Object.fromEntries(Object.entries(submission.answers).map(([questionId, optionId]) => [
-          questionId,
-          `${questionNumbers.get(Number(questionId)) ?? "?"}. ${optionLabels.get(optionId) ?? "Variant tapılmadı"}`,
-        ])),
-      });
+      const view = await adminExamSubmissionView(exam, submission, structure);
+      if (view) result.push(view);
     }
     res.json(GetExamSubmissionsResponse.parse(result));
   } catch (error) { next(error); }
+});
+
+router.post("/admin/exams/:examId/submissions/:profileId/grade", requireTeacher, async (req, res, next) => {
+  try {
+    const examId = Number(req.params.examId);
+    const profileId = Number(req.params.profileId);
+    const actorId = getAuth(req).userId;
+    if (!Number.isInteger(examId) || examId <= 0 || !Number.isInteger(profileId) || profileId <= 0) {
+      res.status(400).json({ error: "Test və tələbə nömrəsi düzgün deyil." });
+      return;
+    }
+    const parsedInput = GradeExamSubmissionBody.safeParse(req.body);
+    if (!parsedInput.success) {
+      res.status(400).json({ error: "Ballar düzgün göndərilməyib." });
+      return;
+    }
+    const [exam] = await db.select().from(examsTable).where(eq(examsTable.id, examId)).limit(1);
+    if (!actorId || !exam || !await canManageExam(actorId, exam)) {
+      res.status(404).json({ error: "Test tapılmadı." });
+      return;
+    }
+    const [submission] = await db.select().from(examSubmissionsTable).where(and(
+      eq(examSubmissionsTable.examId, examId),
+      eq(examSubmissionsTable.profileId, profileId),
+    )).limit(1);
+    if (!submission) {
+      res.status(404).json({ error: "Tələbənin test cavabı tapılmadı." });
+      return;
+    }
+    const structure = await loadExamStructure(examId);
+    const before = computeExamScore(structure.scoring, parseStoredAnswers(submission.answers));
+    const graded = applyOpenGrades(structure.scoring, parseStoredAnswers(submission.answers), parsedInput.data.grades, actorId);
+    const [updated] = await db.update(examSubmissionsTable)
+      .set({ answers: buildStoredAnswers(graded) as Record<string, number> })
+      .where(eq(examSubmissionsTable.id, submission.id))
+      .returning();
+    if (!updated) throw new Error("Ballar yadda saxlanmadı.");
+    const after = computeExamScore(structure.scoring, graded);
+    await recordAuditEvent({
+      eventType: "exam.submission.graded",
+      actorClerkUserId: actorId,
+      targetType: "exam_submission",
+      targetId: submission.id,
+      details: { examId, profileId, score: after.score, maxScore: after.maxScore, status: after.status },
+      deduplicationKey: `exam.submission.graded:${submission.id}:${graded.review?.reviewedAt ?? Date.now()}`,
+    });
+    if (before.status === "pending_review" && after.status === "graded") {
+      await notifyExamGraded(exam, profileId, after).catch(() => undefined);
+    }
+    const view = await adminExamSubmissionView(exam, updated, structure);
+    if (!view) { res.status(404).json({ error: "Tələbə tapılmadı." }); return; }
+    res.json(GradeExamSubmissionResponse.parse(view));
+  } catch (error) {
+    if (error instanceof ExamValidationError) { res.status(400).json({ error: error.message }); return; }
+    next(error);
+  }
 });
 
 router.post("/admin/exams/:examId/submissions/:profileId/resend", requireTeacher, async (req, res, next) => {

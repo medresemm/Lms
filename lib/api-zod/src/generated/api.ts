@@ -69,10 +69,11 @@ export const GetDashboardResponse = zod.object({
 
 
 /**
- * @summary Resolve a student number to the student's email address
+ * @summary Resolve a student number after the password is verified
  */
 export const ResolveStudentNumberBody = zod.object({
-  "identifier": zod.string()
+  "identifier": zod.string(),
+  "password": zod.string()
 })
 
 export const ResolveStudentNumberResponse = zod.object({
@@ -890,9 +891,10 @@ export const getStudentExamsResponseDurationMinutesOneMax = 240;
 
 export const getStudentExamsResponseQuestionsItemPositionMin = 0;
 
+
 export const getStudentExamsResponseQuestionsItemOptionsItemPositionMin = 0;
 
-export const getStudentExamsResponseQuestionsItemOptionsMin = 2;
+export const getStudentExamsResponseSubmissionOneOpenGradesPointsMin = 0;
 
 export const getStudentExamsResponseSubmissionOneResultCorrectCountMin = 0;
 
@@ -900,6 +902,16 @@ export const getStudentExamsResponseSubmissionOneResultTotalQuestionsMin = 0;
 
 export const getStudentExamsResponseSubmissionOneResultPercentageMin = 0;
 export const getStudentExamsResponseSubmissionOneResultPercentageMax = 100;
+
+export const getStudentExamsResponseSubmissionOneResultScoreMin = 0;
+
+export const getStudentExamsResponseSubmissionOneResultMaxScoreMin = 0;
+
+export const getStudentExamsResponseSubmissionOneResultAutoScoreMin = 0;
+
+export const getStudentExamsResponseSubmissionOneResultManualScoreMin = 0;
+
+export const getStudentExamsResponseSubmissionOneResultOpenQuestionCountMin = 0;
 
 
 
@@ -914,6 +926,7 @@ export const GetStudentExamsResponseItem = zod.object({
   "description": zod.string(),
   "status": zod.enum(['open', 'closed']),
   "isOnboarding": zod.boolean(),
+  "language": zod.enum(['az', 'ar']),
   "durationMinutes": zod.union([zod.number().min(1).max(getStudentExamsResponseDurationMinutesOneMax),zod.null()]),
   "startedAt": zod.union([zod.coerce.date(),zod.null()]),
   "createdAt": zod.coerce.date(),
@@ -922,22 +935,36 @@ export const GetStudentExamsResponseItem = zod.object({
   "id": zod.number(),
   "prompt": zod.string(),
   "position": zod.number().min(getStudentExamsResponseQuestionsItemPositionMin),
+  "type": zod.enum(['choice', 'open']),
+  "maxPoints": zod.number().min(1),
   "options": zod.array(zod.object({
   "id": zod.number(),
   "label": zod.string(),
   "position": zod.number().min(getStudentExamsResponseQuestionsItemOptionsItemPositionMin)
-})).min(getStudentExamsResponseQuestionsItemOptionsMin)
+}))
 })),
   "submission": zod.union([zod.object({
   "id": zod.number(),
   "examId": zod.number(),
   "profileId": zod.number(),
   "answers": zod.record(zod.string(), zod.number()),
+  "openAnswers": zod.record(zod.string(), zod.string()),
+  "openGrades": zod.record(zod.string(), zod.object({
+  "points": zod.number().min(getStudentExamsResponseSubmissionOneOpenGradesPointsMin),
+  "comment": zod.union([zod.string(),zod.null()])
+})),
+  "reviewedAt": zod.union([zod.coerce.date(),zod.null()]),
   "submittedAt": zod.coerce.date(),
   "result": zod.object({
   "correctCount": zod.number().min(getStudentExamsResponseSubmissionOneResultCorrectCountMin),
   "totalQuestions": zod.number().min(getStudentExamsResponseSubmissionOneResultTotalQuestionsMin),
-  "percentage": zod.number().min(getStudentExamsResponseSubmissionOneResultPercentageMin).max(getStudentExamsResponseSubmissionOneResultPercentageMax)
+  "percentage": zod.number().min(getStudentExamsResponseSubmissionOneResultPercentageMin).max(getStudentExamsResponseSubmissionOneResultPercentageMax),
+  "score": zod.number().min(getStudentExamsResponseSubmissionOneResultScoreMin),
+  "maxScore": zod.number().min(getStudentExamsResponseSubmissionOneResultMaxScoreMin),
+  "autoScore": zod.number().min(getStudentExamsResponseSubmissionOneResultAutoScoreMin),
+  "manualScore": zod.number().min(getStudentExamsResponseSubmissionOneResultManualScoreMin),
+  "openQuestionCount": zod.number().min(getStudentExamsResponseSubmissionOneResultOpenQuestionCountMin),
+  "status": zod.enum(['graded', 'pending_review'])
 })
 }),zod.null()])
 })
@@ -957,9 +984,10 @@ export const getStudentExamResponseDurationMinutesOneMax = 240;
 
 export const getStudentExamResponseQuestionsItemPositionMin = 0;
 
+
 export const getStudentExamResponseQuestionsItemOptionsItemPositionMin = 0;
 
-export const getStudentExamResponseQuestionsItemOptionsMin = 2;
+export const getStudentExamResponseSubmissionOneOpenGradesPointsMin = 0;
 
 export const getStudentExamResponseSubmissionOneResultCorrectCountMin = 0;
 
@@ -967,6 +995,16 @@ export const getStudentExamResponseSubmissionOneResultTotalQuestionsMin = 0;
 
 export const getStudentExamResponseSubmissionOneResultPercentageMin = 0;
 export const getStudentExamResponseSubmissionOneResultPercentageMax = 100;
+
+export const getStudentExamResponseSubmissionOneResultScoreMin = 0;
+
+export const getStudentExamResponseSubmissionOneResultMaxScoreMin = 0;
+
+export const getStudentExamResponseSubmissionOneResultAutoScoreMin = 0;
+
+export const getStudentExamResponseSubmissionOneResultManualScoreMin = 0;
+
+export const getStudentExamResponseSubmissionOneResultOpenQuestionCountMin = 0;
 
 
 
@@ -981,6 +1019,7 @@ export const GetStudentExamResponse = zod.object({
   "description": zod.string(),
   "status": zod.enum(['open', 'closed']),
   "isOnboarding": zod.boolean(),
+  "language": zod.enum(['az', 'ar']),
   "durationMinutes": zod.union([zod.number().min(1).max(getStudentExamResponseDurationMinutesOneMax),zod.null()]),
   "startedAt": zod.union([zod.coerce.date(),zod.null()]),
   "createdAt": zod.coerce.date(),
@@ -989,22 +1028,36 @@ export const GetStudentExamResponse = zod.object({
   "id": zod.number(),
   "prompt": zod.string(),
   "position": zod.number().min(getStudentExamResponseQuestionsItemPositionMin),
+  "type": zod.enum(['choice', 'open']),
+  "maxPoints": zod.number().min(1),
   "options": zod.array(zod.object({
   "id": zod.number(),
   "label": zod.string(),
   "position": zod.number().min(getStudentExamResponseQuestionsItemOptionsItemPositionMin)
-})).min(getStudentExamResponseQuestionsItemOptionsMin)
+}))
 })),
   "submission": zod.union([zod.object({
   "id": zod.number(),
   "examId": zod.number(),
   "profileId": zod.number(),
   "answers": zod.record(zod.string(), zod.number()),
+  "openAnswers": zod.record(zod.string(), zod.string()),
+  "openGrades": zod.record(zod.string(), zod.object({
+  "points": zod.number().min(getStudentExamResponseSubmissionOneOpenGradesPointsMin),
+  "comment": zod.union([zod.string(),zod.null()])
+})),
+  "reviewedAt": zod.union([zod.coerce.date(),zod.null()]),
   "submittedAt": zod.coerce.date(),
   "result": zod.object({
   "correctCount": zod.number().min(getStudentExamResponseSubmissionOneResultCorrectCountMin),
   "totalQuestions": zod.number().min(getStudentExamResponseSubmissionOneResultTotalQuestionsMin),
-  "percentage": zod.number().min(getStudentExamResponseSubmissionOneResultPercentageMin).max(getStudentExamResponseSubmissionOneResultPercentageMax)
+  "percentage": zod.number().min(getStudentExamResponseSubmissionOneResultPercentageMin).max(getStudentExamResponseSubmissionOneResultPercentageMax),
+  "score": zod.number().min(getStudentExamResponseSubmissionOneResultScoreMin),
+  "maxScore": zod.number().min(getStudentExamResponseSubmissionOneResultMaxScoreMin),
+  "autoScore": zod.number().min(getStudentExamResponseSubmissionOneResultAutoScoreMin),
+  "manualScore": zod.number().min(getStudentExamResponseSubmissionOneResultManualScoreMin),
+  "openQuestionCount": zod.number().min(getStudentExamResponseSubmissionOneResultOpenQuestionCountMin),
+  "status": zod.enum(['graded', 'pending_review'])
 })
 }),zod.null()])
 })
@@ -1018,11 +1071,16 @@ export const SubmitExamParams = zod.object({
 })
 
 
+export const submitExamBodyOpenAnswersMaxOne = 10000;
+
 
 
 export const SubmitExamBody = zod.object({
-  "answers": zod.record(zod.string(), zod.number().min(1))
+  "answers": zod.record(zod.string(), zod.number().min(1)),
+  "openAnswers": zod.record(zod.string(), zod.string().max(submitExamBodyOpenAnswersMaxOne)).optional()
 })
+
+export const submitExamResponseOpenGradesPointsMin = 0;
 
 export const submitExamResponseResultCorrectCountMin = 0;
 
@@ -1031,6 +1089,16 @@ export const submitExamResponseResultTotalQuestionsMin = 0;
 export const submitExamResponseResultPercentageMin = 0;
 export const submitExamResponseResultPercentageMax = 100;
 
+export const submitExamResponseResultScoreMin = 0;
+
+export const submitExamResponseResultMaxScoreMin = 0;
+
+export const submitExamResponseResultAutoScoreMin = 0;
+
+export const submitExamResponseResultManualScoreMin = 0;
+
+export const submitExamResponseResultOpenQuestionCountMin = 0;
+
 
 
 export const SubmitExamResponse = zod.object({
@@ -1038,11 +1106,23 @@ export const SubmitExamResponse = zod.object({
   "examId": zod.number(),
   "profileId": zod.number(),
   "answers": zod.record(zod.string(), zod.number()),
+  "openAnswers": zod.record(zod.string(), zod.string()),
+  "openGrades": zod.record(zod.string(), zod.object({
+  "points": zod.number().min(submitExamResponseOpenGradesPointsMin),
+  "comment": zod.union([zod.string(),zod.null()])
+})),
+  "reviewedAt": zod.union([zod.coerce.date(),zod.null()]),
   "submittedAt": zod.coerce.date(),
   "result": zod.object({
   "correctCount": zod.number().min(submitExamResponseResultCorrectCountMin),
   "totalQuestions": zod.number().min(submitExamResponseResultTotalQuestionsMin),
-  "percentage": zod.number().min(submitExamResponseResultPercentageMin).max(submitExamResponseResultPercentageMax)
+  "percentage": zod.number().min(submitExamResponseResultPercentageMin).max(submitExamResponseResultPercentageMax),
+  "score": zod.number().min(submitExamResponseResultScoreMin),
+  "maxScore": zod.number().min(submitExamResponseResultMaxScoreMin),
+  "autoScore": zod.number().min(submitExamResponseResultAutoScoreMin),
+  "manualScore": zod.number().min(submitExamResponseResultManualScoreMin),
+  "openQuestionCount": zod.number().min(submitExamResponseResultOpenQuestionCountMin),
+  "status": zod.enum(['graded', 'pending_review'])
 })
 })
 
@@ -1056,9 +1136,10 @@ export const getAdminExamsResponseOneDurationMinutesOneMax = 240;
 
 export const getAdminExamsResponseOneQuestionsItemPositionMin = 0;
 
+
 export const getAdminExamsResponseOneQuestionsItemOptionsItemPositionMin = 0;
 
-export const getAdminExamsResponseOneQuestionsItemOptionsMin = 2;
+export const getAdminExamsResponseOneSubmissionOneOpenGradesPointsMin = 0;
 
 export const getAdminExamsResponseOneSubmissionOneResultCorrectCountMin = 0;
 
@@ -1067,13 +1148,24 @@ export const getAdminExamsResponseOneSubmissionOneResultTotalQuestionsMin = 0;
 export const getAdminExamsResponseOneSubmissionOneResultPercentageMin = 0;
 export const getAdminExamsResponseOneSubmissionOneResultPercentageMax = 100;
 
+export const getAdminExamsResponseOneSubmissionOneResultScoreMin = 0;
+
+export const getAdminExamsResponseOneSubmissionOneResultMaxScoreMin = 0;
+
+export const getAdminExamsResponseOneSubmissionOneResultAutoScoreMin = 0;
+
+export const getAdminExamsResponseOneSubmissionOneResultManualScoreMin = 0;
+
+export const getAdminExamsResponseOneSubmissionOneResultOpenQuestionCountMin = 0;
+
 export const getAdminExamsResponseTwoSubmissionCountMin = 0;
+
+export const getAdminExamsResponseTwoPendingReviewCountMin = 0;
 
 export const getAdminExamsResponseTwoQuestionsItemOnePositionMin = 0;
 
-export const getAdminExamsResponseTwoQuestionsItemOneOptionsItemPositionMin = 0;
 
-export const getAdminExamsResponseTwoQuestionsItemOneOptionsMin = 2;
+export const getAdminExamsResponseTwoQuestionsItemOneOptionsItemPositionMin = 0;
 
 
 
@@ -1089,6 +1181,7 @@ export const GetAdminExamsResponseItem = zod.object({
   "description": zod.string(),
   "status": zod.enum(['open', 'closed']),
   "isOnboarding": zod.boolean(),
+  "language": zod.enum(['az', 'ar']),
   "durationMinutes": zod.union([zod.number().min(1).max(getAdminExamsResponseOneDurationMinutesOneMax),zod.null()]),
   "startedAt": zod.union([zod.coerce.date(),zod.null()]),
   "createdAt": zod.coerce.date(),
@@ -1097,38 +1190,56 @@ export const GetAdminExamsResponseItem = zod.object({
   "id": zod.number(),
   "prompt": zod.string(),
   "position": zod.number().min(getAdminExamsResponseOneQuestionsItemPositionMin),
+  "type": zod.enum(['choice', 'open']),
+  "maxPoints": zod.number().min(1),
   "options": zod.array(zod.object({
   "id": zod.number(),
   "label": zod.string(),
   "position": zod.number().min(getAdminExamsResponseOneQuestionsItemOptionsItemPositionMin)
-})).min(getAdminExamsResponseOneQuestionsItemOptionsMin)
+}))
 })),
   "submission": zod.union([zod.object({
   "id": zod.number(),
   "examId": zod.number(),
   "profileId": zod.number(),
   "answers": zod.record(zod.string(), zod.number()),
+  "openAnswers": zod.record(zod.string(), zod.string()),
+  "openGrades": zod.record(zod.string(), zod.object({
+  "points": zod.number().min(getAdminExamsResponseOneSubmissionOneOpenGradesPointsMin),
+  "comment": zod.union([zod.string(),zod.null()])
+})),
+  "reviewedAt": zod.union([zod.coerce.date(),zod.null()]),
   "submittedAt": zod.coerce.date(),
   "result": zod.object({
   "correctCount": zod.number().min(getAdminExamsResponseOneSubmissionOneResultCorrectCountMin),
   "totalQuestions": zod.number().min(getAdminExamsResponseOneSubmissionOneResultTotalQuestionsMin),
-  "percentage": zod.number().min(getAdminExamsResponseOneSubmissionOneResultPercentageMin).max(getAdminExamsResponseOneSubmissionOneResultPercentageMax)
+  "percentage": zod.number().min(getAdminExamsResponseOneSubmissionOneResultPercentageMin).max(getAdminExamsResponseOneSubmissionOneResultPercentageMax),
+  "score": zod.number().min(getAdminExamsResponseOneSubmissionOneResultScoreMin),
+  "maxScore": zod.number().min(getAdminExamsResponseOneSubmissionOneResultMaxScoreMin),
+  "autoScore": zod.number().min(getAdminExamsResponseOneSubmissionOneResultAutoScoreMin),
+  "manualScore": zod.number().min(getAdminExamsResponseOneSubmissionOneResultManualScoreMin),
+  "openQuestionCount": zod.number().min(getAdminExamsResponseOneSubmissionOneResultOpenQuestionCountMin),
+  "status": zod.enum(['graded', 'pending_review'])
 })
 }),zod.null()])
 }).and(zod.object({
   "teacherClerkUserId": zod.string(),
   "submissionCount": zod.number().min(getAdminExamsResponseTwoSubmissionCountMin),
+  "pendingReviewCount": zod.number().min(getAdminExamsResponseTwoPendingReviewCountMin),
   "questions": zod.array(zod.object({
   "id": zod.number(),
   "prompt": zod.string(),
   "position": zod.number().min(getAdminExamsResponseTwoQuestionsItemOnePositionMin),
+  "type": zod.enum(['choice', 'open']),
+  "maxPoints": zod.number().min(1),
   "options": zod.array(zod.object({
   "id": zod.number(),
   "label": zod.string(),
   "position": zod.number().min(getAdminExamsResponseTwoQuestionsItemOneOptionsItemPositionMin)
-})).min(getAdminExamsResponseTwoQuestionsItemOneOptionsMin)
+}))
 }).and(zod.object({
-  "correctOptionId": zod.union([zod.number().min(1),zod.null()])
+  "correctOptionId": zod.union([zod.number().min(1),zod.null()]),
+  "modelAnswer": zod.union([zod.string(),zod.null()])
 })))
 }))
 export const GetAdminExamsResponse = zod.array(GetAdminExamsResponseItem)
@@ -1148,11 +1259,14 @@ export const createExamBodyQuestionsItemPromptMax = 2000;
 
 export const createExamBodyQuestionsItemOptionsItemMax = 500;
 
-export const createExamBodyQuestionsItemOptionsMin = 2;
 export const createExamBodyQuestionsItemOptionsMax = 8;
 
 export const createExamBodyQuestionsItemCorrectOptionIndexMin = 0;
 export const createExamBodyQuestionsItemCorrectOptionIndexMax = 7;
+
+export const createExamBodyQuestionsItemMaxPointsOneMax = 100;
+
+export const createExamBodyQuestionsItemModelAnswerOneMax = 4000;
 
 export const createExamBodyQuestionsMax = 50;
 
@@ -1164,11 +1278,15 @@ export const CreateExamBody = zod.object({
   "description": zod.string().min(1).max(createExamBodyDescriptionMax),
   "status": zod.enum(['open', 'closed']).optional(),
   "isOnboarding": zod.boolean().optional(),
+  "language": zod.enum(['az', 'ar']).optional(),
   "durationMinutes": zod.union([zod.number().min(1).max(createExamBodyDurationMinutesOneMax),zod.null()]).optional(),
   "questions": zod.array(zod.object({
   "prompt": zod.string().min(1).max(createExamBodyQuestionsItemPromptMax),
-  "options": zod.array(zod.string().min(1).max(createExamBodyQuestionsItemOptionsItemMax)).min(createExamBodyQuestionsItemOptionsMin).max(createExamBodyQuestionsItemOptionsMax),
-  "correctOptionIndex": zod.number().min(createExamBodyQuestionsItemCorrectOptionIndexMin).max(createExamBodyQuestionsItemCorrectOptionIndexMax)
+  "type": zod.enum(['choice', 'open']).optional(),
+  "options": zod.array(zod.string().min(1).max(createExamBodyQuestionsItemOptionsItemMax)).max(createExamBodyQuestionsItemOptionsMax).optional(),
+  "correctOptionIndex": zod.number().min(createExamBodyQuestionsItemCorrectOptionIndexMin).max(createExamBodyQuestionsItemCorrectOptionIndexMax).optional(),
+  "maxPoints": zod.union([zod.number().min(1).max(createExamBodyQuestionsItemMaxPointsOneMax),zod.null()]).optional(),
+  "modelAnswer": zod.union([zod.string().max(createExamBodyQuestionsItemModelAnswerOneMax),zod.null()]).optional()
 })).min(1).max(createExamBodyQuestionsMax)
 })
 
@@ -1178,9 +1296,10 @@ export const createExamResponseOneDurationMinutesOneMax = 240;
 
 export const createExamResponseOneQuestionsItemPositionMin = 0;
 
+
 export const createExamResponseOneQuestionsItemOptionsItemPositionMin = 0;
 
-export const createExamResponseOneQuestionsItemOptionsMin = 2;
+export const createExamResponseOneSubmissionOneOpenGradesPointsMin = 0;
 
 export const createExamResponseOneSubmissionOneResultCorrectCountMin = 0;
 
@@ -1189,13 +1308,24 @@ export const createExamResponseOneSubmissionOneResultTotalQuestionsMin = 0;
 export const createExamResponseOneSubmissionOneResultPercentageMin = 0;
 export const createExamResponseOneSubmissionOneResultPercentageMax = 100;
 
+export const createExamResponseOneSubmissionOneResultScoreMin = 0;
+
+export const createExamResponseOneSubmissionOneResultMaxScoreMin = 0;
+
+export const createExamResponseOneSubmissionOneResultAutoScoreMin = 0;
+
+export const createExamResponseOneSubmissionOneResultManualScoreMin = 0;
+
+export const createExamResponseOneSubmissionOneResultOpenQuestionCountMin = 0;
+
 export const createExamResponseTwoSubmissionCountMin = 0;
+
+export const createExamResponseTwoPendingReviewCountMin = 0;
 
 export const createExamResponseTwoQuestionsItemOnePositionMin = 0;
 
-export const createExamResponseTwoQuestionsItemOneOptionsItemPositionMin = 0;
 
-export const createExamResponseTwoQuestionsItemOneOptionsMin = 2;
+export const createExamResponseTwoQuestionsItemOneOptionsItemPositionMin = 0;
 
 
 
@@ -1211,6 +1341,7 @@ export const CreateExamResponse = zod.object({
   "description": zod.string(),
   "status": zod.enum(['open', 'closed']),
   "isOnboarding": zod.boolean(),
+  "language": zod.enum(['az', 'ar']),
   "durationMinutes": zod.union([zod.number().min(1).max(createExamResponseOneDurationMinutesOneMax),zod.null()]),
   "startedAt": zod.union([zod.coerce.date(),zod.null()]),
   "createdAt": zod.coerce.date(),
@@ -1219,38 +1350,56 @@ export const CreateExamResponse = zod.object({
   "id": zod.number(),
   "prompt": zod.string(),
   "position": zod.number().min(createExamResponseOneQuestionsItemPositionMin),
+  "type": zod.enum(['choice', 'open']),
+  "maxPoints": zod.number().min(1),
   "options": zod.array(zod.object({
   "id": zod.number(),
   "label": zod.string(),
   "position": zod.number().min(createExamResponseOneQuestionsItemOptionsItemPositionMin)
-})).min(createExamResponseOneQuestionsItemOptionsMin)
+}))
 })),
   "submission": zod.union([zod.object({
   "id": zod.number(),
   "examId": zod.number(),
   "profileId": zod.number(),
   "answers": zod.record(zod.string(), zod.number()),
+  "openAnswers": zod.record(zod.string(), zod.string()),
+  "openGrades": zod.record(zod.string(), zod.object({
+  "points": zod.number().min(createExamResponseOneSubmissionOneOpenGradesPointsMin),
+  "comment": zod.union([zod.string(),zod.null()])
+})),
+  "reviewedAt": zod.union([zod.coerce.date(),zod.null()]),
   "submittedAt": zod.coerce.date(),
   "result": zod.object({
   "correctCount": zod.number().min(createExamResponseOneSubmissionOneResultCorrectCountMin),
   "totalQuestions": zod.number().min(createExamResponseOneSubmissionOneResultTotalQuestionsMin),
-  "percentage": zod.number().min(createExamResponseOneSubmissionOneResultPercentageMin).max(createExamResponseOneSubmissionOneResultPercentageMax)
+  "percentage": zod.number().min(createExamResponseOneSubmissionOneResultPercentageMin).max(createExamResponseOneSubmissionOneResultPercentageMax),
+  "score": zod.number().min(createExamResponseOneSubmissionOneResultScoreMin),
+  "maxScore": zod.number().min(createExamResponseOneSubmissionOneResultMaxScoreMin),
+  "autoScore": zod.number().min(createExamResponseOneSubmissionOneResultAutoScoreMin),
+  "manualScore": zod.number().min(createExamResponseOneSubmissionOneResultManualScoreMin),
+  "openQuestionCount": zod.number().min(createExamResponseOneSubmissionOneResultOpenQuestionCountMin),
+  "status": zod.enum(['graded', 'pending_review'])
 })
 }),zod.null()])
 }).and(zod.object({
   "teacherClerkUserId": zod.string(),
   "submissionCount": zod.number().min(createExamResponseTwoSubmissionCountMin),
+  "pendingReviewCount": zod.number().min(createExamResponseTwoPendingReviewCountMin),
   "questions": zod.array(zod.object({
   "id": zod.number(),
   "prompt": zod.string(),
   "position": zod.number().min(createExamResponseTwoQuestionsItemOnePositionMin),
+  "type": zod.enum(['choice', 'open']),
+  "maxPoints": zod.number().min(1),
   "options": zod.array(zod.object({
   "id": zod.number(),
   "label": zod.string(),
   "position": zod.number().min(createExamResponseTwoQuestionsItemOneOptionsItemPositionMin)
-})).min(createExamResponseTwoQuestionsItemOneOptionsMin)
+}))
 }).and(zod.object({
-  "correctOptionId": zod.union([zod.number().min(1),zod.null()])
+  "correctOptionId": zod.union([zod.number().min(1),zod.null()]),
+  "modelAnswer": zod.union([zod.string(),zod.null()])
 })))
 }))
 
@@ -1272,11 +1421,14 @@ export const updateExamBodyQuestionsItemPromptMax = 2000;
 
 export const updateExamBodyQuestionsItemOptionsItemMax = 500;
 
-export const updateExamBodyQuestionsItemOptionsMin = 2;
 export const updateExamBodyQuestionsItemOptionsMax = 8;
 
 export const updateExamBodyQuestionsItemCorrectOptionIndexMin = 0;
 export const updateExamBodyQuestionsItemCorrectOptionIndexMax = 7;
+
+export const updateExamBodyQuestionsItemMaxPointsOneMax = 100;
+
+export const updateExamBodyQuestionsItemModelAnswerOneMax = 4000;
 
 export const updateExamBodyQuestionsMax = 50;
 
@@ -1287,11 +1439,15 @@ export const UpdateExamBody = zod.object({
   "description": zod.string().min(1).max(updateExamBodyDescriptionMax).optional(),
   "status": zod.enum(['open', 'closed']).optional(),
   "isOnboarding": zod.boolean().optional(),
+  "language": zod.enum(['az', 'ar']).optional(),
   "durationMinutes": zod.union([zod.number().min(1).max(updateExamBodyDurationMinutesOneMax),zod.null()]).optional(),
   "questions": zod.array(zod.object({
   "prompt": zod.string().min(1).max(updateExamBodyQuestionsItemPromptMax),
-  "options": zod.array(zod.string().min(1).max(updateExamBodyQuestionsItemOptionsItemMax)).min(updateExamBodyQuestionsItemOptionsMin).max(updateExamBodyQuestionsItemOptionsMax),
-  "correctOptionIndex": zod.number().min(updateExamBodyQuestionsItemCorrectOptionIndexMin).max(updateExamBodyQuestionsItemCorrectOptionIndexMax)
+  "type": zod.enum(['choice', 'open']).optional(),
+  "options": zod.array(zod.string().min(1).max(updateExamBodyQuestionsItemOptionsItemMax)).max(updateExamBodyQuestionsItemOptionsMax).optional(),
+  "correctOptionIndex": zod.number().min(updateExamBodyQuestionsItemCorrectOptionIndexMin).max(updateExamBodyQuestionsItemCorrectOptionIndexMax).optional(),
+  "maxPoints": zod.union([zod.number().min(1).max(updateExamBodyQuestionsItemMaxPointsOneMax),zod.null()]).optional(),
+  "modelAnswer": zod.union([zod.string().max(updateExamBodyQuestionsItemModelAnswerOneMax),zod.null()]).optional()
 })).min(1).max(updateExamBodyQuestionsMax).optional()
 })
 
@@ -1301,9 +1457,10 @@ export const updateExamResponseOneDurationMinutesOneMax = 240;
 
 export const updateExamResponseOneQuestionsItemPositionMin = 0;
 
+
 export const updateExamResponseOneQuestionsItemOptionsItemPositionMin = 0;
 
-export const updateExamResponseOneQuestionsItemOptionsMin = 2;
+export const updateExamResponseOneSubmissionOneOpenGradesPointsMin = 0;
 
 export const updateExamResponseOneSubmissionOneResultCorrectCountMin = 0;
 
@@ -1312,13 +1469,24 @@ export const updateExamResponseOneSubmissionOneResultTotalQuestionsMin = 0;
 export const updateExamResponseOneSubmissionOneResultPercentageMin = 0;
 export const updateExamResponseOneSubmissionOneResultPercentageMax = 100;
 
+export const updateExamResponseOneSubmissionOneResultScoreMin = 0;
+
+export const updateExamResponseOneSubmissionOneResultMaxScoreMin = 0;
+
+export const updateExamResponseOneSubmissionOneResultAutoScoreMin = 0;
+
+export const updateExamResponseOneSubmissionOneResultManualScoreMin = 0;
+
+export const updateExamResponseOneSubmissionOneResultOpenQuestionCountMin = 0;
+
 export const updateExamResponseTwoSubmissionCountMin = 0;
+
+export const updateExamResponseTwoPendingReviewCountMin = 0;
 
 export const updateExamResponseTwoQuestionsItemOnePositionMin = 0;
 
-export const updateExamResponseTwoQuestionsItemOneOptionsItemPositionMin = 0;
 
-export const updateExamResponseTwoQuestionsItemOneOptionsMin = 2;
+export const updateExamResponseTwoQuestionsItemOneOptionsItemPositionMin = 0;
 
 
 
@@ -1334,6 +1502,7 @@ export const UpdateExamResponse = zod.object({
   "description": zod.string(),
   "status": zod.enum(['open', 'closed']),
   "isOnboarding": zod.boolean(),
+  "language": zod.enum(['az', 'ar']),
   "durationMinutes": zod.union([zod.number().min(1).max(updateExamResponseOneDurationMinutesOneMax),zod.null()]),
   "startedAt": zod.union([zod.coerce.date(),zod.null()]),
   "createdAt": zod.coerce.date(),
@@ -1342,38 +1511,56 @@ export const UpdateExamResponse = zod.object({
   "id": zod.number(),
   "prompt": zod.string(),
   "position": zod.number().min(updateExamResponseOneQuestionsItemPositionMin),
+  "type": zod.enum(['choice', 'open']),
+  "maxPoints": zod.number().min(1),
   "options": zod.array(zod.object({
   "id": zod.number(),
   "label": zod.string(),
   "position": zod.number().min(updateExamResponseOneQuestionsItemOptionsItemPositionMin)
-})).min(updateExamResponseOneQuestionsItemOptionsMin)
+}))
 })),
   "submission": zod.union([zod.object({
   "id": zod.number(),
   "examId": zod.number(),
   "profileId": zod.number(),
   "answers": zod.record(zod.string(), zod.number()),
+  "openAnswers": zod.record(zod.string(), zod.string()),
+  "openGrades": zod.record(zod.string(), zod.object({
+  "points": zod.number().min(updateExamResponseOneSubmissionOneOpenGradesPointsMin),
+  "comment": zod.union([zod.string(),zod.null()])
+})),
+  "reviewedAt": zod.union([zod.coerce.date(),zod.null()]),
   "submittedAt": zod.coerce.date(),
   "result": zod.object({
   "correctCount": zod.number().min(updateExamResponseOneSubmissionOneResultCorrectCountMin),
   "totalQuestions": zod.number().min(updateExamResponseOneSubmissionOneResultTotalQuestionsMin),
-  "percentage": zod.number().min(updateExamResponseOneSubmissionOneResultPercentageMin).max(updateExamResponseOneSubmissionOneResultPercentageMax)
+  "percentage": zod.number().min(updateExamResponseOneSubmissionOneResultPercentageMin).max(updateExamResponseOneSubmissionOneResultPercentageMax),
+  "score": zod.number().min(updateExamResponseOneSubmissionOneResultScoreMin),
+  "maxScore": zod.number().min(updateExamResponseOneSubmissionOneResultMaxScoreMin),
+  "autoScore": zod.number().min(updateExamResponseOneSubmissionOneResultAutoScoreMin),
+  "manualScore": zod.number().min(updateExamResponseOneSubmissionOneResultManualScoreMin),
+  "openQuestionCount": zod.number().min(updateExamResponseOneSubmissionOneResultOpenQuestionCountMin),
+  "status": zod.enum(['graded', 'pending_review'])
 })
 }),zod.null()])
 }).and(zod.object({
   "teacherClerkUserId": zod.string(),
   "submissionCount": zod.number().min(updateExamResponseTwoSubmissionCountMin),
+  "pendingReviewCount": zod.number().min(updateExamResponseTwoPendingReviewCountMin),
   "questions": zod.array(zod.object({
   "id": zod.number(),
   "prompt": zod.string(),
   "position": zod.number().min(updateExamResponseTwoQuestionsItemOnePositionMin),
+  "type": zod.enum(['choice', 'open']),
+  "maxPoints": zod.number().min(1),
   "options": zod.array(zod.object({
   "id": zod.number(),
   "label": zod.string(),
   "position": zod.number().min(updateExamResponseTwoQuestionsItemOneOptionsItemPositionMin)
-})).min(updateExamResponseTwoQuestionsItemOneOptionsMin)
+}))
 }).and(zod.object({
-  "correctOptionId": zod.union([zod.number().min(1),zod.null()])
+  "correctOptionId": zod.union([zod.number().min(1),zod.null()]),
+  "modelAnswer": zod.union([zod.string(),zod.null()])
 })))
 }))
 
@@ -1395,12 +1582,24 @@ export const GetExamSubmissionsParams = zod.object({
   "examId": zod.coerce.number()
 })
 
+export const getExamSubmissionsResponseOneOpenGradesPointsMin = 0;
+
 export const getExamSubmissionsResponseOneResultCorrectCountMin = 0;
 
 export const getExamSubmissionsResponseOneResultTotalQuestionsMin = 0;
 
 export const getExamSubmissionsResponseOneResultPercentageMin = 0;
 export const getExamSubmissionsResponseOneResultPercentageMax = 100;
+
+export const getExamSubmissionsResponseOneResultScoreMin = 0;
+
+export const getExamSubmissionsResponseOneResultMaxScoreMin = 0;
+
+export const getExamSubmissionsResponseOneResultAutoScoreMin = 0;
+
+export const getExamSubmissionsResponseOneResultManualScoreMin = 0;
+
+export const getExamSubmissionsResponseOneResultOpenQuestionCountMin = 0;
 
 
 
@@ -1409,11 +1608,23 @@ export const GetExamSubmissionsResponseItem = zod.object({
   "examId": zod.number(),
   "profileId": zod.number(),
   "answers": zod.record(zod.string(), zod.number()),
+  "openAnswers": zod.record(zod.string(), zod.string()),
+  "openGrades": zod.record(zod.string(), zod.object({
+  "points": zod.number().min(getExamSubmissionsResponseOneOpenGradesPointsMin),
+  "comment": zod.union([zod.string(),zod.null()])
+})),
+  "reviewedAt": zod.union([zod.coerce.date(),zod.null()]),
   "submittedAt": zod.coerce.date(),
   "result": zod.object({
   "correctCount": zod.number().min(getExamSubmissionsResponseOneResultCorrectCountMin),
   "totalQuestions": zod.number().min(getExamSubmissionsResponseOneResultTotalQuestionsMin),
-  "percentage": zod.number().min(getExamSubmissionsResponseOneResultPercentageMin).max(getExamSubmissionsResponseOneResultPercentageMax)
+  "percentage": zod.number().min(getExamSubmissionsResponseOneResultPercentageMin).max(getExamSubmissionsResponseOneResultPercentageMax),
+  "score": zod.number().min(getExamSubmissionsResponseOneResultScoreMin),
+  "maxScore": zod.number().min(getExamSubmissionsResponseOneResultMaxScoreMin),
+  "autoScore": zod.number().min(getExamSubmissionsResponseOneResultAutoScoreMin),
+  "manualScore": zod.number().min(getExamSubmissionsResponseOneResultManualScoreMin),
+  "openQuestionCount": zod.number().min(getExamSubmissionsResponseOneResultOpenQuestionCountMin),
+  "status": zod.enum(['graded', 'pending_review'])
 })
 }).and(zod.object({
   "studentName": zod.string(),
@@ -1453,6 +1664,81 @@ export const ApproveExamSubmissionResponse = zod.object({
   "profileId": zod.number(),
   "reviewStatus": zod.enum(['approved'])
 })
+
+
+/**
+ * @summary Grade the open-ended answers of a student's test
+ */
+export const GradeExamSubmissionParams = zod.object({
+  "examId": zod.coerce.number(),
+  "profileId": zod.coerce.number()
+})
+
+export const gradeExamSubmissionBodyGradesPointsMin = 0;
+export const gradeExamSubmissionBodyGradesPointsMax = 100;
+
+export const gradeExamSubmissionBodyGradesCommentOneMax = 2000;
+
+
+
+export const GradeExamSubmissionBody = zod.object({
+  "grades": zod.record(zod.string(), zod.object({
+  "points": zod.number().min(gradeExamSubmissionBodyGradesPointsMin).max(gradeExamSubmissionBodyGradesPointsMax),
+  "comment": zod.union([zod.string().max(gradeExamSubmissionBodyGradesCommentOneMax),zod.null()]).optional()
+}))
+})
+
+export const gradeExamSubmissionResponseOneOpenGradesPointsMin = 0;
+
+export const gradeExamSubmissionResponseOneResultCorrectCountMin = 0;
+
+export const gradeExamSubmissionResponseOneResultTotalQuestionsMin = 0;
+
+export const gradeExamSubmissionResponseOneResultPercentageMin = 0;
+export const gradeExamSubmissionResponseOneResultPercentageMax = 100;
+
+export const gradeExamSubmissionResponseOneResultScoreMin = 0;
+
+export const gradeExamSubmissionResponseOneResultMaxScoreMin = 0;
+
+export const gradeExamSubmissionResponseOneResultAutoScoreMin = 0;
+
+export const gradeExamSubmissionResponseOneResultManualScoreMin = 0;
+
+export const gradeExamSubmissionResponseOneResultOpenQuestionCountMin = 0;
+
+
+
+export const GradeExamSubmissionResponse = zod.object({
+  "id": zod.number(),
+  "examId": zod.number(),
+  "profileId": zod.number(),
+  "answers": zod.record(zod.string(), zod.number()),
+  "openAnswers": zod.record(zod.string(), zod.string()),
+  "openGrades": zod.record(zod.string(), zod.object({
+  "points": zod.number().min(gradeExamSubmissionResponseOneOpenGradesPointsMin),
+  "comment": zod.union([zod.string(),zod.null()])
+})),
+  "reviewedAt": zod.union([zod.coerce.date(),zod.null()]),
+  "submittedAt": zod.coerce.date(),
+  "result": zod.object({
+  "correctCount": zod.number().min(gradeExamSubmissionResponseOneResultCorrectCountMin),
+  "totalQuestions": zod.number().min(gradeExamSubmissionResponseOneResultTotalQuestionsMin),
+  "percentage": zod.number().min(gradeExamSubmissionResponseOneResultPercentageMin).max(gradeExamSubmissionResponseOneResultPercentageMax),
+  "score": zod.number().min(gradeExamSubmissionResponseOneResultScoreMin),
+  "maxScore": zod.number().min(gradeExamSubmissionResponseOneResultMaxScoreMin),
+  "autoScore": zod.number().min(gradeExamSubmissionResponseOneResultAutoScoreMin),
+  "manualScore": zod.number().min(gradeExamSubmissionResponseOneResultManualScoreMin),
+  "openQuestionCount": zod.number().min(gradeExamSubmissionResponseOneResultOpenQuestionCountMin),
+  "status": zod.enum(['graded', 'pending_review'])
+})
+}).and(zod.object({
+  "studentName": zod.string(),
+  "studentNumber": zod.number(),
+  "email": zod.string(),
+  "reviewStatus": zod.enum(['pending', 'approved']),
+  "answerLabels": zod.record(zod.string(), zod.string())
+}))
 
 
 /**

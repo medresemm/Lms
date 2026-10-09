@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ExamInputStatus } from './examInputStatus';
+import type { ExamLanguage } from './examLanguage';
 import type { ExamQuestionInput } from './examQuestionInput';
 
 export interface ExamInput {
@@ -23,6 +24,7 @@ export interface ExamInput {
   description: string;
   status?: ExamInputStatus;
   isOnboarding?: boolean;
+  language?: ExamLanguage;
   durationMinutes?: number | null;
   /**
      * @minItems 1

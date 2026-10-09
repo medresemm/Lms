@@ -1749,9 +1749,9 @@ function ArticleList({ articles }: { articles: Article[] }) {
     await Promise.all([queryClient.invalidateQueries({ queryKey: getGetAdminArticlesQueryKey() }), queryClient.invalidateQueries({ queryKey: getGetArticlesQueryKey() })]);
   };
   return (
-    <div className="mt-8 border-t border-[hsl(var(--border))] pt-6">
+    <div>
       <div className="mb-4 flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Son yayımlananlar</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Məqalələr</h3></div><BookOpenText className="text-[hsl(var(--secondary-foreground))]" size={20} /></div>
-      {articles.length ? <div className="space-y-2">{articles.slice(0, 5).map((article) => editingId === article.id ? <form key={article.id} onSubmit={saveEdit} className="space-y-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.55)] p-3"><input required className={inputClass} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Başlıq" /><input required className={inputClass} value={form.author} onChange={(event) => setForm({ ...form, author: event.target.value })} placeholder="Müəllif" /><textarea required rows={2} className={`${inputClass} resize-y`} value={form.excerpt} onChange={(event) => setForm({ ...form, excerpt: event.target.value })} placeholder="Qısa təqdimat" /><textarea required rows={5} className={`${inputClass} resize-y`} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder="Məqalənin mətni" /><div className="flex justify-end gap-2"><button type="button" onClick={() => setEditingId(null)} className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))]">Ləğv et</button><button type="submit" className={buttonClass}>Yadda saxla</button></div></form> : <div key={article.id} className="rounded-xl bg-[hsl(var(--muted)/.55)] p-3"><div className="flex items-start justify-between gap-2"><p className="text-sm font-bold text-[hsl(var(--primary))]">{article.title}</p><div className="flex shrink-0 gap-1"><button type="button" onClick={() => startEdit(article)} className="focus-ring rounded-lg px-2 py-1 text-[11px] font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))]">Redaktə et</button><button type="button" onClick={() => void deleteArticle(article.id)} className="focus-ring rounded-lg px-2 py-1 text-[11px] font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--card))]">Sil</button></div></div><p className="mt-1 line-clamp-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{article.excerpt}</p><p className="mt-2 text-[10px] font-bold uppercase tracking-[.1em] text-[hsl(var(--secondary-foreground))]">{formatPersonName(article.author)}</p></div>)}</div> : <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-5 text-center text-xs text-[hsl(var(--muted-foreground))]">Hələ məqalə əlavə edilməyib.</p>}
+      {articles.length ? <div className="space-y-2">{articles.slice(0, 5).map((article) => editingId === article.id ? <form key={article.id} onSubmit={saveEdit} className="space-y-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.55)] p-3"><input required className={inputClass} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Başlıq" /><input required className={inputClass} value={form.author} onChange={(event) => setForm({ ...form, author: event.target.value })} placeholder="Müəllif" /><textarea required rows={2} className={`${inputClass} resize-y`} value={form.excerpt} onChange={(event) => setForm({ ...form, excerpt: event.target.value })} placeholder="Qısa təqdimat" /><textarea required rows={5} className={`${inputClass} resize-y`} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder="Məqalənin mətni" /><div className="flex justify-end gap-2"><button type="button" onClick={() => setEditingId(null)} className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))]">Ləğv et</button><button type="submit" className={buttonClass}>Yadda saxla</button></div></form> : <div key={article.id} className="rounded-xl bg-[hsl(var(--muted)/.55)] p-3"><div className="flex items-start justify-between gap-2"><p className="text-sm font-bold text-[hsl(var(--primary))]">{article.title}</p><div className="flex shrink-0 gap-1"><button type="button" onClick={() => startEdit(article)} className="focus-ring rounded-lg px-2 py-1 text-[11px] font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))]">Redaktə et</button><button type="button" onClick={() => void deleteArticle(article.id)} className="focus-ring rounded-lg px-2 py-1 text-[11px] font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--card))]">Sil</button></div></div><p className="mt-1 line-clamp-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{article.excerpt}</p><p className="mt-2 text-[10px] font-bold uppercase tracking-[.1em] text-[hsl(var(--secondary-foreground))]">{formatPersonName(article.author)}</p></div>)}</div> : <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] px-5 py-10 text-center"><FileText className="mx-auto text-[hsl(var(--muted-foreground))]" size={22} /><p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Hələ məqalə əlavə edilməyib.</p></div>}
       {notice && <FormNotice text={notice} error={notice.includes('məqalə') && !notice.includes('yeniləndi') && !notice.includes('silindi')} />}
     </div>
   );
@@ -1760,9 +1760,9 @@ function ArticleList({ articles }: { articles: Article[] }) {
 function DailyBenefitList({ benefits }: { benefits: DailyBenefit[] }) {
   const benefit = benefits[0];
   return (
-    <div className="mt-8 rounded-2xl bg-[hsl(var(--accent)/.38)] p-5">
+    <div className="relative overflow-hidden rounded-2xl border border-[hsl(37_55%_72%/.45)] bg-[hsl(var(--accent)/.45)] px-5 py-4">
       <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--primary))]"><Quote size={14} /> Günün faydası</p>
-      {benefit ? <div className="mt-3 rounded-xl bg-[hsl(var(--card)/.55)] p-3"><p className="font-serif text-base leading-6 text-[hsl(var(--primary))]">“{benefit.body}”</p><p className="mt-2 text-xs font-bold text-[hsl(var(--secondary-foreground))]">— {benefit.source}</p></div> : <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Hələ günün faydası əlavə edilməyib.</p>}
+      {benefit ? <div className="relative mt-2"><p className="font-serif text-lg leading-7 text-[hsl(var(--primary))]">“{benefit.body}”</p><p className="mt-2 text-xs font-bold text-[hsl(var(--secondary-foreground))]">— {benefit.source}</p></div> : <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Hələ günün faydası əlavə edilməyib.</p>}
     </div>
   );
 }
@@ -2596,7 +2596,7 @@ function TeacherSchedule({ ownerName }: { ownerName: string }) {
        {selectedLesson && linkOnlyOpen && !editing && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teacher-course-links-standalone"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">Yalnız linkləri redaktə et</p><button type="button" onClick={() => setLinkOnlyOpen(false)} className="focus-ring rounded-lg px-2 py-1 text-xs font-bold text-[hsl(var(--muted-foreground))]">Bağla</button></div><div className="mt-3"><TeacherCourseLinksEditor links={courseLinks} onChange={(key, value) => setCourseLinks((current) => ({ ...current, [key]: value }))} /></div><button type="button" onClick={() => void saveCourseLinks()} className={`${buttonClass} mt-3`} data-testid="button-save-standalone-course-links"><Link2 size={15} /> Yalnız linkləri yadda saxla</button></section>}
        {notice && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800" data-testid="text-lesson-save-notice">{notice}</p>}
        <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Mənim dərslərim</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Həftəlik cədvəl</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">1-ci, 2-ci, 3-cü və 4-cü semestrlər üzrə sizə təyin edilmiş dərslər görünür.</p></div><button type="button" disabled={!selectedLesson} onClick={openLessonLinks} className={`${buttonClass} ${selectedLesson ? 'bg-[hsl(var(--secondary-foreground))]' : 'bg-[hsl(var(--muted-foreground))]'}`} data-testid="button-my-schedule-links"><Link2 size={16} /> Yalnız linklər</button></div>
-       {isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Cədvəl yüklənir...</p> : <><div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-7">{schedule.map(({ day, label, lessons }) => <button key={day} type="button" onClick={() => setSelectedDay(day)} className={`focus-ring rounded-xl border px-2 py-3 text-center ${day === activeDay ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent))] text-[hsl(var(--primary))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]'}`} data-testid={`button-teacher-schedule-day-${day}`}><span className="block text-xs font-black">{label}</span><span className="mt-1 block text-[10px]">{lessons.length ? `${lessons.length} dərs` : 'Dərs yoxdur'}</span></button>)}</div><div className="rounded-xl border border-[hsl(var(--border))] p-4" data-testid="section-teacher-selected-schedule"><p className="text-xs font-black text-[hsl(var(--primary))]">{selected?.label} günü</p>{selected?.lessons.length ? <div className="mt-3 space-y-2">{selected.lessons.map((lesson) => <button key={lesson.id} type="button" onClick={() => openLesson(lesson)} className="focus-ring flex w-full items-center justify-between gap-3 rounded-lg bg-[hsl(var(--muted)/.45)] px-3 py-3 text-left hover:bg-[hsl(var(--secondary)/.25)]"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{lesson.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{lesson.termNumber}-ci semestr · {lesson.teacherClerkUserId === user?.id || lesson.teacherName?.toLowerCase() === 'sistem sahibi' ? currentUserName : (lesson.teacherName ?? 'Müəllim təyin edilməyib')}</p></div><span className="rounded-lg bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-sm font-black text-[hsl(var(--secondary-foreground))]">{lesson.lessonTime ?? '—'}</span></button>)}</div> : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Bu gün üçün dərs yoxdur.</p>}</div>{selectedLesson && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teacher-lesson-details"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{selectedLesson.termNumber}-ci semestr · {selectedLesson.lessonTime ?? 'Saat təyin edilməyib'}</p><h4 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{selectedLesson.title}</h4></div><div className="flex gap-2"><button type="button" onClick={openLessonLinks} className={`${buttonClass} bg-[hsl(var(--secondary-foreground))]`} data-testid="button-open-scheduled-lesson-links"><Link2 size={15} /> Yalnız linklər</button><button type="button" onClick={() => { setEditing((value) => !value); setLinkOnlyOpen(false); }} className={buttonClass} data-testid="button-edit-scheduled-lesson"><Pencil size={15} /> {editing ? 'Baxışa qayıt' : 'Redaktə et'}</button></div></div>{editing ? <form onSubmit={saveLesson} className="mt-4 space-y-4"><Field label="Dərsin adı"><input required className={inputClass} value={editForm.title} onChange={(event) => setEditForm({ ...editForm, title: event.target.value })} /></Field><Field label="Dərs haqqında geniş məlumat"><textarea required rows={5} className={`${inputClass} resize-y`} value={editForm.body} onChange={(event) => setEditForm({ ...editForm, body: event.target.value })} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Həftənin günləri"><div className="grid grid-cols-2 gap-2 rounded-xl border border-[hsl(var(--border))] p-3">{lessonDayOptions.map(([day, label]) => <label key={day} className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={editForm.lessonDays.includes(day)} onChange={(event) => setEditForm({ ...editForm, lessonDays: event.target.checked ? [...editForm.lessonDays, day] : editForm.lessonDays.filter((item) => item !== day) })} />{label}</label>)}</div></Field><Field label="Saat"><input required type="time" className={inputClass} value={editForm.lessonTime} onChange={(event) => setEditForm({ ...editForm, lessonTime: event.target.value })} /></Field></div><Field label="PDF və ya material linki"><input type="text" className={inputClass} value={editForm.url} onChange={(event) => setEditForm({ ...editForm, url: event.target.value })} placeholder="Mövcud link" /><input ref={pdfInput} type="file" accept="application/pdf,.pdf" className="mt-2 block w-full text-xs" onChange={(event) => { const file = event.target.files?.[0] ?? null; setPdfFile(file); }} data-testid="input-schedule-pdf-file" />{pdfFile && <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{pdfFile.name} — yadda saxlanarkən dəyişdiriləcək</p>}</Field><button type="submit" className={buttonClass}>Yadda saxla</button>{notice && <p className="text-xs font-semibold">{notice}</p>}</form> : <div className="mt-4 space-y-3"><p className="whitespace-pre-wrap text-sm leading-6 text-[hsl(var(--muted-foreground))]">{selectedLesson.body || 'Bu dərs üçün əlavə məlumat yazılmayıb.'}</p>{selectedLesson.url && <a href={selectedLesson.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-[hsl(var(--secondary-foreground))]">Materialı aç</a>}{notice && <p className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}</div>}</section>}</>}
+       {isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Cədvəl yüklənir...</p> : <><div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">{schedule.map(({ day, label, lessons }) => <button key={day} type="button" onClick={() => setSelectedDay(day)} className={`focus-ring rounded-2xl border px-2 py-3 text-center ${day === activeDay ? 'border-transparent bg-[hsl(var(--accent))] text-[hsl(var(--primary))] shadow-[var(--shadow-xs)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]'}`} data-testid={`button-teacher-schedule-day-${day}`}><span className="block text-xs font-black">{label}</span><span className="mt-1 block text-[10px] font-semibold opacity-70">{lessons.length ? `${lessons.length} dərs` : 'Dərs yoxdur'}</span></button>)}</div><div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-4" data-testid="section-teacher-selected-schedule"><p className="flex items-center gap-2 text-xs font-black text-[hsl(var(--primary))]"><CalendarDays size={14} /> {selected?.label} günü</p>{selected?.lessons.length ? <div className="mt-3 space-y-2">{selected.lessons.map((lesson) => <button key={lesson.id} type="button" onClick={() => openLesson(lesson)} className="focus-ring flex w-full items-center justify-between gap-3 rounded-lg bg-[hsl(var(--card))] px-3 py-3 text-left hover:bg-[hsl(var(--secondary)/.25)]"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{lesson.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{lesson.termNumber}-ci semestr · {lesson.teacherClerkUserId === user?.id || lesson.teacherName?.toLowerCase() === 'sistem sahibi' ? currentUserName : (lesson.teacherName ?? 'Müəllim təyin edilməyib')}</p></div><span className="rounded-lg bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-sm font-black text-[hsl(var(--secondary-foreground))]">{lesson.lessonTime ?? '—'}</span></button>)}</div> : <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Bu gün üçün dərs yoxdur.</p>}</div>{selectedLesson && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teacher-lesson-details"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{selectedLesson.termNumber}-ci semestr · {selectedLesson.lessonTime ?? 'Saat təyin edilməyib'}</p><h4 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{selectedLesson.title}</h4></div><div className="flex gap-2"><button type="button" onClick={openLessonLinks} className={`${buttonClass} bg-[hsl(var(--secondary-foreground))]`} data-testid="button-open-scheduled-lesson-links"><Link2 size={15} /> Yalnız linklər</button><button type="button" onClick={() => { setEditing((value) => !value); setLinkOnlyOpen(false); }} className={buttonClass} data-testid="button-edit-scheduled-lesson"><Pencil size={15} /> {editing ? 'Baxışa qayıt' : 'Redaktə et'}</button></div></div>{editing ? <form onSubmit={saveLesson} className="mt-4 space-y-4"><Field label="Dərsin adı"><input required className={inputClass} value={editForm.title} onChange={(event) => setEditForm({ ...editForm, title: event.target.value })} /></Field><Field label="Dərs haqqında geniş məlumat"><textarea required rows={5} className={`${inputClass} resize-y`} value={editForm.body} onChange={(event) => setEditForm({ ...editForm, body: event.target.value })} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Həftənin günləri"><div className="grid grid-cols-2 gap-2 rounded-xl border border-[hsl(var(--border))] p-3">{lessonDayOptions.map(([day, label]) => <label key={day} className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={editForm.lessonDays.includes(day)} onChange={(event) => setEditForm({ ...editForm, lessonDays: event.target.checked ? [...editForm.lessonDays, day] : editForm.lessonDays.filter((item) => item !== day) })} />{label}</label>)}</div></Field><Field label="Saat"><input required type="time" className={inputClass} value={editForm.lessonTime} onChange={(event) => setEditForm({ ...editForm, lessonTime: event.target.value })} /></Field></div><Field label="PDF və ya material linki"><input type="text" className={inputClass} value={editForm.url} onChange={(event) => setEditForm({ ...editForm, url: event.target.value })} placeholder="Mövcud link" /><input ref={pdfInput} type="file" accept="application/pdf,.pdf" className="mt-2 block w-full text-xs" onChange={(event) => { const file = event.target.files?.[0] ?? null; setPdfFile(file); }} data-testid="input-schedule-pdf-file" />{pdfFile && <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{pdfFile.name} — yadda saxlanarkən dəyişdiriləcək</p>}</Field><button type="submit" className={buttonClass}>Yadda saxla</button>{notice && <p className="text-xs font-semibold">{notice}</p>}</form> : <div className="mt-4 space-y-3"><p className="whitespace-pre-wrap text-sm leading-6 text-[hsl(var(--muted-foreground))]">{selectedLesson.body || 'Bu dərs üçün əlavə məlumat yazılmayıb.'}</p>{selectedLesson.url && <a href={selectedLesson.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-[hsl(var(--secondary-foreground))]">Materialı aç</a>}{notice && <p className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}</div>}</section>}</>}
     </section>
   );
 }
@@ -3319,22 +3319,31 @@ function TeacherStats({ canEdit }: { canEdit: boolean }) {
         <p className="rounded-2xl border border-[hsl(var(--destructive)/.2)] bg-[hsl(var(--destructive)/.05)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">Tələbə statistikası yüklənə bilmədi.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-3">
-           <button type="button" onClick={() => setDirectoryFilter('all')} className="focus-ring rounded-2xl bg-[hsl(var(--primary))] p-5 text-left text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5">
-            <UsersRound size={19} className="text-[hsl(var(--accent))]" />
-            <p className="mt-5 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--primary-foreground)/.62)]">Ümumi tələbə</p>
-            <p className="mt-1 font-serif text-4xl leading-none">{profiles.length}</p>
+           <button type="button" onClick={() => setDirectoryFilter('all')} className="focus-ring flex items-center justify-between gap-3 rounded-2xl bg-[hsl(var(--primary))] p-4 text-left text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5">
+            <span>
+              <span className="grid size-9 place-items-center rounded-xl bg-white/10 text-[hsl(var(--accent))]"><UsersRound size={16} /></span>
+              <span className="mt-4 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--primary-foreground)/.62)]">Ümumi tələbə</span>
+              <span className="mt-1 block font-serif text-4xl leading-none">{profiles.length}</span>
+            </span>
+            <span className="flex items-end gap-1" aria-hidden>{[12, 20, 16, 28, 22].map((height) => <span key={height} className="w-1.5 rounded-full bg-white/25" style={{ height }} />)}</span>
            </button>
-           <button type="button" onClick={() => setDirectoryFilter(1)} className="focus-ring rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
-            <GraduationCap size={19} className="text-[hsl(var(--secondary-foreground))]" />
-            <p className="mt-5 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">1-ci tədris ili</p>
-            <p className="mt-1 font-serif text-4xl leading-none text-[hsl(var(--primary))]">{firstYearCount}</p>
-            <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">tələbə</p>
+           <button type="button" onClick={() => setDirectoryFilter(1)} className="focus-ring flex items-center justify-between gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
+            <span>
+              <span className="grid size-9 place-items-center rounded-xl bg-[#eef8f1] text-[#2f7d4f]"><GraduationCap size={16} /></span>
+              <span className="mt-4 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">1-ci tədris ili</span>
+              <span className="mt-1 block font-serif text-4xl leading-none text-[hsl(var(--primary))]">{firstYearCount}</span>
+              <span className="mt-1 block text-xs text-[hsl(var(--muted-foreground))]">tələbə</span>
+            </span>
+            <span className="flex items-end gap-1" aria-hidden>{[10, 16, 22, 28].map((height) => <span key={height} className="w-1.5 rounded-full bg-[#8dcea8]" style={{ height }} />)}</span>
            </button>
-           <button type="button" onClick={() => setDirectoryFilter(2)} className="focus-ring rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
-            <GraduationCap size={19} className="text-[hsl(var(--secondary-foreground))]" />
-            <p className="mt-5 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">2-ci tədris ili</p>
-            <p className="mt-1 font-serif text-4xl leading-none text-[hsl(var(--primary))]">{secondYearCount}</p>
-            <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">tələbə</p>
+           <button type="button" onClick={() => setDirectoryFilter(2)} className="focus-ring flex items-center justify-between gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
+            <span>
+              <span className="grid size-9 place-items-center rounded-xl bg-[#eef4ff] text-[#3d63b8]"><GraduationCap size={16} /></span>
+              <span className="mt-4 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">2-ci tədris ili</span>
+              <span className="mt-1 block font-serif text-4xl leading-none text-[hsl(var(--primary))]">{secondYearCount}</span>
+              <span className="mt-1 block text-xs text-[hsl(var(--muted-foreground))]">tələbə</span>
+            </span>
+            <span className="flex items-end gap-1" aria-hidden>{[18, 12, 16, 10].map((height) => <span key={height} className="w-1.5 rounded-full bg-[#d7e2f2]" style={{ height }} />)}</span>
            </button>
             {activeTerms.includes(5) && activeTerms.includes(6) && <button type="button" onClick={() => setDirectoryFilter(3)} className="focus-ring rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
              <GraduationCap size={19} className="text-[hsl(var(--secondary-foreground))]" />
@@ -3396,7 +3405,26 @@ const individualPermissionRole = (user: AdminUser): IndividualPermissionRole | n
   user.role === 'teacher' || user.role === 'supervisor' || user.role === 'owner_assistant' ? user.role : null;
 
 const adminTabButtonClass = (value: string, active: boolean) =>
-  `focus-ring inline-flex max-w-full items-center gap-2 whitespace-normal rounded-xl px-3 py-2.5 text-left text-xs font-bold transition ${active ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`;
+  `focus-ring inline-flex max-w-full items-center gap-2 whitespace-normal rounded-full border px-3.5 py-2 text-left text-xs font-bold transition ${active ? 'border-transparent bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]'}`;
+
+const adminTileTones: Record<string, string> = {
+  announcement: 'bg-[#fff4e8] text-[#c56a1a]',
+  'student-notifications': 'bg-[#eef6ff] text-[#2f6fad]',
+  article: 'bg-[#eef8f1] text-[#2f7d4f]',
+  benefit: 'bg-[#f4f0ff] text-[#6d4bb5]',
+  'student-management': 'bg-[#fff0f4] text-[#b14b6c]',
+  application: 'bg-[#fff1f5] text-[#c25478]',
+  exams: 'bg-[#eef4ff] text-[#3d63b8]',
+  'course-content': 'bg-[#eef8f3] text-[#2f7a62]',
+  users: 'bg-[#f6f0ff] text-[#6a4cae]',
+  'course-activation': 'bg-[#f3f8ee] text-[#4d7a32]',
+  statistics: 'bg-[#fff6ea] text-[#b86a22]',
+  'audit-history': 'bg-[#eef3fb] text-[#3e5f93]',
+  'graduation-certificates': 'bg-[#fff6ee] text-[#b86a22]',
+};
+
+const adminTileClass = (value: string, active: boolean) =>
+  `focus-ring flex min-h-[92px] flex-col items-start justify-between gap-3 rounded-2xl px-3.5 py-3 text-left text-xs font-bold transition hover:-translate-y-0.5 ${adminTileTones[value] ?? 'bg-[hsl(var(--muted))] text-[hsl(var(--primary))]'} ${active ? 'ring-2 ring-[hsl(var(--primary))]' : ''}`;
 
 function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: boolean }) {
   const usersQuery = useGetAdminUsers({ query: { queryKey: getGetAdminUsersQueryKey() } });
@@ -3973,8 +4001,8 @@ function AdminGlobalSearch({ onSelectStudent }: { onSelectStudent: (profileId: n
   }, [open, query]);
 
   return <>
-    <button type="button" onClick={() => setOpen(true)} className="focus-ring inline-flex shrink-0 items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-2.5 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] sm:px-3" data-testid="button-open-admin-search" aria-label="Qlobal axtarış">
-      <Search size={15} /><span className="hidden sm:inline">Axtar</span><kbd className="hidden rounded bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[10px] font-semibold text-[hsl(var(--muted-foreground))] sm:inline">Ctrl K</kbd>
+    <button type="button" onClick={() => setOpen(true)} className="focus-ring inline-flex shrink-0 items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-open-admin-search" aria-label="Qlobal axtarış">
+      <Search size={15} /><span className="hidden sm:inline">Axtar</span><kbd className="hidden rounded-md bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[10px] font-semibold text-[hsl(var(--muted-foreground))] sm:inline">Ctrl K</kbd>
     </button>
     {open && <div className="fixed inset-0 z-[70] overflow-y-auto bg-[hsl(var(--primary)/.45)] p-3 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-label="Qlobal axtarış" data-testid="admin-global-search">
       <div className="mx-auto mt-4 w-full max-w-2xl overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-[var(--shadow-lg)] sm:mt-[10vh]">
@@ -4093,51 +4121,58 @@ export function AdminPanel() {
 
   return (
     <div className="grain min-h-[100dvh] overflow-x-hidden bg-[hsl(var(--background))]">
-      <header className="border-b border-[hsl(var(--border))] bg-[hsl(var(--card)/.9)] px-4 py-4 md:px-10">
+      <header className="border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 md:px-8">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-          <Link href="/user-portal" className="focus-ring flex min-w-0 max-w-full items-center gap-3 rounded-xl" data-testid="link-admin-back">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] bg-[hsl(var(--accent))] font-serif text-xl font-bold text-[hsl(var(--primary))] shadow-[0_7px_0_hsl(37_83%_52%)]">M</div>
-             <div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Mədinə</p><p className="truncate font-serif text-base leading-none text-[hsl(var(--primary))] sm:text-[17px]">{owner ? 'Sahib paneli' : ownerAssistant ? 'Sahib köməkçisi paneli' : activeRole === 'supervisor' ? 'Nəzarətçi paneli' : 'Müəllim paneli'}</p></div>
+          <Link href="/user-portal" className="focus-ring flex min-w-0 items-center gap-2.5 rounded-xl" data-testid="link-admin-back">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[hsl(var(--accent))] font-serif text-lg font-bold text-[hsl(var(--primary))]">M</div>
+             <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Mədinə</p><p className="truncate text-sm font-bold leading-tight text-[hsl(var(--primary))]">{owner ? 'Sahib paneli' : ownerAssistant ? 'Sahib köməkçisi paneli' : activeRole === 'supervisor' ? 'Nəzarətçi paneli' : 'Müəllim paneli'}</p></div>
           </Link>
-          <div className="flex max-w-full flex-wrap items-center justify-end gap-1 sm:gap-2">
+          <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
             <HomeLink compact />
             <ArticlesLink compact />
              <AdminGlobalSearch onSelectStudent={(profileId) => { setFocusStudentId(profileId); setTab('student-management'); }} />
-             <span className="hidden max-w-40 truncate text-xs font-semibold text-[hsl(var(--muted-foreground))] sm:block">{owner ? 'N1 · ' : ownerAssistant ? 'NK1 · ' : ''}{displayName}</span>
-             <button type="button" onClick={onLogout} className="focus-ring inline-flex items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--muted))] sm:px-3" aria-label="Çıxış" data-testid="button-admin-logout"><LogOut size={15} /> <span className="hidden sm:inline">Çıxış</span></button>
+             <span className="hidden max-w-52 items-center gap-2 truncate rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] sm:inline-flex">{owner ? 'N1 · ' : ownerAssistant ? 'NK1 · ' : ''}{displayName} <ChevronDown size={14} className="text-[hsl(var(--muted-foreground))]" /></span>
+             <button type="button" onClick={onLogout} className="focus-ring inline-flex items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" aria-label="Çıxış" data-testid="button-admin-logout"><LogOut size={15} /> <span className="hidden sm:inline">Çıxış</span></button>
           </div>
         </div>
       </header>
-       <div className="mx-auto min-w-0 max-w-6xl px-4 pt-6 md:px-10">
-         <section className="flex flex-wrap items-center gap-x-8 gap-y-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)]" data-testid="section-admin-account">
-           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[hsl(var(--accent)/.45)] font-serif text-xl font-bold text-[hsl(var(--primary))]">{accountCode}</div>
-           <div>
-             <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">Hesab məlumatları</p>
-             <p className="mt-1 font-bold text-[hsl(var(--primary))]">{fullName}</p>
+       <div className="mx-auto min-w-0 max-w-6xl px-4 pt-5 md:px-8">
+         <section className="flex flex-wrap items-center gap-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 shadow-[var(--shadow-xs)] sm:gap-6 sm:px-5" data-testid="section-admin-account">
+           <div className="flex min-w-0 items-center gap-3">
+             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[hsl(var(--border))] font-serif text-sm font-bold text-[hsl(var(--primary))]">{accountCode}</div>
+             <div className="min-w-0">
+               <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">Hesab məlumatları</p>
+               <p className="truncate font-bold text-[hsl(var(--primary))]">{fullName}</p>
+             </div>
            </div>
-           <div className="sm:ml-auto">
+           <div className="sm:ml-auto sm:border-l sm:border-[hsl(var(--border))] sm:pl-6">
              <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">Hesab kodu</p>
-             <p className="mt-1 text-lg font-bold text-[hsl(var(--secondary-foreground))]">{accountCode}</p>
+             <p className="mt-0.5 text-lg font-bold text-[hsl(var(--primary))]">{accountCode}</p>
            </div>
-           <div>
+           <div className="sm:border-l sm:border-[hsl(var(--border))] sm:pl-6">
               <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">Status</p>
-               <p className="mt-1 text-sm font-bold text-[hsl(var(--primary))]">{owner ? 'Sistem sahibi' : ownerAssistant ? 'Sahib köməkçisi' : metadataRole === 'supervisor' ? 'Nəzarətçi' : 'Müəllim'}</p>
+               <p className="mt-0.5 flex items-center gap-1.5 text-sm font-bold text-[hsl(var(--primary))]"><span className="h-2 w-2 rounded-full bg-emerald-500" />{owner ? 'Sistem sahibi' : ownerAssistant ? 'Sahib köməkçisi' : metadataRole === 'supervisor' ? 'Nəzarətçi' : 'Müəllim'}</p>
            </div>
          </section>
        </div>
-      <main className="mx-auto min-w-0 max-w-6xl px-4 py-8 md:px-10 md:py-12">
+      <main className="mx-auto min-w-0 max-w-6xl px-4 py-6 md:px-8">
         <div className="max-w-2xl">
-          <p className="flex items-center gap-2 text-2xl font-bold text-[hsl(var(--primary))]"><ShieldCheck size={22} /> İDARƏETMƏ SAHƏSİ</p>
+          <p className="flex items-center gap-2 text-xl font-bold tracking-wide text-[hsl(var(--primary))]"><ShieldCheck size={20} /> İDARƏETMƏ SAHƏSİ</p>
           <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{owner ? 'Akademiyanın məzmununu idarə edin və qeydiyyatdan keçmiş istifadəçilərə işçi rolları verin.' : 'Tələbələr və ziyarətçilər üçün dərsləri, elanları, məqalələri, günün faydasını və dərs resurslarını buradan əlavə edin.'}</p>
         </div>
         <TeacherStats canEdit={owner || ownerAssistant} />
-        <div className="mt-10 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <section className="min-w-0 rounded-[26px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-[var(--shadow-sm)] sm:p-5 md:p-7">
-           <h2 className="mb-5 font-serif text-3xl leading-none tracking-[-.03em] text-[hsl(var(--primary))] md:text-4xl">İdarə paneli</h2>
-            <div className="mb-7 flex flex-wrap gap-2 border-b border-[hsl(var(--border))] pb-4">
-                  {([['announcement', 'Yeni elan', Megaphone, 'announcements'], ['student-notifications', 'Tələbələrə bildiriş', Send, 'announcements'], ['article', 'Məqalə', BookOpenText, 'articles'], ['benefit', 'Günün faydası', Quote, 'dailyBenefits'], ['student-management', 'Tələbələri idarə et', UsersRound, 'students'], ['application', 'Müraciətlər', UsersRound, 'applications'], ['exams', 'İmtahan və testlər', ClipboardList, 'assignments'], ['course-content', 'Tədris proqramı', BookOpenText, 'schedule'], ['users', 'İstifadəçi rolları', UserCog, 'userRoleManagement'], ['course-activation', 'Dərsləri idarə et', BookOpen, 'schedule'], ['statistics', 'Statistika', UsersRound, null], ['audit-history', 'Audit tarixçəsi', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <button key={value} type="button" onClick={() => toggleTab(value)} className={adminTabButtonClass(value, tab === value)} data-testid={`tab-admin-${value}`}><Icon size={15} /> {label} {value === 'application' && pendingApplicationCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</button>)}
-                   {(owner || ownerAssistant) && <button type="button" onClick={() => toggleTab('graduation-certificates')} className={adminTabButtonClass('graduation-certificates', tab === 'graduation-certificates')} data-testid="tab-admin-graduation-certificates"><FileBadge size={15} /> Şəhadətnamə idarəsi</button>}
+        <section className="mt-8 min-w-0 rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-[var(--shadow-sm)] sm:p-6">
+           <h2 className="mb-4 flex items-center gap-2 font-serif text-3xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]"><ShieldCheck size={22} /> İdarə paneli</h2>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                  {([['announcement', 'Yeni elan', Megaphone, 'announcements'], ['student-notifications', 'Tələbələrə bildiriş', Send, 'announcements'], ['article', 'Məqalə', BookOpenText, 'articles'], ['benefit', 'Günün faydası', Quote, 'dailyBenefits'], ['student-management', 'Tələbələri idarə et', UsersRound, 'students'], ['application', 'Müraciətlər', UsersRound, 'applications'], ['exams', 'İmtahan və testlər', ClipboardList, 'assignments'], ['course-content', 'Tədris proqramı', BookOpenText, 'schedule'], ['users', 'İstifadəçi rolları', UserCog, 'userRoleManagement'], ['course-activation', 'Dərsləri idarə et', BookOpen, 'schedule'], ['statistics', 'Statistika', UsersRound, null], ['audit-history', 'Audit tarixçəsi', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <button key={value} type="button" onClick={() => toggleTab(value)} className={adminTileClass(value, tab === value)} data-testid={`tab-admin-${value}`}><span className="grid size-9 place-items-center rounded-xl bg-white/70"><Icon size={16} /></span><span className="leading-4">{label} {value === 'application' && pendingApplicationCount > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</span></button>)}
+                   {(owner || ownerAssistant) && <button type="button" onClick={() => toggleTab('graduation-certificates')} className={adminTileClass('graduation-certificates', tab === 'graduation-certificates')} data-testid="tab-admin-graduation-certificates"><span className="grid size-9 place-items-center rounded-xl bg-white/70"><FileBadge size={16} /></span><span className="leading-4">Şəhadətnamə idarəsi</span></button>}
             </div>
+               <div className="mb-5 mt-5 flex flex-wrap gap-2 border-t border-[hsl(var(--border))] pt-4">
+                 <button type="button" onClick={() => toggleTab('schedule')} className={adminTabButtonClass('schedule', tab === 'schedule')} data-testid="tab-admin-schedule"><CalendarRange size={16} /> Mənim cədvəlim</button>
+                  <button type="button" onClick={() => toggleTab('teachers-schedule')} className={adminTabButtonClass('teachers-schedule', tab === 'teachers-schedule')} data-testid="tab-admin-teachers-schedule"><CalendarRange size={16} /> Müəllimlər cədvəli</button>
+                   <button type="button" onClick={() => toggleTab('messages')} className={adminTabButtonClass('messages', tab === 'messages')} data-testid="tab-admin-messages"><Mail size={16} /> Məsləhətləşmə / Əlaqə {unreadMessageCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unreadMessageCount}</span>}</button>
+                   <button type="button" onClick={() => toggleTab('questions')} className={adminTabButtonClass('questions', tab === 'questions')} data-testid="tab-admin-questions"><HelpCircle size={16} /> Sual-cavab {unansweredQuestionCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unansweredQuestionCount}</span>}</button>
+              </div>
               {tab === 'student-notifications' && rolePermissions.has('announcements') && <StudentNotificationForm />}
               {tab === 'exams' && canManageAssignments && <AdminExamsSection resources={resourcesQuery.data ?? []} teacherClerkUserId={activeRole === 'teacher' || activeRole === 'admin' ? user?.id : undefined} owner={owner} />}
             {tab === 'course-activation' && (owner || ownerAssistant) && <CourseActivationSettings />}
@@ -4151,27 +4186,29 @@ export function AdminPanel() {
             {tab === 'statistics' && owner && <><AnalyticsDashboard applications={applicationsQuery.data ?? []} profiles={academicProfilesQuery.data ?? []} resources={resourcesQuery.data ?? []} onRefresh={() => { void Promise.all([applicationsQuery.refetch(), academicProfilesQuery.refetch(), resourcesQuery.refetch()]); }} /><SystemStatisticsSettings /></>}
             {tab === 'audit-history' && owner && <AuditHistory />}
             {tab === 'graduation-certificates' && (owner || ownerAssistant) && <GraduateCertificateSection canRevoke={owner} />}
-               <div className="mb-5 flex flex-wrap gap-2">
-                 <button type="button" onClick={() => toggleTab('schedule')} className={adminTabButtonClass('schedule', tab === 'schedule')} data-testid="tab-admin-schedule"><CalendarRange size={18} /> Mənim cədvəlim</button>
-                  <button type="button" onClick={() => toggleTab('teachers-schedule')} className={adminTabButtonClass('teachers-schedule', tab === 'teachers-schedule')} data-testid="tab-admin-teachers-schedule"><CalendarRange size={18} /> Müəllimlər cədvəli</button>
-                   <button type="button" onClick={() => toggleTab('messages')} className={adminTabButtonClass('messages', tab === 'messages')} data-testid="tab-admin-messages"><Mail size={18} /> Məsləhətləşmə / Əlaqə {unreadMessageCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unreadMessageCount}</span>}</button>
-                   <button type="button" onClick={() => toggleTab('questions')} className={adminTabButtonClass('questions', tab === 'questions')} data-testid="tab-admin-questions"><HelpCircle size={18} /> Sual-cavab {unansweredQuestionCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unansweredQuestionCount}</span>}</button>
-              </div>
              {tab === 'schedule' && <TeacherSchedule ownerName={fullName} />}
               {tab === 'teachers-schedule' && <TeachersSchedule ownerName={fullName} />}
                {tab === 'messages' && <MessageCenter staff />}
                 {tab === 'questions' && <QaCenter canAnswer onUnansweredCountChange={setUnansweredQuestionCount} />}
           </section>
-          <aside className="space-y-4">
-            <div className="rounded-2xl bg-[hsl(var(--primary))] p-5 text-[hsl(var(--primary-foreground))]">
-              <Send className="mb-8 text-[hsl(var(--accent))]" size={20} />
-              <p className="text-sm font-bold">Məzmunu canlı saxla</p>
-              <p className="mt-2 text-xs leading-5 text-[hsl(var(--primary-foreground)/.62)]">Əlavə etdiyiniz məlumat tələbələrin kabinetində və ana səhifədə görünəcək.</p>
+          <div className="mt-4">
+            <div className="flex items-center justify-between gap-4 rounded-2xl bg-[hsl(var(--primary))] px-5 py-4 text-[hsl(var(--primary-foreground))]">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/10 text-[hsl(var(--accent))]"><Send size={18} /></span>
+                <div>
+                  <p className="text-sm font-bold">Məzmunu canlı saxla</p>
+                  <p className="mt-1 text-xs leading-5 text-[hsl(var(--primary-foreground)/.7)]">Əlavə etdiyiniz məlumat tələbələrin kabinetində və ana səhifədə görünəcək.</p>
+                </div>
+              </div>
+              <ChevronDown className="-rotate-90 shrink-0 text-[hsl(var(--accent))]" size={18} />
             </div>
+          </div>
+          <div className="mt-4 space-y-4">
             <DailyBenefitList benefits={dailyBenefits} />
-            <ArticleList articles={articles} />
-          </aside>
-        </div>
+            <section className="rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)]">
+              <ArticleList articles={articles} />
+            </section>
+          </div>
       </main>
       {(owner || rolePermissions.has('students')) && <AiAssistantLauncher href="/ai" />}
     </div>

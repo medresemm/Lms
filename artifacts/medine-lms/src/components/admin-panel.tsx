@@ -1948,8 +1948,6 @@ function SchedulePrepSection() {
   const queryClient = useQueryClient();
   const [termNumber, setTermNumber] = useState(1);
   const [title, setTitle] = useState('');
-  const [lessonDays, setLessonDays] = useState<string[]>([]);
-  const [lessonTime, setLessonTime] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [notice, setNotice] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -1958,8 +1956,6 @@ function SchedulePrepSection() {
   const reset = () => {
     setEditingId(null);
     setTitle('');
-    setLessonDays([]);
-    setLessonTime('');
   };
 
   const save = async (event: FormEvent) => {
@@ -1967,33 +1963,33 @@ function SchedulePrepSection() {
     setNotice('');
     setIsSaving(true);
     try {
-      if (!title.trim() || !lessonDays.length || !lessonTime) throw new Error('Dərs adı, gün və saat mütləqdir.');
+      if (!title.trim()) throw new Error('Dərs adı mütləqdir.');
       const response = await fetch(apiUrl(editingId === null ? '/admin/schedule-lessons' : `/admin/schedule-lessons/${editingId}`), {
         method: editingId === null ? 'POST' : 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ termNumber, title: title.trim(), lessonDays, lessonTime }),
+        body: JSON.stringify({ termNumber, title: title.trim() }),
       });
       const result = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Cədvəl yadda saxlanılmadı.');
+      if (!response.ok) throw new Error(result.error || 'Dərs yadda saxlanılmadı.');
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetAdminResourcesQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetCoursesQueryKey() }),
       ]);
-      setNotice(editingId === null ? 'Dərs cədvələ əlavə edildi.' : 'Cədvəl yeniləndi.');
+      setNotice(editingId === null ? 'Dərs əlavə edildi.' : 'Dərs adı yeniləndi.');
       reset();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Cədvəl yadda saxlanılmadı.');
+      setNotice(error instanceof Error ? error.message : 'Dərs yadda saxlanılmadı.');
     } finally {
       setIsSaving(false);
     }
   };
 
   const remove = async (resourceId: number) => {
-    if (!window.confirm('Bu cədvəl dərsini silmək istəyirsiniz?')) return;
+    if (!window.confirm('Bu dərsi silmək istəyirsiniz?')) return;
     const response = await fetch(apiUrl(`/admin/schedule-lessons/${resourceId}`), { method: 'DELETE' });
     const result = await response.json().catch(() => ({})) as { error?: string };
     if (!response.ok) {
-      setNotice(result.error || 'Cədvəl dərsi silinmədi.');
+      setNotice(result.error || 'Dərs silinmədi.');
       return;
     }
     await Promise.all([
@@ -2001,7 +1997,7 @@ function SchedulePrepSection() {
       queryClient.invalidateQueries({ queryKey: getGetCoursesQueryKey() }),
     ]);
     if (editingId === resourceId) reset();
-    setNotice('Cədvəl dərsi silindi.');
+    setNotice('Dərs silindi.');
   };
 
   return (
@@ -2009,10 +2005,10 @@ function SchedulePrepSection() {
       <div>
         <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Semestr cədvəli</p>
         <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Cədvəl hazırlama</h3>
-        <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hər semestr üçün dərsin adını, gününü və saatını yazın. Müəllim burada seçilmir. Əlavə olunan dərslər tədris proqramındakı dərs seçiminə düşür.</p>
+        <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hər semestr üçün yalnız dərsin adını yazın. Gün, saat və müəllim tədris proqramından idarə olunur.</p>
       </div>
       <form onSubmit={save} className="space-y-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-4">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
           <Field label="Semestr">
             <select className={inputClass} value={termNumber} onChange={(event) => { setTermNumber(Number(event.target.value)); reset(); }} data-testid="select-schedule-prep-term">
               {Array.from({ length: 8 }, (_, index) => index + 1).map((term) => <option key={term} value={term}>{term}-{termSuffixes[term] ?? 'ci'} semestr</option>)}
@@ -2021,41 +2017,44 @@ function SchedulePrepSection() {
           <Field label="Dərsin adı">
             <input required className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Dərsin adını yazın" data-testid="input-schedule-prep-title" />
           </Field>
-          <Field label="Həftənin günləri">
-            <div className="grid grid-cols-2 gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3">
-              {lessonDayOptions.map(([day, label]) => <label key={day} className="flex items-center gap-2 text-xs font-semibold text-[hsl(var(--primary))]"><input type="checkbox" checked={lessonDays.includes(day)} onChange={(event) => setLessonDays((current) => event.target.checked ? [...current, day] : current.filter((item) => item !== day))} />{label}</label>)}
-            </div>
-          </Field>
-          <Field label="Dərs saatı">
-            <input required type="time" className={inputClass} value={lessonTime} onChange={(event) => setLessonTime(event.target.value)} data-testid="input-schedule-prep-time" />
-          </Field>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           {editingId !== null && <button type="button" onClick={reset} className="focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-[hsl(var(--muted-foreground))]">Ləğv et</button>}
-          <button type="submit" className={buttonClass} disabled={isSaving} data-testid="button-save-schedule-prep">{isSaving ? 'Yadda saxlanılır...' : editingId === null ? 'Cədvələ əlavə et' : 'Cədvəli yenilə'}</button>
+          <button type="submit" className={buttonClass} disabled={isSaving} data-testid="button-save-schedule-prep">{isSaving ? 'Yadda saxlanılır...' : editingId === null ? 'Dərs əlavə et' : 'Adı yenilə'}</button>
         </div>
       </form>
-      {notice && <FormNotice text={notice} error={notice.includes('bil') || notice.includes('doldur') || notice.includes('silinmə')} />}
+      {notice && <FormNotice text={notice} error={notice.includes('bil') || notice.includes('mütləq') || notice.includes('silinmə')} />}
       <div className="space-y-2" data-testid="list-schedule-prep">
-        {resourcesQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Cədvəl yüklənir...</p> : lessons.length ? lessons.map((lesson) => {
+        {resourcesQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Siyahı yüklənir...</p> : lessons.length ? lessons.map((lesson) => {
           const courseTitle = coursesQuery.data?.find((course) => course.id === lesson.courseId)?.title ?? lesson.title;
-          const days = lesson.lessonDays.map((day) => lessonDayOptions.find(([value]) => value === day)?.[1] ?? day).join(', ');
           return (
             <div key={lesson.courseId} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3">
-              <div>
-                <p className="text-sm font-bold text-[hsl(var(--primary))]">{courseTitle}</p>
-                <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{days || 'Gün yoxdur'} · {lesson.lessonTime || 'Saat yoxdur'}</p>
-              </div>
+              <p className="text-sm font-bold text-[hsl(var(--primary))]">{courseTitle}</p>
               <div className="flex gap-2">
-                <button type="button" className="focus-ring rounded-lg px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" onClick={() => { setEditingId(lesson.id); setTitle(courseTitle); setLessonDays(lesson.lessonDays); setLessonTime(lesson.lessonTime ?? ''); }}>Redaktə et</button>
+                <button type="button" className="focus-ring rounded-lg px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" onClick={() => { setEditingId(lesson.id); setTitle(courseTitle); }}>Redaktə et</button>
                 <button type="button" className="focus-ring rounded-lg px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--muted))]" onClick={() => void remove(lesson.id)}>Sil</button>
               </div>
             </div>
           );
-        }) : <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">Bu semestr üçün cədvəl dərsi yoxdur.</p>}
+        }) : <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">Bu semestr üçün dərs yoxdur.</p>}
       </div>
     </section>
   );
+}
+
+function parseDayTimes(lessonTime: string | null | undefined, days: string[]) {
+  if (lessonTime?.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(lessonTime) as Record<string, string>;
+      return Object.fromEntries(days.map((day) => [day, parsed[day] ?? '']));
+    } catch { /* köhnə format */ }
+  }
+  return Object.fromEntries(days.map((day) => [day, lessonTime && /^\d{2}:\d{2}$/.test(lessonTime) ? lessonTime : '']));
+}
+
+function lessonTimesForSave(stored: string | null | undefined, days: string[], activeDay: string, activeTime: string) {
+  const existing = parseDayTimes(stored, days);
+  return Object.fromEntries(days.map((day) => [day, day === activeDay ? activeTime : (existing[day] || activeTime)]));
 }
 
 function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: () => void; teacherOnly?: boolean; teacherName?: string }) {
@@ -2065,6 +2064,7 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
   const teachersQuery = useGetAdminTeachers();
   const { user } = useUser();
   const [form, setForm] = useState<Omit<ResourceInput, 'courseId' | 'teacherClerkUserId'> & { courseId: string; teacherClerkUserId?: string }>({ courseId: '', termNumber: 1, kind: ResourceInputKind.material, title: '', body: '', url: '', lessonDays: [], lessonTime: '', isMandatory: true, teacherClerkUserId: '', studentCapacity: 0 });
+  const [dayTimes, setDayTimes] = useState<Record<string, string>>({});
   const [isNewSubject, setIsNewSubject] = useState(false);
   const [subjectName, setSubjectName] = useState('');
   const [courseTotalLessons, setCourseTotalLessons] = useState(0);
@@ -2072,6 +2072,9 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
   const pdfInput = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
+  useEffect(() => {
+    setDayTimes(parseDayTimes(form.lessonTime, form.lessonDays));
+  }, [editingId]);
   const [isAddingAssignment, setIsAddingAssignment] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSemesterDatesOpen, setIsSemesterDatesOpen] = useState(false);
@@ -2247,6 +2250,7 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
     if (resource) {
       setIsAddingAssignment(false);
       setEditingId(resource.id);
+      setDayTimes(parseDayTimes(resource.lessonTime, resource.lessonDays));
       setForm({ courseId: String(resource.courseId), termNumber: resource.termNumber, kind: resource.kind as ResourceInputKind, title: resource.title, body: resource.body, url: resource.url ?? '', lessonDays: resource.lessonDays, lessonTime: resource.lessonTime ?? '', isMandatory: resource.isMandatory, teacherClerkUserId: resource.teacherClerkUserId ?? '', studentCapacity: resource.studentCapacity });
     } else {
       setIsAddingAssignment(false);
@@ -2280,7 +2284,7 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
     setNotice('');
     setIsSaving(true);
     try {
-      if (!form.lessonDays.length || !form.lessonTime) throw new Error('Həftənin ən azı bir gününü və dərs saatını seçin.');
+      if (!form.lessonDays.length || form.lessonDays.some((day) => !/^\d{2}:\d{2}$/.test(dayTimes[day] ?? ''))) throw new Error('Hər seçilmiş gün üçün dərs saatı yazın.');
       let courseId = Number(form.courseId);
       let resourceUrl = form.url || null;
       let uploadedPdfUrl: string | null = null;
@@ -2335,10 +2339,11 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
           const courseUpdateResult = await courseUpdateResponse.json().catch(() => ({})) as { error?: string };
           if (!courseUpdateResponse.ok) throw new Error(courseUpdateResult.error || 'Dərs linkləri yadda saxlanıla bilmədi.');
         }
-        const data = { courseId, termNumber: form.termNumber, kind: form.kind, title: form.title.trim() || 'Dərs', body: form.body.trim() || 'Cədvəl dərsi', url: resourceUrl, lessonDays: form.lessonDays, lessonTime: form.lessonTime, isMandatory: form.isMandatory, teacherClerkUserId, studentCapacity: form.studentCapacity };
+        const lessonDayTimes = Object.fromEntries(form.lessonDays.map((day) => [day, dayTimes[day]]));
+        const data = { courseId, termNumber: form.termNumber, kind: form.kind, title: form.title.trim() || 'Dərs', body: form.body.trim() || 'Cədvəl dərsi', url: resourceUrl, lessonDays: form.lessonDays, lessonTime: dayTimes[form.lessonDays[0]], lessonDayTimes, isMandatory: form.isMandatory, teacherClerkUserId, studentCapacity: form.studentCapacity };
        let savedResourceId = editingId;
        if (editingId === null) {
-         const createdResource = await mutation.mutateAsync({ data });
+         const createdResource = await mutation.mutateAsync({ data: data as ResourceInput });
          savedResourceId = createdResource.id;
        } else {
         const response = await fetch(apiUrl(`/admin/resources/${editingId}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
@@ -2396,6 +2401,7 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
           setIsAddingAssignment(Boolean(courseId) && !skeleton);
           setEditingId(skeleton?.id ?? null);
           setForm({ ...form, courseId, teacherClerkUserId: '', title: skeleton?.title ?? '', body: skeleton?.body ?? '', url: skeleton?.url ?? '', lessonDays: skeleton?.lessonDays ?? [], lessonTime: skeleton?.lessonTime ?? '' });
+          setDayTimes(parseDayTimes(skeleton?.lessonTime, skeleton?.lessonDays ?? []));
           setCourseLinks({ pdfUrl: '', telegramUrl: '', zoomUrl: '', googleMeetUrl: '', lessonUrl: '' });
         }} data-testid="select-resource-course">
            <option value="">Dərs seçin</option>
@@ -2411,13 +2417,14 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
               ? teachersQuery.data.find((teacher) => teacher.clerkUserId === resource.teacherClerkUserId)?.displayName
               : resource.teacherName
               || 'Müəllim təyin edilməyib';
-            const days = resource.lessonDays.length ? resource.lessonDays.map((day) => lessonDayOptions.find(([value]) => value === day)?.[1] ?? day).join(', ') : 'Gün yoxdur';
-            return `${teacherName} · ${days} · ${resource.lessonTime || 'Saat yoxdur'}`;
+            const days = resource.lessonDays.length ? resource.lessonDays.map((day) => `${lessonDayOptions.find(([value]) => value === day)?.[1] ?? day} ${parseDayTimes(resource.lessonTime, [day])[day] || '—'}`).join(', ') : 'Gün yoxdur';
+            const shownTime = resource.lessonTime?.startsWith('{') ? '' : (resource.lessonTime || 'Saat yoxdur');
+            return shownTime ? `${teacherName} · ${days} · ${shownTime}` : `${teacherName} · ${days}`;
           })
           .filter((value, index, values) => values.indexOf(value) === index);
         return (
           <div className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-3" data-testid="section-course-assigned-teachers">
-             <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-black text-[hsl(var(--primary))]">Bu fənnin müəllimləri · {form.termNumber}-ci semestr</p><button type="button" className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-[11px] font-bold text-[hsl(var(--primary-foreground))]" onClick={() => { const source = (resourcesQuery.data ?? []).find((resource) => resource.courseId === Number(form.courseId) && resource.termNumber === form.termNumber); setIsAddingAssignment(true); setEditingId(null); setForm((current) => ({ ...current, courseId: String(current.courseId), termNumber: form.termNumber, title: source?.title || current.title, body: source?.body || current.body, url: '', teacherClerkUserId: '', lessonDays: source?.lessonDays?.length ? [...source.lessonDays] : current.lessonDays, lessonTime: source?.lessonTime || current.lessonTime, isMandatory: source?.isMandatory ?? current.isMandatory, studentCapacity: 0 })); setSelectedStudentIds([]); setNotice('Eyni fənnə yeni müəllim əlavə olunur. Gün və saatı yoxlayıb müəllimi seçin.'); }} data-testid="button-add-another-course-teacher">+ Başqa müəllim əlavə et</button></div>
+             <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-black text-[hsl(var(--primary))]">Bu fənnin müəllimləri · {form.termNumber}-ci semestr</p><button type="button" className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-[11px] font-bold text-[hsl(var(--primary-foreground))]" onClick={() => { const source = (resourcesQuery.data ?? []).find((resource) => resource.courseId === Number(form.courseId) && resource.termNumber === form.termNumber); setIsAddingAssignment(true); setEditingId(null); const nextDays = source?.lessonDays?.length ? [...source.lessonDays] : form.lessonDays; setForm((current) => ({ ...current, courseId: String(current.courseId), termNumber: form.termNumber, title: source?.title || current.title, body: source?.body || current.body, url: '', teacherClerkUserId: '', lessonDays: nextDays, lessonTime: source?.lessonTime || current.lessonTime, isMandatory: source?.isMandatory ?? current.isMandatory, studentCapacity: 0 })); setDayTimes(parseDayTimes(source?.lessonTime, nextDays)); setSelectedStudentIds([]); setNotice('Eyni fənnə yeni müəllim əlavə olunur. Gün və saatı yoxlayıb müəllimi seçin.'); }} data-testid="button-add-another-course-teacher">+ Başqa müəllim əlavə et</button></div>
              {assignedTeachers.length > 0
                ? <div className="mt-2 flex flex-wrap gap-2">{assignedTeachers.map((teacher) => <span key={teacher} className="rounded-lg bg-[hsl(var(--card))] px-3 py-2 text-xs font-semibold text-[hsl(var(--primary))]">{teacher}</span>)}</div>
                : <p className="mt-2 text-xs font-semibold text-[hsl(var(--muted-foreground))]">Bu semestr üçün bu dərsə hələ müəllim seçilməyib.</p>}
@@ -2467,16 +2474,22 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
           <option value="optional">İxtiyari dərs</option>
         </select>
       </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Həftənin dərs günləri" hint="Bir neçə gün seçə bilərsiniz.">
-          <div className="grid grid-cols-2 gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
-            {lessonDayOptions.map(([value, label]) => <label key={value} className="flex items-center gap-2 text-xs font-semibold text-[hsl(var(--primary))]"><input type="checkbox" checked={form.lessonDays.includes(value)} onChange={(event) => setForm({ ...form, lessonDays: event.target.checked ? [...form.lessonDays, value] : form.lessonDays.filter((day) => day !== value) })} />{label}</label>)}
-          </div>
-        </Field>
-        <Field label="Dərs saatı">
-          <input required type="time" className={inputClass} value={form.lessonTime} onChange={(e) => setForm({ ...form, lessonTime: e.target.value })} data-testid="input-resource-lesson-time" />
-        </Field>
-      </div>
+      <Field label="Həftənin dərs günləri" hint="Bir neçə gün seçə bilərsiniz. Hər günün saatı ayrı yazılır.">
+        <div className="space-y-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
+          {lessonDayOptions.map(([value, label]) => {
+            const selected = form.lessonDays.includes(value);
+            return (
+              <div key={value} className="flex flex-wrap items-center gap-3">
+                <label className="flex min-w-36 items-center gap-2 text-xs font-semibold text-[hsl(var(--primary))]">
+                  <input type="checkbox" checked={selected} onChange={(event) => setForm({ ...form, lessonDays: event.target.checked ? [...form.lessonDays, value] : form.lessonDays.filter((day) => day !== value) })} />
+                  {label}
+                </label>
+                {selected && <input required type="time" className={`${inputClass} max-w-40`} value={dayTimes[value] ?? ''} onChange={(event) => setDayTimes((current) => ({ ...current, [value]: event.target.value }))} aria-label={`${label} saatı`} data-testid={`input-resource-day-time-${value}`} />}
+              </div>
+            );
+          })}
+        </div>
+      </Field>
       <div className="grid gap-4 sm:grid-cols-2">
        <Field label="Kitab adı" hint="İstəyə bağlıdır."><input className={inputClass} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Məsələn, Təcvid qaydaları" data-testid="input-resource-title" /></Field>
       </div>
@@ -2492,7 +2505,7 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
         <div className="flex justify-end gap-2">{editingId !== null && <button type="button" className="focus-ring rounded-xl px-4 py-3 text-sm font-bold text-[hsl(var(--muted-foreground))]" onClick={() => { setEditingId(null); setForm({ courseId: '', termNumber: 1, kind: ResourceInputKind.material, title: '', body: '', url: '', lessonDays: [], lessonTime: '', isMandatory: true, teacherClerkUserId: '', studentCapacity: 0 }); }}>Ləğv et</button>}<button type="submit" className={buttonClass} disabled={isSaving || mutation.isPending || coursesQuery.isLoading || teachersQuery.isLoading} data-testid="button-create-resource"><FilePlus2 size={16} /> {isSaving ? 'Yadda saxlanılır...' : editingId === null ? 'Dərsi əlavə et' : 'Dəyişiklikləri saxla'}</button></div>
       <FormNotice text={notice} error={notice.includes('bil') || notice.includes('olmaya')} />
     </form>
-      <div className="mt-8 border-t border-[hsl(var(--border))] pt-6"><button type="button" onClick={() => setShowSelectedSubjects((current) => !current)} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--accent))] px-4 py-3 text-sm font-black text-[hsl(var(--primary))] shadow-[0_4px_0_hsl(37_83%_52%)]" aria-expanded={showSelectedSubjects} data-testid="button-show-selected-subjects"><BookOpen size={16} /> Seçili fənlər</button>{showSelectedSubjects && <div className="mt-4 rounded-2xl border-2 border-[hsl(var(--accent)/.6)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-selected-subjects"><p className="text-sm font-black text-[hsl(var(--primary))]">Hazırda seçili fənlər</p>{resourcesQuery.data?.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{resourcesQuery.data.map((resource) => <div key={resource.id} className="rounded-xl bg-[hsl(var(--card))] p-3"><p className="text-sm font-bold text-[hsl(var(--primary))]">{coursesQuery.data?.find((course) => course.id === resource.courseId)?.title ?? 'Fənn'}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{resource.teacherName ?? 'Müəllim təyin edilməyib'} · {resource.termNumber}-ci semestr</p></div>)}</div> : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Hələ seçili fənn yoxdur.</p>}</div>}<div className="mt-4"><h4 className="font-serif text-xl text-[hsl(var(--primary))]">Semestr fənləri</h4>{resourcesQuery.isLoading ? <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Fənlər yüklənir...</p> : resourcesQuery.data?.length ? <div className="mt-3 space-y-2">{resourcesQuery.data.map((resource) => <div key={resource.id} className="flex items-start justify-between gap-3 rounded-xl bg-[hsl(var(--muted)/.5)] p-3"><div className="min-w-0"><p className="text-sm font-bold text-[hsl(var(--primary))]"><span className="text-[hsl(var(--secondary-foreground))]">{resource.teacherName ? `Müəllim: ${resource.teacherName}` : 'Müəllim təyin edilməyib'}</span> · {coursesQuery.data?.find((course) => course.id === resource.courseId)?.title ?? 'Fənn'}</p><p className="text-xs text-[hsl(var(--muted-foreground))]">{resource.title} · {resource.termNumber}-ci semestr · {resource.isMandatory ? 'İcbari' : 'İxtiyari'} · {resource.studentCapacity} tələbəlik qrup · {resource.lessonDays.length ? resource.lessonDays.map((day) => lessonDayOptions.find(([value]) => value === day)?.[1]).join(', ') : 'Gün təyin edilməyib'} · {resource.lessonTime || 'Saat təyin edilməyib'}</p></div><div className="flex shrink-0 gap-1"><button type="button" className="focus-ring rounded-lg p-2 text-[hsl(var(--secondary-foreground))] hover:bg-[hsl(var(--card))]" aria-label="Fənni redaktə et" onClick={() => { setEditingId(resource.id); setForm({ courseId: String(resource.courseId), termNumber: resource.termNumber, kind: resource.kind as ResourceInputKind, title: resource.title, body: resource.body, url: resource.url ?? '', lessonDays: resource.lessonDays, lessonTime: resource.lessonTime ?? '', isMandatory: resource.isMandatory, teacherClerkUserId: resource.teacherClerkUserId ?? '', studentCapacity: resource.studentCapacity }); }}><Pencil size={15} /></button><button type="button" className="focus-ring rounded-lg p-2 text-[hsl(var(--destructive))] hover:bg-[hsl(var(--card))]" aria-label="Fənni sil" onClick={async () => { if (!window.confirm('Bu fənni semestrdən silmək istədiyinizə əminsiniz?')) return; const response = await fetch(apiUrl(`/admin/resources/${resource.id}`), { method: 'DELETE' }); if (!response.ok) { setNotice('Fənn silinə bilmədi.'); return; } await queryClient.invalidateQueries({ queryKey: getGetAdminResourcesQueryKey() }); await queryClient.invalidateQueries({ queryKey: getGetCoursesQueryKey() }); setNotice('Fənn semestrdən silindi.'); }}><Trash2 size={15} /></button></div></div>)}</div> : <p className="mt-3 rounded-xl border border-dashed border-[hsl(var(--border))] p-4 text-center text-xs text-[hsl(var(--muted-foreground))]">Hələ semestr fənni əlavə edilməyib.</p>}</div></div>
+      <div className="mt-8 border-t border-[hsl(var(--border))] pt-6"><button type="button" onClick={() => setShowSelectedSubjects((current) => !current)} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--accent))] px-4 py-3 text-sm font-black text-[hsl(var(--primary))] shadow-[0_4px_0_hsl(37_83%_52%)]" aria-expanded={showSelectedSubjects} data-testid="button-show-selected-subjects"><BookOpen size={16} /> Seçili fənlər</button>{showSelectedSubjects && <div className="mt-4 rounded-2xl border-2 border-[hsl(var(--accent)/.6)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-selected-subjects"><p className="text-sm font-black text-[hsl(var(--primary))]">Hazırda seçili fənlər</p>{resourcesQuery.data?.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{resourcesQuery.data.map((resource) => <div key={resource.id} className="rounded-xl bg-[hsl(var(--card))] p-3"><p className="text-sm font-bold text-[hsl(var(--primary))]">{coursesQuery.data?.find((course) => course.id === resource.courseId)?.title ?? 'Fənn'}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{resource.teacherName ?? 'Müəllim təyin edilməyib'} · {resource.termNumber}-ci semestr</p></div>)}</div> : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Hələ seçili fənn yoxdur.</p>}</div>}<div className="mt-4"><h4 className="font-serif text-xl text-[hsl(var(--primary))]">Semestr fənləri</h4>{resourcesQuery.isLoading ? <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Fənlər yüklənir...</p> : resourcesQuery.data?.length ? <div className="mt-3 space-y-2">{resourcesQuery.data.map((resource) => <div key={resource.id} className="flex items-start justify-between gap-3 rounded-xl bg-[hsl(var(--muted)/.5)] p-3"><div className="min-w-0"><p className="text-sm font-bold text-[hsl(var(--primary))]"><span className="text-[hsl(var(--secondary-foreground))]">{resource.teacherName ? `Müəllim: ${resource.teacherName}` : 'Müəllim təyin edilməyib'}</span> · {coursesQuery.data?.find((course) => course.id === resource.courseId)?.title ?? 'Fənn'}</p><p className="text-xs text-[hsl(var(--muted-foreground))]">{resource.title} · {resource.termNumber}-ci semestr · {resource.isMandatory ? 'İcbari' : 'İxtiyari'} · {resource.studentCapacity} tələbəlik qrup · {resource.lessonDays.length ? resource.lessonDays.map((day) => `${lessonDayOptions.find(([value]) => value === day)?.[1] ?? day} ${parseDayTimes(resource.lessonTime, [day])[day] || '—'}`).join(', ') : 'Gün təyin edilməyib'}</p></div><div className="flex shrink-0 gap-1"><button type="button" className="focus-ring rounded-lg p-2 text-[hsl(var(--secondary-foreground))] hover:bg-[hsl(var(--card))]" aria-label="Fənni redaktə et" onClick={() => { setEditingId(resource.id); setDayTimes(parseDayTimes(resource.lessonTime, resource.lessonDays)); setForm({ courseId: String(resource.courseId), termNumber: resource.termNumber, kind: resource.kind as ResourceInputKind, title: resource.title, body: resource.body, url: resource.url ?? '', lessonDays: resource.lessonDays, lessonTime: resource.lessonTime ?? '', isMandatory: resource.isMandatory, teacherClerkUserId: resource.teacherClerkUserId ?? '', studentCapacity: resource.studentCapacity }); }}><Pencil size={15} /></button><button type="button" className="focus-ring rounded-lg p-2 text-[hsl(var(--destructive))] hover:bg-[hsl(var(--card))]" aria-label="Fənni sil" onClick={async () => { if (!window.confirm('Bu fənni semestrdən silmək istədiyinizə əminsiniz?')) return; const response = await fetch(apiUrl(`/admin/resources/${resource.id}`), { method: 'DELETE' }); if (!response.ok) { setNotice('Fənn silinə bilmədi.'); return; } await queryClient.invalidateQueries({ queryKey: getGetAdminResourcesQueryKey() }); await queryClient.invalidateQueries({ queryKey: getGetCoursesQueryKey() }); setNotice('Fənn semestrdən silindi.'); }}><Trash2 size={15} /></button></div></div>)}</div> : <p className="mt-3 rounded-xl border border-dashed border-[hsl(var(--border))] p-4 text-center text-xs text-[hsl(var(--muted-foreground))]">Hələ semestr fənni əlavə edilməyib.</p>}</div></div>
     </div>
   );
 }
@@ -2685,7 +2698,7 @@ function TeacherSchedule({ ownerName }: { ownerName: string }) {
   const schedule = lessonDayOptions.map(([day, label]) => ({
     day,
     label,
-    lessons: lessons.filter((resource) => resource.lessonDays.includes(day)).sort((a, b) => (a.lessonTime ?? '99:99').localeCompare(b.lessonTime ?? '99:99') || a.termNumber - b.termNumber),
+    lessons: lessons.filter((resource) => resource.lessonDays.includes(day)).sort((a, b) => (parseDayTimes(a.lessonTime, [day])[day] || '99:99').localeCompare(parseDayTimes(b.lessonTime, [day])[day] || '99:99') || a.termNumber - b.termNumber),
   }));
   const activeDay = selectedDay ?? todayKey;
   const selected = schedule.find((item) => item.day === activeDay) ?? schedule[0];
@@ -2697,7 +2710,7 @@ function TeacherSchedule({ ownerName }: { ownerName: string }) {
     setLinkOnlyOpen(false);
     setNotice('');
     setPdfFile(null);
-    setEditForm({ title: lesson.title, body: lesson.body, url: lesson.url ?? '', lessonTime: lesson.lessonTime ?? '', lessonDays: lesson.lessonDays });
+    setEditForm({ title: lesson.title, body: lesson.body, url: lesson.url ?? '', lessonTime: parseDayTimes(lesson.lessonTime, [activeDay])[activeDay] || parseDayTimes(lesson.lessonTime, lesson.lessonDays)[lesson.lessonDays[0]] || '', lessonDays: lesson.lessonDays });
     void fetch(apiUrl(`/admin/courses/${lesson.courseId}`))
       .then((response) => response.ok ? response.json() as Promise<{ telegramUrl?: string | null; zoomUrl?: string | null; googleMeetUrl?: string | null; lessonUrl?: string | null }> : Promise.reject())
       .then((course) => setCourseLinks({
@@ -2752,6 +2765,7 @@ function TeacherSchedule({ ownerName }: { ownerName: string }) {
         if (!uploaded.ok) throw new Error('PDF faylı yüklənə bilmədi.');
         materialUrl = upload.objectPath;
       }
+      const lessonDayTimes = lessonTimesForSave(selectedLesson.lessonTime, editForm.lessonDays, activeDay, editForm.lessonTime);
       const response = await fetch(apiUrl(`/admin/resources/${selectedLesson.id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -2764,6 +2778,7 @@ function TeacherSchedule({ ownerName }: { ownerName: string }) {
           url: materialUrl,
           lessonDays: editForm.lessonDays,
           lessonTime: editForm.lessonTime,
+          lessonDayTimes,
           isMandatory: selectedLesson.isMandatory,
           teacherClerkUserId: selectedLesson.teacherClerkUserId,
         }),
@@ -2783,7 +2798,7 @@ function TeacherSchedule({ ownerName }: { ownerName: string }) {
       const courseResult = await courseResponse.json() as { error?: string };
       if (!courseResponse.ok) throw new Error(courseResult.error || 'Dərs keçid linkləri yenilənə bilmədi.');
       await Promise.all(Array.from({ length: 8 }, (_, index) => index + 1).map((termNumber) => queryClient.invalidateQueries({ queryKey: ['get', 'admin', 'teacher-schedule', { termNumber }] })));
-      setSelectedLesson({ ...selectedLesson, title: editForm.title.trim(), body: editForm.body.trim(), url: materialUrl, lessonDays: editForm.lessonDays as LearningResource['lessonDays'], lessonTime: editForm.lessonTime });
+      setSelectedLesson({ ...selectedLesson, title: editForm.title.trim(), body: editForm.body.trim(), url: materialUrl, lessonDays: editForm.lessonDays as LearningResource['lessonDays'], lessonTime: Object.values(lessonDayTimes).every((time) => time === editForm.lessonTime) ? editForm.lessonTime : JSON.stringify(lessonDayTimes) });
       setEditing(false);
       setPdfFile(null);
       if (pdfInput.current) pdfInput.current.value = '';
@@ -2798,7 +2813,7 @@ function TeacherSchedule({ ownerName }: { ownerName: string }) {
        {selectedLesson && linkOnlyOpen && !editing && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teacher-course-links-standalone"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">Yalnız linkləri redaktə et</p><button type="button" onClick={() => setLinkOnlyOpen(false)} className="focus-ring rounded-lg px-2 py-1 text-xs font-bold text-[hsl(var(--muted-foreground))]">Bağla</button></div><div className="mt-3"><TeacherCourseLinksEditor links={courseLinks} onChange={(key, value) => setCourseLinks((current) => ({ ...current, [key]: value }))} /></div><button type="button" onClick={() => void saveCourseLinks()} className={`${buttonClass} mt-3`} data-testid="button-save-standalone-course-links"><Link2 size={15} /> Yalnız linkləri yadda saxla</button></section>}
        {notice && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800" data-testid="text-lesson-save-notice">{notice}</p>}
        <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Mənim dərslərim</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Həftəlik cədvəl</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">1-ci, 2-ci, 3-cü və 4-cü semestrlər üzrə sizə təyin edilmiş dərslər görünür.</p></div><button type="button" disabled={!selectedLesson} onClick={openLessonLinks} className={`${buttonClass} ${selectedLesson ? 'bg-[hsl(var(--secondary-foreground))]' : 'bg-[hsl(var(--muted-foreground))]'}`} data-testid="button-my-schedule-links"><Link2 size={16} /> Yalnız linklər</button></div>
-       {isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Cədvəl yüklənir...</p> : <><div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">{schedule.map(({ day, label, lessons }) => <button key={day} type="button" onClick={() => setSelectedDay(day)} className={`focus-ring rounded-2xl border px-2 py-3 text-center ${day === activeDay ? 'border-transparent bg-[hsl(var(--accent))] text-[hsl(var(--primary))] shadow-[var(--shadow-xs)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]'}`} data-testid={`button-teacher-schedule-day-${day}`}><span className="block text-xs font-black">{label}</span><span className="mt-1 block text-[10px] font-semibold opacity-70">{lessons.length ? `${lessons.length} dərs` : 'Dərs yoxdur'}</span></button>)}</div><div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-4" data-testid="section-teacher-selected-schedule"><p className="flex items-center gap-2 text-xs font-black text-[hsl(var(--primary))]"><CalendarDays size={14} /> {selected?.label} günü</p>{selected?.lessons.length ? <div className="mt-3 space-y-2">{selected.lessons.map((lesson) => <button key={lesson.id} type="button" onClick={() => openLesson(lesson)} className="focus-ring flex w-full items-center justify-between gap-3 rounded-lg bg-[hsl(var(--card))] px-3 py-3 text-left hover:bg-[hsl(var(--secondary)/.25)]"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{lesson.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{lesson.termNumber}-ci semestr · {lesson.teacherClerkUserId === user?.id || lesson.teacherName?.toLowerCase() === 'sistem sahibi' ? currentUserName : (lesson.teacherName ?? 'Müəllim təyin edilməyib')}</p></div><span className="rounded-lg bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-sm font-black text-[hsl(var(--secondary-foreground))]">{lesson.lessonTime ?? '—'}</span></button>)}</div> : <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Bu gün üçün dərs yoxdur.</p>}</div>{selectedLesson && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teacher-lesson-details"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{selectedLesson.termNumber}-ci semestr · {selectedLesson.lessonTime ?? 'Saat təyin edilməyib'}</p><h4 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{selectedLesson.title}</h4></div><div className="flex gap-2"><button type="button" onClick={openLessonLinks} className={`${buttonClass} bg-[hsl(var(--secondary-foreground))]`} data-testid="button-open-scheduled-lesson-links"><Link2 size={15} /> Yalnız linklər</button><button type="button" onClick={() => { setEditing((value) => !value); setLinkOnlyOpen(false); }} className={buttonClass} data-testid="button-edit-scheduled-lesson"><Pencil size={15} /> {editing ? 'Baxışa qayıt' : 'Redaktə et'}</button></div></div>{editing ? <form onSubmit={saveLesson} className="mt-4 space-y-4"><Field label="Dərsin adı"><input required className={inputClass} value={editForm.title} onChange={(event) => setEditForm({ ...editForm, title: event.target.value })} /></Field><Field label="Dərs haqqında geniş məlumat"><textarea required rows={5} className={`${inputClass} resize-y`} value={editForm.body} onChange={(event) => setEditForm({ ...editForm, body: event.target.value })} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Həftənin günləri"><div className="grid grid-cols-2 gap-2 rounded-xl border border-[hsl(var(--border))] p-3">{lessonDayOptions.map(([day, label]) => <label key={day} className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={editForm.lessonDays.includes(day)} onChange={(event) => setEditForm({ ...editForm, lessonDays: event.target.checked ? [...editForm.lessonDays, day] : editForm.lessonDays.filter((item) => item !== day) })} />{label}</label>)}</div></Field><Field label="Saat"><input required type="time" className={inputClass} value={editForm.lessonTime} onChange={(event) => setEditForm({ ...editForm, lessonTime: event.target.value })} /></Field></div><Field label="PDF və ya material linki"><input type="text" className={inputClass} value={editForm.url} onChange={(event) => setEditForm({ ...editForm, url: event.target.value })} placeholder="Mövcud link" /><input ref={pdfInput} type="file" accept="application/pdf,.pdf" className="mt-2 block w-full text-xs" onChange={(event) => { const file = event.target.files?.[0] ?? null; setPdfFile(file); }} data-testid="input-schedule-pdf-file" />{pdfFile && <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{pdfFile.name} — yadda saxlanarkən dəyişdiriləcək</p>}</Field><button type="submit" className={buttonClass}>Yadda saxla</button>{notice && <p className="text-xs font-semibold">{notice}</p>}</form> : <div className="mt-4 space-y-3"><p className="whitespace-pre-wrap text-sm leading-6 text-[hsl(var(--muted-foreground))]">{selectedLesson.body || 'Bu dərs üçün əlavə məlumat yazılmayıb.'}</p>{selectedLesson.url && <a href={selectedLesson.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-[hsl(var(--secondary-foreground))]">Materialı aç</a>}{notice && <p className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}</div>}</section>}</>}
+       {isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Cədvəl yüklənir...</p> : <><div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">{schedule.map(({ day, label, lessons }) => <button key={day} type="button" onClick={() => setSelectedDay(day)} className={`focus-ring rounded-2xl border px-2 py-3 text-center ${day === activeDay ? 'border-transparent bg-[hsl(var(--accent))] text-[hsl(var(--primary))] shadow-[var(--shadow-xs)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]'}`} data-testid={`button-teacher-schedule-day-${day}`}><span className="block text-xs font-black">{label}</span><span className="mt-1 block text-[10px] font-semibold opacity-70">{lessons.length ? `${lessons.length} dərs` : 'Dərs yoxdur'}</span></button>)}</div><div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-4" data-testid="section-teacher-selected-schedule"><p className="flex items-center gap-2 text-xs font-black text-[hsl(var(--primary))]"><CalendarDays size={14} /> {selected?.label} günü</p>{selected?.lessons.length ? <div className="mt-3 space-y-2">{selected.lessons.map((lesson) => <button key={lesson.id} type="button" onClick={() => openLesson(lesson)} className="focus-ring flex w-full items-center justify-between gap-3 rounded-lg bg-[hsl(var(--card))] px-3 py-3 text-left hover:bg-[hsl(var(--secondary)/.25)]"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{lesson.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{lesson.termNumber}-ci semestr · {lesson.teacherClerkUserId === user?.id || lesson.teacherName?.toLowerCase() === 'sistem sahibi' ? currentUserName : (lesson.teacherName ?? 'Müəllim təyin edilməyib')}</p></div><span className="rounded-lg bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-sm font-black text-[hsl(var(--secondary-foreground))]">{parseDayTimes(lesson.lessonTime, [activeDay])[activeDay] || '—'}</span></button>)}</div> : <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Bu gün üçün dərs yoxdur.</p>}</div>{selectedLesson && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teacher-lesson-details"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{selectedLesson.termNumber}-ci semestr · {parseDayTimes(selectedLesson.lessonTime, [activeDay])[activeDay] || 'Saat təyin edilməyib'}</p><h4 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{selectedLesson.title}</h4></div><div className="flex gap-2"><button type="button" onClick={openLessonLinks} className={`${buttonClass} bg-[hsl(var(--secondary-foreground))]`} data-testid="button-open-scheduled-lesson-links"><Link2 size={15} /> Yalnız linklər</button><button type="button" onClick={() => { setEditing((value) => !value); setLinkOnlyOpen(false); }} className={buttonClass} data-testid="button-edit-scheduled-lesson"><Pencil size={15} /> {editing ? 'Baxışa qayıt' : 'Redaktə et'}</button></div></div>{editing ? <form onSubmit={saveLesson} className="mt-4 space-y-4"><Field label="Dərsin adı"><input required className={inputClass} value={editForm.title} onChange={(event) => setEditForm({ ...editForm, title: event.target.value })} /></Field><Field label="Dərs haqqında geniş məlumat"><textarea required rows={5} className={`${inputClass} resize-y`} value={editForm.body} onChange={(event) => setEditForm({ ...editForm, body: event.target.value })} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Həftənin günləri"><div className="grid grid-cols-2 gap-2 rounded-xl border border-[hsl(var(--border))] p-3">{lessonDayOptions.map(([day, label]) => <label key={day} className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={editForm.lessonDays.includes(day)} onChange={(event) => setEditForm({ ...editForm, lessonDays: event.target.checked ? [...editForm.lessonDays, day] : editForm.lessonDays.filter((item) => item !== day) })} />{label}</label>)}</div></Field><Field label="Saat"><input required type="time" className={inputClass} value={editForm.lessonTime} onChange={(event) => setEditForm({ ...editForm, lessonTime: event.target.value })} /></Field></div><Field label="PDF və ya material linki"><input type="text" className={inputClass} value={editForm.url} onChange={(event) => setEditForm({ ...editForm, url: event.target.value })} placeholder="Mövcud link" /><input ref={pdfInput} type="file" accept="application/pdf,.pdf" className="mt-2 block w-full text-xs" onChange={(event) => { const file = event.target.files?.[0] ?? null; setPdfFile(file); }} data-testid="input-schedule-pdf-file" />{pdfFile && <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{pdfFile.name} — yadda saxlanarkən dəyişdiriləcək</p>}</Field><button type="submit" className={buttonClass}>Yadda saxla</button>{notice && <p className="text-xs font-semibold">{notice}</p>}</form> : <div className="mt-4 space-y-3"><p className="whitespace-pre-wrap text-sm leading-6 text-[hsl(var(--muted-foreground))]">{selectedLesson.body || 'Bu dərs üçün əlavə məlumat yazılmayıb.'}</p>{selectedLesson.url && <a href={selectedLesson.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-[hsl(var(--secondary-foreground))]">Materialı aç</a>}{notice && <p className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}</div>}</section>}</>}
     </section>
   );
 }
@@ -2820,7 +2835,7 @@ function TeachersSchedule({ ownerName }: { ownerName: string }) {
     label,
     lessons: (resourcesQuery.data ?? [])
       .filter((resource) => resource.lessonDays.includes(day))
-      .sort((a, b) => (a.lessonTime ?? '99:99').localeCompare(b.lessonTime ?? '99:99') || a.termNumber - b.termNumber)
+      .sort((a, b) => (parseDayTimes(a.lessonTime, [day])[day] || '99:99').localeCompare(parseDayTimes(b.lessonTime, [day])[day] || '99:99') || a.termNumber - b.termNumber)
       .map((lesson) => ({ ...lesson, teacherName: lesson.teacherName?.trim().toLowerCase() === 'sistem sahibi' ? ownerName : lesson.teacherName })),
   }));
   const selected = schedule.find((item) => item.day === activeDay) ?? schedule[0];
@@ -2830,7 +2845,7 @@ function TeachersSchedule({ ownerName }: { ownerName: string }) {
     setEditing(false);
     setLinkOnlyOpen(false);
     setNotice('');
-    setEditForm({ title: lesson.title, body: lesson.body, url: lesson.url ?? '', lessonTime: lesson.lessonTime ?? '', lessonDays: lesson.lessonDays });
+    setEditForm({ title: lesson.title, body: lesson.body, url: lesson.url ?? '', lessonTime: parseDayTimes(lesson.lessonTime, [activeDay])[activeDay] || parseDayTimes(lesson.lessonTime, lesson.lessonDays)[lesson.lessonDays[0]] || '', lessonDays: lesson.lessonDays });
     void fetch(apiUrl(`/admin/courses/${lesson.courseId}`))
       .then((response) => response.ok ? response.json() as Promise<Partial<TeacherCourseLinks>> : Promise.reject())
       .then((course) => setCourseLinks({
@@ -2868,15 +2883,16 @@ function TeachersSchedule({ ownerName }: { ownerName: string }) {
       return;
     }
     try {
+      const lessonDayTimes = lessonTimesForSave(selectedLesson.lessonTime, editForm.lessonDays, activeDay, editForm.lessonTime);
       const response = await fetch(apiUrl(`/admin/resources/${selectedLesson.id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ courseId: selectedLesson.courseId, termNumber: selectedLesson.termNumber, kind: selectedLesson.kind, title: editForm.title.trim(), body: editForm.body.trim(), url: editForm.url.trim() || null, lessonDays: editForm.lessonDays, lessonTime: editForm.lessonTime, isMandatory: selectedLesson.isMandatory, teacherClerkUserId: selectedLesson.teacherClerkUserId }),
+        body: JSON.stringify({ courseId: selectedLesson.courseId, termNumber: selectedLesson.termNumber, kind: selectedLesson.kind, title: editForm.title.trim(), body: editForm.body.trim(), url: editForm.url.trim() || null, lessonDays: editForm.lessonDays, lessonTime: editForm.lessonTime, lessonDayTimes, isMandatory: selectedLesson.isMandatory, teacherClerkUserId: selectedLesson.teacherClerkUserId }),
       });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || 'Dərs yenilənə bilmədi.');
       await queryClient.invalidateQueries({ queryKey: getGetAdminResourcesQueryKey() });
-      setSelectedLesson({ ...selectedLesson, title: editForm.title.trim(), body: editForm.body.trim(), url: editForm.url.trim() || null, lessonDays: editForm.lessonDays as LearningResource['lessonDays'], lessonTime: editForm.lessonTime });
+      setSelectedLesson({ ...selectedLesson, title: editForm.title.trim(), body: editForm.body.trim(), url: editForm.url.trim() || null, lessonDays: editForm.lessonDays as LearningResource['lessonDays'], lessonTime: Object.values(lessonDayTimes).every((time) => time === editForm.lessonTime) ? editForm.lessonTime : JSON.stringify(lessonDayTimes) });
       setEditing(false);
       setNotice('Dərs məlumatları yadda saxlanıldı.');
     } catch (error) {
@@ -2890,7 +2906,7 @@ function TeachersSchedule({ ownerName }: { ownerName: string }) {
       {selectedLesson && <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setLinkOnlyOpen((value) => !value)} className={`${buttonClass} bg-[hsl(var(--secondary-foreground))]`} data-testid="button-open-teachers-schedule-links"><Link2 size={15} /> Yalnız linklər</button></div>}
        {notice && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800" data-testid="text-teachers-lesson-save-notice">{notice}</p>}
       {selectedLesson && linkOnlyOpen && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teachers-schedule-links"><TeacherCourseLinksEditor links={courseLinks} onChange={(key, value) => setCourseLinks((current) => ({ ...current, [key]: value }))} /><button type="button" onClick={() => void saveCourseLinks()} className={`${buttonClass} mt-3`} data-testid="button-save-teachers-schedule-links"><Link2 size={15} /> Yalnız linkləri yadda saxla</button></section>}
-       {resourcesQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Müəllimlər cədvəli yüklənir...</p> : <><div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-7">{schedule.map(({ day, label, lessons }) => <button key={day} type="button" onClick={() => setSelectedDay(day)} className={`focus-ring rounded-xl border px-2 py-3 text-center ${day === activeDay ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent))] text-[hsl(var(--primary))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]'}`}><span className="block text-xs font-black">{label}</span><span className="mt-1 block text-[10px]">{lessons.length ? `${lessons.length} dərs` : 'Dərs yoxdur'}</span></button>)}</div><div className="rounded-xl border border-[hsl(var(--border))] p-4" data-testid="section-teachers-selected-schedule"><p className="text-xs font-black text-[hsl(var(--primary))]">{selected?.label} günü</p>{selected?.lessons.length ? <div className="mt-3 space-y-2">{selected.lessons.map((lesson) => <button key={lesson.id} type="button" onClick={() => openLesson(lesson)} className="focus-ring flex w-full flex-wrap items-center justify-between gap-3 rounded-lg bg-[hsl(var(--muted)/.45)] px-3 py-3 text-left hover:bg-[hsl(var(--secondary)/.25)]"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{lesson.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{lesson.teacherName ?? 'Müəllim təyin edilməyib'} · {lesson.termNumber}-ci semestr</p><p className="mt-1 line-clamp-2 text-xs text-[hsl(var(--muted-foreground))]">{lesson.body}</p></div><span className="rounded-lg bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-sm font-black text-[hsl(var(--secondary-foreground))]">{lesson.lessonTime ?? '—'}</span></button>)}</div> : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Bu gün üçün dərs yoxdur.</p>}</div>{selectedLesson && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teachers-lesson-details"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{selectedLesson.teacherName ?? 'Müəllim'} · {selectedLesson.termNumber}-ci semestr · {selectedLesson.lessonTime ?? '—'}</p><h4 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{selectedLesson.title}</h4></div><button type="button" onClick={() => setEditing((value) => !value)} className={buttonClass} data-testid="button-edit-teachers-lesson"><Pencil size={15} /> {editing ? 'Baxışa qayıt' : 'Redaktə et'}</button></div>{editing ? <form onSubmit={saveLesson} className="mt-4 space-y-4"><Field label="Dərsin adı"><input required className={inputClass} value={editForm.title} onChange={(event) => setEditForm({ ...editForm, title: event.target.value })} /></Field><Field label="Dərs haqqında məlumat"><textarea required rows={5} className={`${inputClass} resize-y`} value={editForm.body} onChange={(event) => setEditForm({ ...editForm, body: event.target.value })} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Həftənin günləri"><div className="grid grid-cols-2 gap-2 rounded-xl border border-[hsl(var(--border))] p-3">{lessonDayOptions.map(([day, label]) => <label key={day} className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={editForm.lessonDays.includes(day)} onChange={(event) => setEditForm({ ...editForm, lessonDays: event.target.checked ? [...editForm.lessonDays, day] : editForm.lessonDays.filter((item) => item !== day) })} />{label}</label>)}</div></Field><Field label="Saat"><input required type="time" className={inputClass} value={editForm.lessonTime} onChange={(event) => setEditForm({ ...editForm, lessonTime: event.target.value })} /></Field></div><Field label="PDF və ya material linki"><input type="text" className={inputClass} value={editForm.url} onChange={(event) => setEditForm({ ...editForm, url: event.target.value })} placeholder="https:// və ya yüklənmiş PDF" /></Field><button type="submit" className={buttonClass}>Yadda saxla</button>{notice && <p className="text-xs font-semibold">{notice}</p>}</form> : <div className="mt-4 space-y-3"><p className="whitespace-pre-wrap text-sm leading-6 text-[hsl(var(--muted-foreground))]">{selectedLesson.body || 'Bu dərs üçün əlavə məlumat yazılmayıb.'}</p>{selectedLesson.url && <a href={selectedLesson.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-[hsl(var(--secondary-foreground))]">Materialı aç</a>}{notice && <p className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}</div>}</section>}</>}
+       {resourcesQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Müəllimlər cədvəli yüklənir...</p> : <><div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-7">{schedule.map(({ day, label, lessons }) => <button key={day} type="button" onClick={() => setSelectedDay(day)} className={`focus-ring rounded-xl border px-2 py-3 text-center ${day === activeDay ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent))] text-[hsl(var(--primary))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]'}`}><span className="block text-xs font-black">{label}</span><span className="mt-1 block text-[10px]">{lessons.length ? `${lessons.length} dərs` : 'Dərs yoxdur'}</span></button>)}</div><div className="rounded-xl border border-[hsl(var(--border))] p-4" data-testid="section-teachers-selected-schedule"><p className="text-xs font-black text-[hsl(var(--primary))]">{selected?.label} günü</p>{selected?.lessons.length ? <div className="mt-3 space-y-2">{selected.lessons.map((lesson) => <button key={lesson.id} type="button" onClick={() => openLesson(lesson)} className="focus-ring flex w-full flex-wrap items-center justify-between gap-3 rounded-lg bg-[hsl(var(--muted)/.45)] px-3 py-3 text-left hover:bg-[hsl(var(--secondary)/.25)]"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{lesson.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{lesson.teacherName ?? 'Müəllim təyin edilməyib'} · {lesson.termNumber}-ci semestr</p><p className="mt-1 line-clamp-2 text-xs text-[hsl(var(--muted-foreground))]">{lesson.body}</p></div><span className="rounded-lg bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-sm font-black text-[hsl(var(--secondary-foreground))]">{parseDayTimes(lesson.lessonTime, [activeDay])[activeDay] || '—'}</span></button>)}</div> : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Bu gün üçün dərs yoxdur.</p>}</div>{selectedLesson && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teachers-lesson-details"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{selectedLesson.teacherName ?? 'Müəllim'} · {selectedLesson.termNumber}-ci semestr · {parseDayTimes(selectedLesson.lessonTime, [activeDay])[activeDay] || '—'}</p><h4 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{selectedLesson.title}</h4></div><button type="button" onClick={() => setEditing((value) => !value)} className={buttonClass} data-testid="button-edit-teachers-lesson"><Pencil size={15} /> {editing ? 'Baxışa qayıt' : 'Redaktə et'}</button></div>{editing ? <form onSubmit={saveLesson} className="mt-4 space-y-4"><Field label="Dərsin adı"><input required className={inputClass} value={editForm.title} onChange={(event) => setEditForm({ ...editForm, title: event.target.value })} /></Field><Field label="Dərs haqqında məlumat"><textarea required rows={5} className={`${inputClass} resize-y`} value={editForm.body} onChange={(event) => setEditForm({ ...editForm, body: event.target.value })} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Həftənin günləri"><div className="grid grid-cols-2 gap-2 rounded-xl border border-[hsl(var(--border))] p-3">{lessonDayOptions.map(([day, label]) => <label key={day} className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={editForm.lessonDays.includes(day)} onChange={(event) => setEditForm({ ...editForm, lessonDays: event.target.checked ? [...editForm.lessonDays, day] : editForm.lessonDays.filter((item) => item !== day) })} />{label}</label>)}</div></Field><Field label="Saat"><input required type="time" className={inputClass} value={editForm.lessonTime} onChange={(event) => setEditForm({ ...editForm, lessonTime: event.target.value })} /></Field></div><Field label="PDF və ya material linki"><input type="text" className={inputClass} value={editForm.url} onChange={(event) => setEditForm({ ...editForm, url: event.target.value })} placeholder="https:// və ya yüklənmiş PDF" /></Field><button type="submit" className={buttonClass}>Yadda saxla</button>{notice && <p className="text-xs font-semibold">{notice}</p>}</form> : <div className="mt-4 space-y-3"><p className="whitespace-pre-wrap text-sm leading-6 text-[hsl(var(--muted-foreground))]">{selectedLesson.body || 'Bu dərs üçün əlavə məlumat yazılmayıb.'}</p>{selectedLesson.url && <a href={selectedLesson.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-[hsl(var(--secondary-foreground))]">Materialı aç</a>}{notice && <p className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}</div>}</section>}</>}
     </section>
   );
 }

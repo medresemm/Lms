@@ -200,7 +200,7 @@ export function AiAssistant({ mode, backHref, backLabel }: { mode: AiAssistantMo
             </div>
             <p className="mt-5 text-xs leading-5 text-[#f4ead5]/55">
               {mode === 'admin'
-                ? 'Tələbələr, müəllimlər, kurslar, müraciətlər, tapşırıqlar, testlər və elanlar üzrə LMS bazasından cavab verirəm — hərf səhvlərini də başa düşürəm.'
+                ? 'Tələbələr, müəllimlər, dərslər, müraciətlər, tapşırıqlar, testlər və elanlar üzrə LMS bazasından cavab verirəm — hərf səhvlərini də başa düşürəm.'
                 : 'Yalnız sizin dərsləriniz, cədvəliniz, tapşırıqlarınız və nəticələriniz əsasında cavab verirəm.'}
             </p>
           </div>

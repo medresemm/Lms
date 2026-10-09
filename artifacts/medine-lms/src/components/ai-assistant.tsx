@@ -596,7 +596,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
         )}
       </div>
 
-      <div className="relative z-10 shrink-0 space-y-2 px-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-1 sm:space-y-3 sm:px-5 sm:pb-5 md:px-7">
+      <div className="relative z-10 shrink-0 space-y-1.5 px-3 pb-[max(.5rem,env(safe-area-inset-bottom))] pt-1 sm:space-y-2 sm:px-5 sm:pb-3 md:px-7">
         {hasChat && lastSuggestions.length > 0 && !sending && (
           <div className={`${chipRow} min-[1025px]:flex-wrap min-[1025px]:overflow-visible`}>
             {lastSuggestions.map((suggestion) => (
@@ -606,7 +606,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
             ))}
           </div>
         )}
-        <form onSubmit={onSubmit} className="flex items-end gap-2 rounded-[22px] border border-[#e3c27a]/60 bg-black/40 p-2 shadow-[0_0_30px_rgba(227,194,122,.08)] focus-within:border-[#e3c27a] sm:block sm:p-3">
+        <form onSubmit={onSubmit} className="flex items-end gap-2 rounded-2xl border border-[#e3c27a]/60 bg-black/40 p-2 shadow-[0_0_30px_rgba(227,194,122,.08)] focus-within:border-[#e3c27a]">
           <label htmlFor={`ai-input-${mode}`} className="sr-only">Mədinə AI-a sual</label>
           <textarea
             id={`ai-input-${mode}`}
@@ -618,25 +618,20 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
             placeholder={placeholder}
             dir="auto"
             enterKeyHint="send"
-            className="max-h-32 min-h-[2.75rem] w-full flex-1 resize-none bg-transparent px-2 py-1.5 text-base leading-6 text-[#f4ead5] outline-none placeholder:text-[#f4ead5]/45 sm:min-h-0 sm:text-sm"
+            className="max-h-28 min-h-[3.25rem] w-full flex-1 resize-none bg-transparent px-2 py-2 text-sm leading-5 text-[#f4ead5] outline-none placeholder:text-[#f4ead5]/45"
             data-testid="input-ai-message"
           />
-          <div className="flex shrink-0 items-center justify-between gap-3 sm:mt-1 sm:px-1">
-            <span className="hidden text-[10px] text-[#f4ead5]/45 sm:inline">Söhbət yalnız bu brauzerdə saxlanılır.</span>
-            <button type="submit" disabled={!input.trim() || sending} className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#f3dca6] to-[#c49a4c] text-[#17130c] shadow-[0_0_20px_rgba(227,194,122,.35)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11" aria-label="Göndər" data-testid="button-ai-send">
-              {sending ? <Loader2 size={18} className="animate-spin" /> : <SendHorizontal size={18} />}
-            </button>
-          </div>
+          <button type="submit" disabled={!input.trim() || sending} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#f3dca6] to-[#c49a4c] text-[#17130c] shadow-[0_0_20px_rgba(227,194,122,.35)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Göndər" data-testid="button-ai-send">
+            {sending ? <Loader2 size={16} className="animate-spin" /> : <SendHorizontal size={16} />}
+          </button>
         </form>
-        <div className={`${chipRow} min-[1025px]:grid min-[1025px]:gap-2.5 min-[1025px]:overflow-visible min-[1025px]:pb-0 `} style={{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }} data-testid="ai-tiles">
+        <div className={`${chipRow} min-[1025px]:grid min-[1025px]:gap-1 min-[1025px]:overflow-visible min-[1025px]:pb-0`} style={{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }} data-testid="ai-tiles">
           {tiles.map(({ label, hint, prompt, Icon, fill }) => (
             <button key={label} type="button" onClick={() => (fill ? prefill(prompt) : void send(prompt))} disabled={sending} title={hint}
-              className="group flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-[#e3c27a]/25 bg-white/[.03] px-3 py-1.5 text-center transition hover:border-[#e3c27a]/60 hover:bg-[#e3c27a]/[.06] disabled:opacity-50 min-[1025px]:flex-col min-[1025px]:gap-0 min-[1025px]:whitespace-normal min-[1025px]:rounded-2xl min-[1025px]:border-[#e3c27a]/20 min-[1025px]:px-3 min-[1025px]:py-3"
+              className="group flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-[#e3c27a]/25 bg-white/[.03] px-2 py-0.5 text-center transition hover:border-[#e3c27a]/60 hover:bg-[#e3c27a]/[.06] disabled:opacity-50 min-[1025px]:justify-center min-[1025px]:whitespace-normal min-[1025px]:rounded-lg min-[1025px]:px-1.5 min-[1025px]:py-1"
               data-testid={`button-ai-tile-${label}`}>
-              <Icon size={14} className="min-[1025px]:hidden" style={{ color: gold }} />
-              <Icon size={20} className="hidden min-[1025px]:block" style={{ color: gold }} />
-              <span className="text-[11px] font-bold text-[#f4ead5] min-[1025px]:mt-2 min-[1025px]:text-xs">{label}</span>
-              <span dir="auto" className="mt-0.5 hidden text-[10px] leading-4 text-[#f4ead5]/55 min-[1025px]:block">{hint}</span>
+              <Icon size={12} style={{ color: gold }} />
+              <span className="text-[10px] font-bold leading-4 text-[#f4ead5]">{label}</span>
             </button>
           ))}
         </div>

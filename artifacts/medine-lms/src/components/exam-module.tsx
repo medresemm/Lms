@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { CheckCircle2, ClipboardList, Eye, FilePlus2, Pencil, Plus, Power, RefreshCw, Send, Trash2, X } from 'lucide-react';
+import { CheckCircle2, ChevronRight, ClipboardList, Eye, FilePlus2, Pencil, Plus, Power, RefreshCw, Send, Trash2, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { AdminExam, AdminExamSubmission, Exam, LearningResource } from '@workspace/api-client-react';
 import {
@@ -315,14 +315,17 @@ export function StudentExamsLauncher({ termNumber, onOpen }: { termNumber: numbe
     <button
       type="button"
       onClick={onOpen}
-      className="focus-ring group flex min-h-[132px] w-full flex-col items-stretch justify-between gap-3 rounded-2xl border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary))] p-4 text-left shadow-[0_12px_30px_hsl(var(--primary)/.18)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_34px_hsl(var(--primary)/.25)] sm:flex-row sm:items-center sm:gap-4 md:p-5"
+      className="focus-ring group flex h-full w-full items-center justify-between gap-3 rounded-2xl border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary))] px-3 py-2.5 text-left shadow-[0_8px_18px_hsl(var(--primary)/.16)] transition hover:-translate-y-0.5"
       data-testid="button-open-student-exams"
     >
-      <span className="flex min-w-0 items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[hsl(var(--accent))] text-[hsl(var(--primary))] shadow-sm"><ClipboardList size={21} /></span>
-        <span className="min-w-0"><span className="block break-words text-[10px] font-black uppercase tracking-[.17em] text-[hsl(var(--primary-foreground)/.68)]">Cari semestr · {termNumber}-ci semestr</span><span className="mt-1 block break-words font-serif text-2xl text-[hsl(var(--primary-foreground))]">Testlər</span><span className="mt-1 block break-words text-xs font-semibold text-[hsl(var(--primary-foreground)/.68)]">Testləri görmək üçün toxunun</span></span>
+      <span className="flex min-w-0 items-center gap-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--accent))] text-[hsl(var(--primary))]"><ClipboardList size={18} /></span>
+        <span className="min-w-0">
+          <span className="block truncate text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--primary-foreground)/.68)]">{termNumber}-ci semestr</span>
+          <span className="mt-0.5 block truncate font-serif text-lg leading-tight text-[hsl(var(--primary-foreground))]">Testlər</span>
+        </span>
       </span>
-      <span className="flex w-full items-center justify-between gap-2 rounded-xl bg-[hsl(var(--accent))] px-3 py-2 text-xs font-black text-[hsl(var(--primary))] shadow-sm transition group-hover:bg-[hsl(var(--accent)/.88)] sm:w-auto sm:justify-start"><span>{examsQuery.isLoading ? '...' : `${exams.length} test`}</span><span aria-hidden="true">→</span></span>
+      <span className="flex shrink-0 items-center gap-1 rounded-lg bg-[hsl(var(--accent))] px-2.5 py-1.5 text-[11px] font-black text-[hsl(var(--primary))]"><span>{examsQuery.isLoading ? '...' : exams.length}</span><ChevronRight size={15} /></span>
     </button>
   );
 }

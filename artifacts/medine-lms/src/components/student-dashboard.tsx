@@ -1315,20 +1315,23 @@ function StudentAssignmentsSection({ termNumber }: { termNumber: number }) {
   const assignmentsQuery = useGetStudentAssignments({ termNumber }, { query: { queryKey: getGetStudentAssignmentsQueryKey({ termNumber }) } });
   const assignments = assignmentsQuery.data ?? [];
   return (
-    <section id="tapşırıqlar" className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)] md:p-6" data-testid="section-student-assignments">
+    <section id="tapşırıqlar" className={isOpen ? 'h-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-[var(--shadow-xs)]' : 'h-full'} data-testid="section-student-assignments">
        {!isOpen ? (
          <button
            type="button"
            onClick={() => setIsOpen(true)}
-           className="focus-ring group flex w-full flex-col items-stretch justify-between gap-3 rounded-2xl border border-[hsl(var(--accent)/.8)] bg-gradient-to-r from-[hsl(var(--accent))] via-[hsl(var(--accent)/.86)] to-[hsl(var(--secondary))] p-4 text-left shadow-[0_12px_30px_hsl(var(--accent)/.22)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_34px_hsl(var(--accent)/.3)] sm:flex-row sm:items-center sm:gap-4 md:p-5"
+           className="focus-ring group flex h-full w-full items-center justify-between gap-3 rounded-2xl border border-[hsl(var(--accent)/.8)] bg-gradient-to-r from-[hsl(var(--accent))] via-[hsl(var(--accent)/.86)] to-[hsl(var(--secondary))] px-3 py-2.5 text-left shadow-[0_8px_18px_hsl(var(--accent)/.18)] transition hover:-translate-y-0.5"
            aria-expanded="false"
            data-testid="button-open-student-assignments"
          >
-           <span className="flex min-w-0 items-center gap-3">
-             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/80 text-[hsl(var(--primary))] shadow-sm"><FileText size={21} /></span>
-             <span className="min-w-0"><span className="block break-words text-[10px] font-black uppercase tracking-[.17em] text-[hsl(var(--primary)/.72)]">Cari semestr · {termNumber}-ci semestr</span><span className="mt-1 block break-words font-serif text-2xl text-[hsl(var(--primary))]">Ev tapşırıqları</span><span className="mt-1 block break-words text-xs font-semibold text-[hsl(var(--primary)/.72)]">Tapşırıqlarınızı görmək üçün toxunun</span></span>
+           <span className="flex min-w-0 items-center gap-2.5">
+             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/80 text-[hsl(var(--primary))]"><FileText size={18} /></span>
+             <span className="min-w-0">
+               <span className="block truncate text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--primary)/.7)]">{termNumber}-ci semestr</span>
+               <span className="mt-0.5 block truncate font-serif text-lg leading-tight text-[hsl(var(--primary))]">Ev tapşırıqları</span>
+             </span>
            </span>
-           <span className="flex w-full items-center justify-between gap-2 rounded-xl bg-[hsl(var(--primary))] px-3 py-2 text-xs font-black text-[hsl(var(--primary-foreground))] shadow-sm transition group-hover:bg-[hsl(var(--primary)/.88)] sm:w-auto sm:justify-start"><span>{assignmentsQuery.isLoading ? '...' : `${assignments.length} tapşırıq`}</span><ChevronRight size={17} /></span>
+           <span className="flex shrink-0 items-center gap-1 rounded-lg bg-[hsl(var(--primary))] px-2.5 py-1.5 text-[11px] font-black text-[hsl(var(--primary-foreground))]"><span>{assignmentsQuery.isLoading ? '...' : assignments.length}</span><ChevronRight size={15} /></span>
          </button>
        ) : (
          <>
@@ -1605,7 +1608,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
               <button type="button" onClick={() => setSelectedLesson(null)} className="focus-ring rounded-md p-1 hover:bg-[hsl(var(--secondary-foreground)/.1)]" aria-label="Seçilmiş dərs bildirişini bağla" data-testid="button-dismiss-lesson"><X size={15} /></button>
             </div>
           )}
-           {academicProfile && <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4" data-testid="section-student-work-actions"><StudentAssignmentsSection termNumber={academicProfile.currentTermNumber} /><StudentExamsLauncher termNumber={academicProfile.currentTermNumber} onOpen={() => setShowExams(true)} /></div>}
+           {academicProfile && <div className="mt-5 grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2" data-testid="section-student-work-actions"><StudentAssignmentsSection termNumber={academicProfile.currentTermNumber} /><StudentExamsLauncher termNumber={academicProfile.currentTermNumber} onOpen={() => setShowExams(true)} /></div>}
           <div className="mt-11 grid gap-10 xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-12">
              {scheduleAccessLoaded && scheduleAccessApproved ? <CoursesSection courses={scheduledCourses} onContinue={setSelectedLesson} onOpen={(course) => setSelectedCourse({ id: course.id, teacherName: course.instructor })} onJoin={(courseId) => void recordLessonJoin(courseId)} /> : <div data-testid="student-schedule-access-placeholder" />}
             <AnnouncementsSection announcements={resolvedAnnouncements} />

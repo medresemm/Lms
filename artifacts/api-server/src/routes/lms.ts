@@ -1366,7 +1366,7 @@ export async function buildAcademicProfile(
     .map((termNumber) => {
     const details = termDetails(termNumber);
     const termAttendanceRecords = attendanceRecordRows.filter((record) => record.termNumber === termNumber);
-    const termResources = resourceRows.filter((resource) => resource.termNumber === termNumber);
+    const termResources = resourceRows.filter((resource) => resource.termNumber === termNumber && Boolean(resource.teacherClerkUserId));
     const subjectCourses = Array.from(new Map(termResources.map((resource) => [resource.courseId, { courseId: resource.courseId, isMandatory: resource.isMandatory }])).values())
       .filter(({ courseId }) => selections.get(`${termNumber}:${courseId}`) !== false);
     const subjects = subjectCourses.map(({ courseId, isMandatory }) => {
@@ -2363,7 +2363,7 @@ router.get("/resources", requireApprovedStudent, async (req, res, next) => {
     const removedCourseIds = new Set(selections.filter((selection) => !selection.selected).map((selection) => selection.courseId));
     const grouped = new Map<number, typeof resources>();
     for (const resource of resources) {
-      if (removedCourseIds.has(resource.courseId)) continue;
+      if (removedCourseIds.has(resource.courseId) || !resource.teacherClerkUserId) continue;
       const group = grouped.get(resource.courseId) ?? [];
       group.push(resource);
       grouped.set(resource.courseId, group);
@@ -3913,6 +3913,121 @@ router.get("/admin/teacher-schedule", requireTeacher, async (req, res, next) => 
       .where(and(eq(resourcesTable.termNumber, termNumber), eq(resourcesTable.teacherClerkUserId, teacherClerkUserId)))
       .orderBy(asc(resourcesTable.id));
     res.json(await resourceViews(resources));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/admin/schedule-lessons", requireTeacher, async (req, res, next) => {
+  try {
+    const userId = getAuth(req).userId;
+    const clerkUser = userId ? await getClerkUser(userId) : null;
+    const role = clerkUser ? roleForClerkUser(clerkUser) : "none";
+    if (!userId || !clerkUser || !(await userIsSystemOwner(userId, clerkUser) || role === "owner_assistant" || role === "admin")) {
+      res.status(403).json({ error: "Cədvəli yalnız admin hazırlaya bilər." });
+      return;
+    }
+    const termNumber = Number(req.body?.termNumber);
+    const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+    const lessonDays = Array.isArray(req.body?.lessonDays) ? req.body.lessonDays.filter((day: unknown): day is string => typeof day === "string") : [];
+    const lessonTime = typeof req.body?.lessonTime === "string" ? req.body.lessonTime.trim() : "";
+    const validLessonDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+    if (validateTermNumber(termNumber) || !title || !lessonDays.length || lessonDays.some((day) => !validLessonDays.includes(day)) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(lessonTime)) {
+      res.status(400).json({ error: "Semestr, dərs adı, gün və saat düzgün doldurulmalıdır." });
+      return;
+    }
+    const [course] = await db.insert(coursesTable).values({
+      title,
+      category: "İslam elmləri",
+      instructor: "",
+      totalLessons: 0,
+      credits: 3,
+      hours: 45,
+      color: "teal",
+      progress: 0,
+      completedLessons: 0,
+      description: `${title} dərsi.`,
+      curriculum: [],
+      lessonDescription: "",
+      nextLesson: null,
+      lessonDays,
+      lessonTime,
+    }).returning();
+    if (!course) throw new Error("Dərs yaradılmadı.");
+    const [resource] = await db.insert(resourcesTable).values({
+      courseId: course.id,
+      termNumber,
+      kind: "material",
+      title,
+      body: "Cədvəl dərsi",
+      url: null,
+      lessonDays,
+      lessonTime,
+      isMandatory: true,
+      teacherClerkUserId: null,
+      studentCapacity: 0,
+    }).returning();
+    res.status(201).json({ courseId: course.id, resourceId: resource?.id ?? null });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch("/admin/schedule-lessons/:resourceId", requireTeacher, async (req, res, next) => {
+  try {
+    const userId = getAuth(req).userId;
+    const clerkUser = userId ? await getClerkUser(userId) : null;
+    const role = clerkUser ? roleForClerkUser(clerkUser) : "none";
+    if (!userId || !clerkUser || !(await userIsSystemOwner(userId, clerkUser) || role === "owner_assistant" || role === "admin")) {
+      res.status(403).json({ error: "Cədvəli yalnız admin hazırlaya bilər." });
+      return;
+    }
+    const resourceId = Number(req.params.resourceId);
+    const [existing] = await db.select().from(resourcesTable).where(eq(resourcesTable.id, resourceId)).limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Cədvəl dərsi tapılmadı." });
+      return;
+    }
+    const title = typeof req.body?.title === "string" && req.body.title.trim() ? req.body.title.trim() : existing.title;
+    const lessonDays = Array.isArray(req.body?.lessonDays) ? req.body.lessonDays.filter((day: unknown): day is string => typeof day === "string") : existing.lessonDays;
+    const lessonTime = typeof req.body?.lessonTime === "string" ? req.body.lessonTime.trim() : existing.lessonTime ?? "";
+    const validLessonDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+    if (!lessonDays.length || lessonDays.some((day) => !validLessonDays.includes(day)) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(lessonTime)) {
+      res.status(400).json({ error: "Gün və dərs saatı düzgün doldurulmalıdır." });
+      return;
+    }
+    await db.update(coursesTable).set({ title, lessonDays, lessonTime }).where(eq(coursesTable.id, existing.courseId));
+    await db.update(resourcesTable).set({ title, lessonDays, lessonTime }).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber)));
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/admin/schedule-lessons/:resourceId", requireTeacher, async (req, res, next) => {
+  try {
+    const userId = getAuth(req).userId;
+    const clerkUser = userId ? await getClerkUser(userId) : null;
+    const role = clerkUser ? roleForClerkUser(clerkUser) : "none";
+    if (!userId || !clerkUser || !(await userIsSystemOwner(userId, clerkUser) || role === "owner_assistant" || role === "admin")) {
+      res.status(403).json({ error: "Cədvəli yalnız admin hazırlaya bilər." });
+      return;
+    }
+    const resourceId = Number(req.params.resourceId);
+    const [existing] = await db.select().from(resourcesTable).where(eq(resourcesTable.id, resourceId)).limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Cədvəl dərsi tapılmadı." });
+      return;
+    }
+    const siblings = await db.select().from(resourcesTable).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber)));
+    if (siblings.some((item) => item.teacherClerkUserId)) {
+      res.status(400).json({ error: "Bu dərsə müəllim təyin olunub. Qalanını tədris proqramından idarə edin." });
+      return;
+    }
+    await db.delete(resourcesTable).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber), isNull(resourcesTable.teacherClerkUserId)));
+    const remaining = await db.select({ id: resourcesTable.id }).from(resourcesTable).where(eq(resourcesTable.courseId, existing.courseId)).limit(1);
+    if (!remaining.length) await db.delete(coursesTable).where(eq(coursesTable.id, existing.courseId));
+    res.json({ ok: true });
   } catch (error) {
     next(error);
   }

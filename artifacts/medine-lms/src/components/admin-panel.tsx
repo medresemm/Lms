@@ -3396,7 +3396,7 @@ const individualPermissionRole = (user: AdminUser): IndividualPermissionRole | n
   user.role === 'teacher' || user.role === 'supervisor' || user.role === 'owner_assistant' ? user.role : null;
 
 const adminTabButtonClass = (value: string, active: boolean) =>
-  `focus-ring inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition ${active ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`;
+  `focus-ring inline-flex max-w-full items-center gap-2 whitespace-normal rounded-xl px-3 py-2.5 text-left text-xs font-bold transition ${active ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`;
 
 function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: boolean }) {
   const usersQuery = useGetAdminUsers({ query: { queryKey: getGetAdminUsersQueryKey() } });
@@ -3976,20 +3976,20 @@ function AdminGlobalSearch({ onSelectStudent }: { onSelectStudent: (profileId: n
     <button type="button" onClick={() => setOpen(true)} className="focus-ring inline-flex shrink-0 items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-2.5 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] sm:px-3" data-testid="button-open-admin-search" aria-label="Qlobal axtarış">
       <Search size={15} /><span className="hidden sm:inline">Axtar</span><kbd className="hidden rounded bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[10px] font-semibold text-[hsl(var(--muted-foreground))] sm:inline">Ctrl K</kbd>
     </button>
-    {open && <div className="fixed inset-0 z-[70] bg-[hsl(var(--primary)/.45)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Qlobal axtarış" data-testid="admin-global-search">
-      <div className="mx-auto mt-[10vh] max-w-2xl overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-[var(--shadow-lg)]">
-        <div className="flex items-center gap-3 border-b border-[hsl(var(--border))] px-4">
+    {open && <div className="fixed inset-0 z-[70] overflow-y-auto bg-[hsl(var(--primary)/.45)] p-3 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-label="Qlobal axtarış" data-testid="admin-global-search">
+      <div className="mx-auto mt-4 w-full max-w-2xl overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-[var(--shadow-lg)] sm:mt-[10vh]">
+        <div className="flex items-center gap-2 border-b border-[hsl(var(--border))] px-3 sm:gap-3 sm:px-4">
           <Search size={18} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
           <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent py-4 text-sm font-semibold outline-none" placeholder="Tələbə, müraciət və ya dərs axtar..." data-testid="input-admin-global-search" />
-          <button type="button" onClick={() => setOpen(false)} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Axtarışı bağla"><X size={18} /></button>
+          <button type="button" onClick={() => setOpen(false)} className="focus-ring shrink-0 rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Axtarışı bağla"><X size={18} /></button>
         </div>
         <div className="max-h-[55vh] overflow-y-auto p-3">
           {!query.trim() && <p className="p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">Axtarış üçün ən azı iki simvol yazın.</p>}
           {query.trim().length >= 2 && loading && <p className="p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">Axtarılır...</p>}
           {query.trim().length >= 2 && !loading && !results.length && <p className="p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">Uyğun nəticə tapılmadı.</p>}
-          {results.map((result) => <button key={result.id} type="button" onClick={() => { if (result.kind === 'student' && result.profileId) onSelectStudent(result.profileId); setOpen(false); }} className="focus-ring flex w-full items-start gap-3 rounded-xl p-3 text-left hover:bg-[hsl(var(--muted)/.55)]" data-testid={`admin-search-result-${result.kind}`}>
-            <span className="mt-0.5 rounded-lg bg-[hsl(var(--secondary)/.65)] px-2 py-1 text-[10px] font-black uppercase text-[hsl(var(--secondary-foreground))]">{result.kind === 'student' ? 'Tələbə' : result.kind === 'application' ? 'Müraciət' : 'Dərs'}</span>
-            <span className="min-w-0"><span className="block truncate text-sm font-bold text-[hsl(var(--primary))]">{result.title}</span><span className="mt-1 block truncate text-xs text-[hsl(var(--muted-foreground))]">{result.subtitle}</span></span>
+          {results.map((result) => <button key={result.id} type="button" onClick={() => { if (result.kind === 'student' && result.profileId) onSelectStudent(result.profileId); setOpen(false); }} className="focus-ring flex w-full min-w-0 items-start gap-3 rounded-xl p-3 text-left hover:bg-[hsl(var(--muted)/.55)]" data-testid={`admin-search-result-${result.kind}`}>
+            <span className="mt-0.5 shrink-0 rounded-lg bg-[hsl(var(--secondary)/.65)] px-2 py-1 text-[10px] font-black uppercase text-[hsl(var(--secondary-foreground))]">{result.kind === 'student' ? 'Tələbə' : result.kind === 'application' ? 'Müraciət' : 'Dərs'}</span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-[hsl(var(--primary))]">{result.title}</span><span className="mt-1 block truncate text-xs text-[hsl(var(--muted-foreground))]">{result.subtitle}</span></span>
           </button>)}
         </div>
       </div>
@@ -4092,23 +4092,23 @@ export function AdminPanel() {
   };
 
   return (
-    <div className="grain min-h-[100dvh] bg-[hsl(var(--background))]">
-      <header className="border-b border-[hsl(var(--border))] bg-[hsl(var(--card)/.9)] px-5 py-5 md:px-10">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-          <Link href="/user-portal" className="focus-ring flex items-center gap-3 rounded-xl" data-testid="link-admin-back">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[13px] bg-[hsl(var(--accent))] font-serif text-xl font-bold text-[hsl(var(--primary))] shadow-[0_7px_0_hsl(37_83%_52%)]">M</div>
-             <div><p className="text-[11px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Mədinə</p><p className="font-serif text-[17px] leading-none text-[hsl(var(--primary))]">{owner ? 'Sahib paneli' : ownerAssistant ? 'Sahib köməkçisi paneli' : activeRole === 'supervisor' ? 'Nəzarətçi paneli' : 'Müəllim paneli'}</p></div>
+    <div className="grain min-h-[100dvh] overflow-x-hidden bg-[hsl(var(--background))]">
+      <header className="border-b border-[hsl(var(--border))] bg-[hsl(var(--card)/.9)] px-4 py-4 md:px-10">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
+          <Link href="/user-portal" className="focus-ring flex min-w-0 max-w-full items-center gap-3 rounded-xl" data-testid="link-admin-back">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] bg-[hsl(var(--accent))] font-serif text-xl font-bold text-[hsl(var(--primary))] shadow-[0_7px_0_hsl(37_83%_52%)]">M</div>
+             <div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Mədinə</p><p className="truncate font-serif text-base leading-none text-[hsl(var(--primary))] sm:text-[17px]">{owner ? 'Sahib paneli' : ownerAssistant ? 'Sahib köməkçisi paneli' : activeRole === 'supervisor' ? 'Nəzarətçi paneli' : 'Müəllim paneli'}</p></div>
           </Link>
-          <div className="flex shrink-0 flex-nowrap items-center gap-1 sm:gap-2">
-            <HomeLink />
-            <ArticlesLink />
+          <div className="flex max-w-full flex-wrap items-center justify-end gap-1 sm:gap-2">
+            <HomeLink compact />
+            <ArticlesLink compact />
              <AdminGlobalSearch onSelectStudent={(profileId) => { setFocusStudentId(profileId); setTab('student-management'); }} />
-             <span className="hidden text-xs font-semibold text-[hsl(var(--muted-foreground))] sm:block">{owner ? 'N1 · ' : ownerAssistant ? 'NK1 · ' : ''}{displayName}</span>
-             <button type="button" onClick={onLogout} className="focus-ring inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-2.5 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--muted))] sm:px-3" data-testid="button-admin-logout"><LogOut size={15} /> Çıxış</button>
+             <span className="hidden max-w-40 truncate text-xs font-semibold text-[hsl(var(--muted-foreground))] sm:block">{owner ? 'N1 · ' : ownerAssistant ? 'NK1 · ' : ''}{displayName}</span>
+             <button type="button" onClick={onLogout} className="focus-ring inline-flex items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--muted))] sm:px-3" aria-label="Çıxış" data-testid="button-admin-logout"><LogOut size={15} /> <span className="hidden sm:inline">Çıxış</span></button>
           </div>
         </div>
       </header>
-       <div className="mx-auto max-w-6xl px-5 pt-6 md:px-10">
+       <div className="mx-auto min-w-0 max-w-6xl px-4 pt-6 md:px-10">
          <section className="flex flex-wrap items-center gap-x-8 gap-y-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)]" data-testid="section-admin-account">
            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[hsl(var(--accent)/.45)] font-serif text-xl font-bold text-[hsl(var(--primary))]">{accountCode}</div>
            <div>
@@ -4125,14 +4125,14 @@ export function AdminPanel() {
            </div>
          </section>
        </div>
-      <main className="mx-auto max-w-6xl px-5 py-8 md:px-10 md:py-12">
+      <main className="mx-auto min-w-0 max-w-6xl px-4 py-8 md:px-10 md:py-12">
         <div className="max-w-2xl">
           <p className="flex items-center gap-2 text-2xl font-bold text-[hsl(var(--primary))]"><ShieldCheck size={22} /> İDARƏETMƏ SAHƏSİ</p>
           <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{owner ? 'Akademiyanın məzmununu idarə edin və qeydiyyatdan keçmiş istifadəçilərə işçi rolları verin.' : 'Tələbələr və ziyarətçilər üçün dərsləri, elanları, məqalələri, günün faydasını və dərs resurslarını buradan əlavə edin.'}</p>
         </div>
         <TeacherStats canEdit={owner || ownerAssistant} />
-        <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <section className="rounded-[26px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-sm)] md:p-7">
+        <div className="mt-10 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="min-w-0 rounded-[26px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-[var(--shadow-sm)] sm:p-5 md:p-7">
            <h2 className="mb-5 font-serif text-3xl leading-none tracking-[-.03em] text-[hsl(var(--primary))] md:text-4xl">İdarə paneli</h2>
             <div className="mb-7 flex flex-wrap gap-2 border-b border-[hsl(var(--border))] pb-4">
                   {([['announcement', 'Yeni elan', Megaphone, 'announcements'], ['student-notifications', 'Tələbələrə bildiriş', Send, 'announcements'], ['article', 'Məqalə', BookOpenText, 'articles'], ['benefit', 'Günün faydası', Quote, 'dailyBenefits'], ['student-management', 'Tələbələri idarə et', UsersRound, 'students'], ['application', 'Müraciətlər', UsersRound, 'applications'], ['exams', 'İmtahan və testlər', ClipboardList, 'assignments'], ['course-content', 'Tədris proqramı', BookOpenText, 'schedule'], ['users', 'İstifadəçi rolları', UserCog, 'userRoleManagement'], ['course-activation', 'Dərsləri idarə et', BookOpen, 'schedule'], ['statistics', 'Statistika', UsersRound, null], ['audit-history', 'Audit tarixçəsi', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <button key={value} type="button" onClick={() => toggleTab(value)} className={adminTabButtonClass(value, tab === value)} data-testid={`tab-admin-${value}`}><Icon size={15} /> {label} {value === 'application' && pendingApplicationCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</button>)}

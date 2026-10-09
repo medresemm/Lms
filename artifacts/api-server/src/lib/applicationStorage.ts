@@ -122,7 +122,7 @@ export async function createCourseUploadUrl() {
 }
 
 export async function getCourseFile(objectPath: string): Promise<StoredFile> {
-  if (!/^\/objects\/courses\/[a-zA-Z0-9-]+\.pdf$/.test(objectPath)) throw new Error("Yanlış kurs faylı yolu.");
+  if (!/^\/objects\/courses\/[a-zA-Z0-9-]+\.pdf$/.test(objectPath)) throw new Error("Yanlış dərs faylı yolu.");
   const key = objectPath.replace("/objects/", "");
   const file = makeStoredFile(key);
   const [exists] = await file.exists();

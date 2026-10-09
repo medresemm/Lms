@@ -250,7 +250,7 @@ test("admin teachers, staff and other entities", async () => {
   assert.match((await ask("Fiqh esse tapşırığı", adminContext())).reply, /Təhvil verməyən \(cari qrupda\): 1[\s\S]*Əli Məmmədov/);
   assert.match((await ask("Quran imtahan nəticələri", adminContext())).reply, /Təcvid testi[\s\S]*Aişə Həsənova[\s\S]*9\/10 \(90%\)/);
   assert.match((await ask("imtahnlar", adminContext())).reply, /Testlər: 2/);
-  assert.match((await ask("neçə kurs var", adminContext())).reply, /Kurslar \(2\)/);
+  assert.match((await ask("neçə kurs var", adminContext())).reply, /Dərslər \(2\)/);
   assert.match((await ask("ümumi statistika", adminContext())).reply, /Aktiv tələbə: 3[\s\S]*Müəllim: 2[\s\S]*Müraciətlər: 3/);
 });
 

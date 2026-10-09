@@ -193,7 +193,7 @@ export function adminHelp(ctx: AdminAiContext) {
     "Nümunələr:",
     "• Tələbə: «Əli Məmmədov», «mammadov ali», «T0012», «ali@mail.com», «050 123 45 67»",
     "• Filtrlər: «2-ci semestr tələbələri», «qayıbı çox olanlar», «ortalaması 60-dan aşağı olanlar», «tapşırığı təhvil verməyənlər», «ərəb dili səviyyəsi»",
-    can("schedule") ? "• Müəllim və kurslar: «Neçə müəllim var?», «Ustad Əli», «Əli müəllimin tələbələri», «Müəllim cədvəli», «Kurs siyahısı», «Quran tələbələri»" : null,
+    can("schedule") ? "• Müəllim və dərslər: «Neçə müəllim var?», «Ustad Əli», «Əli müəllimin tələbələri», «Müəllim cədvəli», «Dərs siyahısı», «Quran tələbələri»" : null,
     "• Testlər: «Quran imtahan nəticələri», «testlər»",
     can("assignments") ? "• Tapşırıqlar: «tapşırıqlar», «yoxlanılmamış tapşırıqlar», «Fatihə tapşırığı»" : null,
     can("applications") ? "• Müraciətlər: «Neçə müraciət gözləyir?», «rədd edilən müraciətlər», «fənn silmə müraciətləri»" : null,
@@ -535,7 +535,7 @@ async function teacherBranch(ctx: AdminAiContext, parsed: ParsedMessage, entitie
       lines.push("", `${teacher.name}:`, ...teacherLessonLines({ ...teacher, lessons }));
     }
     if (lines.length === 1) lines.push("Bu filtrə uyğun dərs tapılmadı.");
-    return reply(lines, ["Kurs siyahısı", "Neçə müəllim var?"]);
+    return reply(lines, ["Dərs siyahısı", "Neçə müəllim var?"]);
   }
 
   if (matched.length) {
@@ -776,17 +776,17 @@ async function courseBranch(ctx: AdminAiContext, parsed: ParsedMessage, entities
       }
       lines.push("");
     }
-    return reply(lines, wantsStudents ? ["Kurs siyahısı", "Tələbə axtar"] : matched.slice(0, 2).map((course) => `${course.title} tələbələri`));
+    return reply(lines, wantsStudents ? ["Dərs siyahısı", "Tələbə axtar"] : matched.slice(0, 2).map((course) => `${course.title} tələbələri`));
   }
   if (!entities.has("course") && !entities.has("resource")) return null;
-  const lines = [`Kurslar (${courses.length}):`];
+  const lines = [`Dərslər (${courses.length}):`];
   if (!isCount) {
     for (const course of courses) {
       const terms = Array.from(new Set(course.lessons.map((lesson) => lesson.termNumber))).sort((a, b) => a - b);
       const teachers = Array.from(new Set(course.lessons.map((lesson) => lesson.teacherName).filter((name): name is string => Boolean(name))));
       lines.push(`• ${course.title} (${course.category}) — müəllim: ${teachers.length ? teachers.join(", ") : course.instructor || "—"}${terms.length ? ` · semestr: ${terms.join(", ")}` : ""}`);
     }
-    lines.push("", "Kursun tələbə siyahısı üçün yazın: «<kurs adı> tələbələri».");
+    lines.push("", "Dərsin tələbə siyahısı üçün yazın: «<dərs adı> tələbələri».");
   }
   return reply(lines, courses.slice(0, 3).map((course) => `${course.title} tələbələri`));
 }
@@ -808,7 +808,7 @@ async function overallStats(ctx: AdminAiContext): Promise<AiReply> {
     `• Aktiv tələbə: ${roster.length} (${Array.from(byTerm.entries()).sort(([a], [b]) => a - b).map(([term, count]) => `${term}-ci sem.: ${count}`).join(", ") || "—"})`,
     `• Cari semestrdə qayıbı 3+ olan: ${roster.filter((student) => student.absences >= 3).length} · ortalaması 60-dan aşağı: ${roster.filter((student) => student.gradeAverage !== null && student.gradeAverage < 60).length}`,
     teachers ? `• Müəllim: ${teachers.length}` : null,
-    courses ? `• Kurs: ${courses.length}` : null,
+    courses ? `• Dərs: ${courses.length}` : null,
     applications ? `• Müraciətlər: ${applications.filter((item) => !item.deleted).length} (${countByStatus(applications.filter((item) => !item.deleted)) || "—"})` : null,
     subjectRequests ? `• Fənn silmə müraciəti gözləyir: ${subjectRequests.filter((item) => item.status === "pending").length}` : null,
     excuses ? `• Üzrlər: ${excuses.length} (gözləyir: ${excuses.filter((item) => item.status === "pending").length})` : null,
@@ -843,7 +843,7 @@ async function searchCandidates(ctx: AdminAiContext): Promise<SearchCandidate[]>
     if (teacherIds.has(member.clerkUserId)) continue;
     candidates.push({ type: "Heyət", label: `${member.name} — ${ROLE_LABELS[member.role] ?? member.role}`, query: `heyət ${member.name}`, fields: [member.name, member.email?.split("@")[0]] });
   }
-  for (const course of courses) candidates.push({ type: "Kurslar", label: course.title, query: course.title, fields: [course.title, course.category] });
+  for (const course of courses) candidates.push({ type: "Dərslər", label: course.title, query: course.title, fields: [course.title, course.category] });
   for (const item of applications ?? []) {
     if (item.deleted || item.status === "approved") continue;
     candidates.push({ type: "Müraciətlər", label: `${item.firstName} ${item.lastName} — ${STATUS_LABELS[item.status] ?? item.status}`, query: `müraciət ${item.firstName} ${item.lastName}`, fields: [item.firstName, item.lastName, item.username, item.email.split("@")[0]] });
@@ -977,6 +977,6 @@ export async function answerAdmin(parsed: ParsedMessage, ctx: AdminAiContext): P
   }
   return reply([
     "Bu sualı başa düşmədim və ya uyğun məlumat tapmadım.",
-    "Ad, e-poçt, T-nömrə, kurs və ya tapşırıq adı yazın, yaxud «Ümumi statistika», «Qayıbı çox olanlar», «Neçə müəllim var?» kimi sorğulardan istifadə edin.",
+    "Ad, e-poçt, T-nömrə, dərs və ya tapşırıq adı yazın, yaxud «Ümumi statistika», «Qayıbı çox olanlar», «Neçə müəllim var?» kimi sorğulardan istifadə edin.",
   ], ADMIN_SUGGESTIONS);
 }

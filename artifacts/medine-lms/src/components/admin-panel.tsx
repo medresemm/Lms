@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
   BookOpen,
@@ -1210,8 +1210,20 @@ function StudentManagementSection({
 }) {
   const [activeSection, setActiveSection] = useState<StudentManagementTab | null>('subject-requests');
   const [isPromotionDirectoryOpen, setIsPromotionDirectoryOpen] = useState(false);
+  const scrollSectionRef = useRef<StudentManagementTab | null>(null);
+  const toggleSection = (value: StudentManagementTab) => {
+    const next = activeSection === value ? null : value;
+    scrollSectionRef.current = next;
+    setActiveSection(next);
+  };
+  useEffect(() => {
+    if (!activeSection || scrollSectionRef.current !== activeSection) return;
+    scrollSectionRef.current = null;
+    revealTileAndPanel(`tab-student-management-${activeSection}`, `panel-student-management-${activeSection}`);
+  }, [activeSection]);
   useEffect(() => {
     if (focusStudentId) {
+      scrollSectionRef.current = 'promotion';
       setActiveSection('promotion');
       setIsPromotionDirectoryOpen(true);
     }
@@ -1229,6 +1241,24 @@ function StudentManagementSection({
     ...(canViewDeletedStudents ? [{ value: 'deleted-students' as const, label: 'Silinmiş hesablar', description: 'Silinmiş tələbə hesablarının tarixçəsi', Icon: Trash2 }] : []),
   ];
 
+  const renderSection = (t: StudentManagementTab): ReactNode => [
+    t === 'subject-requests' && <SubjectRemovalRequests />,
+    t === 'grading' && <AcademicManagement mode="grades" />,
+    t === 'attendance' && <RollCallAttendance />,
+    t === 'excuses' && <AttendanceExcuses onRead={onReadExcuses} />,
+    t === 'teacher-choices' && <TeacherChoiceRequests />,
+    t === 'promotion' && <div className="rounded-2xl border border-[hsl(var(--accent)/.55)] bg-[hsl(var(--accent)/.12)] p-5" data-testid="section-semester-promotion-entry"><p className="text-sm font-bold text-[hsl(var(--primary))]">Tələbənin növbəti semestrə keçidini təsdiqləyin</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Tələbəni seçdikdən sonra cari semestri və əsas nəticələri görünəcək. Təsdiq düyməsi tələbə məlumatlarında yerləşir.</p><button type="button" onClick={() => setIsPromotionDirectoryOpen(true)} className={`${buttonClass} mt-4`} data-testid="button-open-semester-promotion"><GraduationCap size={16} /> Tələbə seç və keçidi təsdiqlə</button>{isPromotionDirectoryOpen && <StudentDirectory filter="all" onClose={() => setIsPromotionDirectoryOpen(false)} canEdit={canGraduate} focusStudentId={focusStudentId} />}</div>,
+    t === 'schedule-access' && <div className="space-y-4" data-testid="section-schedule-access-entry"><div className="rounded-2xl border border-[hsl(var(--accent)/.55)] bg-[hsl(var(--accent)/.12)] p-5"><p className="text-sm font-bold text-[hsl(var(--primary))]">Tələbələrin cədvəl girişini təsdiqləyin</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Aşağıdakı siyahıdan tələbəni seçin və dərs cədvəlinə giriş icazəsini verin.</p></div><StudentDirectory filter="all" onClose={() => undefined} canEdit={false} embedded /></div>,
+    t === 'assignments' && canManageAssignments && <AdminAssignmentsSection resources={resources} teacherClerkUserId={assignmentTeacherClerkUserId} />,
+    t === 'graduation' && <GraduationSection />,
+    t === 'deleted-students' && canViewDeletedStudents && <StudentDeletionAudit />,
+  ].find(Boolean) || null;
+  const sectionPanel = (value: StudentManagementTab) => {
+    if (activeSection !== value) return null;
+    const content = renderSection(value);
+    return content ? <InlineSectionPanel id={`panel-student-management-${value}`} live>{content}</InlineSectionPanel> : null;
+  };
+
   return (
     <section className="space-y-5" data-testid="section-student-management">
       <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.22)] p-4">
@@ -1240,14 +1270,14 @@ function StudentManagementSection({
           </div>
           <span className="rounded-full bg-[hsl(var(--card))] px-3 py-1.5 text-[10px] font-bold text-[hsl(var(--muted-foreground))]">{sections.length} bölmə</span>
         </div>
-        <div className="mt-5 grid gap-2 sm:grid-cols-2" aria-label="Tələbə idarəetmə bölmələri">
-          {sections.map(({ value, label, description, Icon }) => (
+        <div className="mt-5 grid grid-flow-row-dense gap-2 sm:grid-cols-2" aria-label="Tələbə idarəetmə bölmələri">
+          {sections.map(({ value, label, description, Icon }) => <Fragment key={value}>
             <button
-              key={value}
+              aria-controls={activeSection === value ? `panel-student-management-${value}` : undefined}
               type="button"
               aria-expanded={activeSection === value}
-              onClick={() => setActiveSection((current) => current === value ? null : value)}
-              className={`focus-ring flex items-start gap-3 rounded-xl border p-3 text-left transition ${activeSection === value ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-[var(--shadow-xs)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))] hover:border-[hsl(var(--secondary-foreground)/.45)] hover:bg-[hsl(var(--secondary)/.2)]'}`}
+              onClick={() => toggleSection(value)}
+              className={`focus-ring relative flex items-start gap-3 rounded-xl border p-3 text-left transition ${activeSection === value ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-[var(--shadow-xs)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))] hover:border-[hsl(var(--secondary-foreground)/.45)] hover:bg-[hsl(var(--secondary)/.2)]'}`}
               data-testid={`tab-student-management-${value}`}
             >
               <Icon size={17} className="mt-0.5 shrink-0" />
@@ -1259,21 +1289,11 @@ function StudentManagementSection({
                 </span>
                 <span className={`mt-1 block text-[11px] leading-4 ${activeSection === value ? 'text-[hsl(var(--primary-foreground)/.7)]' : 'text-[hsl(var(--muted-foreground))]'}`}>{description}</span>
               </span>
+              {activeSection === value && <TilePointer />}
             </button>
-          ))}
+            {sectionPanel(value)}
+          </Fragment>)}
         </div>
-      </div>
-      <div aria-live="polite">
-        {activeSection === 'subject-requests' && <SubjectRemovalRequests />}
-        {activeSection === 'grading' && <AcademicManagement mode="grades" />}
-        {activeSection === 'attendance' && <RollCallAttendance />}
-        {activeSection === 'excuses' && <AttendanceExcuses onRead={onReadExcuses} />}
-        {activeSection === 'teacher-choices' && <TeacherChoiceRequests />}
-        {activeSection === 'promotion' && <div className="rounded-2xl border border-[hsl(var(--accent)/.55)] bg-[hsl(var(--accent)/.12)] p-5" data-testid="section-semester-promotion-entry"><p className="text-sm font-bold text-[hsl(var(--primary))]">Tələbənin növbəti semestrə keçidini təsdiqləyin</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Tələbəni seçdikdən sonra cari semestri və əsas nəticələri görünəcək. Təsdiq düyməsi tələbə məlumatlarında yerləşir.</p><button type="button" onClick={() => setIsPromotionDirectoryOpen(true)} className={`${buttonClass} mt-4`} data-testid="button-open-semester-promotion"><GraduationCap size={16} /> Tələbə seç və keçidi təsdiqlə</button>{isPromotionDirectoryOpen && <StudentDirectory filter="all" onClose={() => setIsPromotionDirectoryOpen(false)} canEdit={canGraduate} focusStudentId={focusStudentId} />}</div>}
-        {activeSection === 'schedule-access' && <div className="space-y-4" data-testid="section-schedule-access-entry"><div className="rounded-2xl border border-[hsl(var(--accent)/.55)] bg-[hsl(var(--accent)/.12)] p-5"><p className="text-sm font-bold text-[hsl(var(--primary))]">Tələbələrin cədvəl girişini təsdiqləyin</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Aşağıdakı siyahıdan tələbəni seçin və dərs cədvəlinə giriş icazəsini verin.</p></div><StudentDirectory filter="all" onClose={() => undefined} canEdit={false} embedded /></div>}
-        {activeSection === 'assignments' && canManageAssignments && <AdminAssignmentsSection resources={resources} teacherClerkUserId={assignmentTeacherClerkUserId} />}
-        {activeSection === 'graduation' && <GraduationSection />}
-        {activeSection === 'deleted-students' && canViewDeletedStudents && <StudentDeletionAudit />}
       </div>
      </section>
   );
@@ -3798,11 +3818,41 @@ type IndividualPermissionRole = 'teacher' | 'supervisor' | 'owner_assistant';
 const individualPermissionRole = (user: AdminUser): IndividualPermissionRole | null =>
   user.role === 'teacher' || user.role === 'supervisor' || user.role === 'owner_assistant' ? user.role : null;
 
+/** Small arrow under the active tile pointing at the panel that opened right below it. */
+function TilePointer() {
+  return <span aria-hidden="true" className="pointer-events-none absolute -bottom-[7px] left-1/2 z-10 h-0 w-0 -translate-x-1/2 border-x-[7px] border-t-[7px] border-x-transparent border-t-[hsl(var(--primary))]" />;
+}
+
+/** Full-width panel placed in the tile grid directly after the clicked tile.
+ *  The grid uses `grid-flow-row-dense`, so the remaining tiles of that row fill
+ *  in before it and the panel always starts on the row right below the tile,
+ *  whatever the column count (phone / tablet / desktop). */
+function InlineSectionPanel({ id, live = false, children }: { id: string; live?: boolean; children: ReactNode }) {
+  return <div id={id} role="region" aria-live={live ? 'polite' : undefined} className="col-span-full mb-2 mt-1 min-w-0 scroll-mt-3 rounded-2xl border-2 border-[hsl(var(--primary)/.35)] bg-[hsl(var(--card))] p-3 text-left shadow-[var(--shadow-xs)] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-200 sm:p-4" data-testid={id}>{children}</div>;
+}
+
+/** After a tile opens its panel, bring the tile and the top of the panel into view
+ *  (only scrolls when they are not already comfortably visible). */
+function revealTileAndPanel(tileTestId: string, panelId: string) {
+  if (typeof window === 'undefined') return;
+  window.requestAnimationFrame(() => {
+    const tile = document.querySelector<HTMLElement>(`[data-testid="${tileTestId}"]`);
+    if (!tile) return;
+    const panel = document.getElementById(panelId);
+    const tileTop = tile.getBoundingClientRect().top;
+    const panelTop = panel ? panel.getBoundingClientRect().top : tile.getBoundingClientRect().bottom;
+    const viewport = window.innerHeight || document.documentElement.clientHeight;
+    if (tileTop >= 8 && panelTop <= viewport - 160) return;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: Math.max(0, tileTop + window.scrollY - 12), behavior: reduceMotion ? 'auto' : 'smooth' });
+  });
+}
+
 const adminTabButtonClass = (value: string, active: boolean) =>
   `focus-ring inline-flex max-w-full items-center gap-2 whitespace-normal rounded-full border px-3.5 py-2 text-left text-xs font-bold transition ${active ? 'border-transparent bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]'}`;
 
 const adminTileClass = (_value: string, active: boolean) =>
-  `focus-ring flex min-h-[64px] flex-col items-start justify-center gap-1.5 rounded-xl border px-2.5 py-2 text-left text-[11px] font-bold leading-4 text-[hsl(var(--primary))] transition hover:-translate-y-0.5 ${active ? 'border-[hsl(var(--primary))] bg-[hsl(var(--accent)/.55)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] hover:bg-[hsl(var(--muted))]'}`;
+  `focus-ring relative flex min-h-[64px] flex-col items-start justify-center gap-1.5 rounded-xl border px-2.5 py-2 text-left text-[11px] font-bold leading-4 text-[hsl(var(--primary))] transition hover:-translate-y-0.5 ${active ? 'border-[hsl(var(--primary))] bg-[hsl(var(--accent)/.55)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] hover:bg-[hsl(var(--muted))]'}`;
 
 function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: boolean }) {
   const usersQuery = useGetAdminUsers({ query: { queryKey: getGetAdminUsersQueryKey() } });
@@ -4474,7 +4524,17 @@ export function AdminPanel() {
   const adminExamsQuery = useGetAdminExams({ query: { enabled: canManageAssignments, queryKey: getGetAdminExamsQueryKey(), refetchInterval: 120_000 } });
   const pendingExamReviewCount = canManageAssignments ? (adminExamsQuery.data ?? []).reduce((sum, exam) => sum + (exam.pendingReviewCount ?? 0), 0) : 0;
   const accountCode = owner ? 'N1' : (typeof user?.publicMetadata === 'object' && user.publicMetadata !== null && 'staffNumber' in user.publicMetadata && typeof user.publicMetadata.staffNumber === 'string' ? user.publicMetadata.staffNumber : metadataRole === 'owner_assistant' ? 'NK1' : metadataRole === 'supervisor' ? 'B001' : 'M01');
-  const toggleTab = (nextTab: Tab) => setTab((current) => current === nextTab ? null : nextTab);
+  const scrollTabRef = useRef<Tab | null>(null);
+  const toggleTab = (nextTab: Tab) => {
+    const next = tab === nextTab ? null : nextTab;
+    scrollTabRef.current = next;
+    setTab(next);
+  };
+  useEffect(() => {
+    if (!tab || scrollTabRef.current !== tab) return;
+    scrollTabRef.current = null;
+    revealTileAndPanel(`tab-admin-${tab}`, `panel-admin-${tab}`);
+  }, [tab]);
   const onLogout = () => void signOut({ redirectUrl: import.meta.env.BASE_URL || '/' });
   const decideApplication = async (application: Application, status: 'approved' | 'rejected', rejectionReason?: string) => {
     setDecisionBusyId(application.id);
@@ -4514,6 +4574,39 @@ export function AdminPanel() {
     }
   };
 
+  const renderTabContent = (t: Tab): ReactNode => [
+    t === 'student-notifications' && rolePermissions.has('announcements') && <StudentNotificationForm />,
+    t === 'exams' && canManageAssignments && <AdminExamsSection resources={resourcesQuery.data ?? []} teacherClerkUserId={activeRole === 'teacher' || activeRole === 'admin' ? user?.id : undefined} owner={owner} />,
+    t === 'course-activation' && (owner || ownerAssistant) && <CourseActivationSettings />,
+    t === 'course-content' && canEditCourseContent && <div className="space-y-8" data-testid="section-course-content-management"><section><div className="mb-4"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Dərs idarəetməsi</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Semestr cədvəli</h3><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hər semestr üçün fənni, günü və saatı yazın. Eyni fənnə bir neçə müəllim əlavə edin və tələbələri qrupa seçin. Tələbə yalnız öz qrupunu görür.</p></div><ResourceForm teacherOnly={activeRole === 'teacher'} teacherName={fullName} onSaved={() => setLocation('/admin')} /></section></div>,
+    t === 'announcement' && <><button type="button" onClick={() => setIsAnnouncementListOpen((current) => !current)} aria-expanded={isAnnouncementListOpen} className="focus-ring mb-5 inline-flex items-center gap-2.5 rounded-xl border border-[hsl(var(--border))] px-5 py-3.5 text-sm font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-existing-announcements"><Megaphone size={18} /> Mövcud elanlar</button>{isAnnouncementListOpen && <AnnouncementList />}<AnnouncementForm onSaved={() => setLocation('/admin')} /></>,
+    t === 'article' && <ArticleForm />,
+    t === 'benefit' && <DailyBenefitForm />,
+    t === 'application' && <>{(owner || ownerAssistant) && <ApplicationWindowSettings />}<ApplicationList applications={applicationsQuery.data ?? []} isLoading={applicationsQuery.isLoading} busyId={decisionBusyId} onDecision={decideApplication} canDecide={!ownerAssistant} canAssignTeacher={owner || ownerAssistant} onAssignTeacher={assignApplicationTeacher} teacherBusyId={teacherBusyId} />{decisionNotice && <p className="mt-4 rounded-xl bg-[hsl(var(--secondary)/.35)] p-3 text-sm font-semibold text-[hsl(var(--secondary-foreground))]">{decisionNotice}</p>}</>,
+    t === 'student-management' && <StudentManagementSection pendingSubjectRequestCount={pendingSubjectRequestCount} pendingExcuseCount={pendingExcuseCount} onReadExcuses={() => setReadExcuseIds(excusesQuery.data?.map((item) => item.id) ?? [])} canViewDeletedStudents={owner} canGraduate={owner} resources={resourcesQuery.data ?? []} canManageAssignments={canManageAssignments} assignmentTeacherClerkUserId={activeRole === 'teacher' || activeRole === 'admin' ? user?.id : undefined} focusStudentId={focusStudentId} />,
+    t === 'users' && (owner || ownerAssistant) && <RoleManagement canConfigurePermissions={owner} />,
+    t === 'statistics' && owner && <><AnalyticsDashboard applications={applicationsQuery.data ?? []} profiles={academicProfilesQuery.data ?? []} resources={resourcesQuery.data ?? []} onRefresh={() => { void Promise.all([applicationsQuery.refetch(), academicProfilesQuery.refetch(), resourcesQuery.refetch()]); }} /><SystemStatisticsSettings /><StudentAiExternalSettings /></>,
+    t === 'audit-history' && owner && <AuditHistory />,
+    t === 'graduation-certificates' && (owner || ownerAssistant) && <GraduateCertificateSection canRevoke={owner} />,
+    t === 'schedule-prep' && (owner || ownerAssistant || activeRole === 'admin') && <SchedulePrepSection />,
+    t === 'library' && <MedreseLibrary canManage={owner || ownerAssistant || activeRole === 'admin'} />,
+    t === 'schedule' && <TeacherSchedule ownerName={fullName} />,
+    t === 'teachers-schedule' && <TeachersSchedule ownerName={fullName} />,
+    t === 'messages' && <MessageCenter staff />,
+    t === 'questions' && <QaCenter canAnswer onUnansweredCountChange={setUnansweredQuestionCount} />,
+  ].find(Boolean) || null;
+  // Tabs shown as pills under the tile grid; their panel opens right under that row.
+  const pillTabs: Tab[] = ['schedule', 'teachers-schedule', 'messages', 'questions'];
+  // Filled while the tile grid renders, so a section opened without a visible tile
+  // (e.g. from the global search) still gets a panel right under the grid.
+  const tileTabsRendered = new Set<Tab>();
+  const inlinePanel = (value: Tab) => {
+    tileTabsRendered.add(value);
+    if (tab !== value) return null;
+    const content = renderTabContent(value);
+    return content ? <InlineSectionPanel id={`panel-admin-${value}`}>{content}</InlineSectionPanel> : null;
+  };
+
   return (
     <div className="grain min-h-[100dvh] overflow-x-hidden bg-[hsl(var(--background))]">
       <header className="border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 md:px-8">
@@ -4525,7 +4618,7 @@ export function AdminPanel() {
           <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
             <HomeLink compact />
             <ArticlesLink compact />
-             <AdminGlobalSearch onSelectStudent={(profileId) => { setFocusStudentId(profileId); setTab('student-management'); }} />
+             <AdminGlobalSearch onSelectStudent={(profileId) => { setFocusStudentId(profileId); scrollTabRef.current = 'student-management'; setTab('student-management'); }} />
              <span className="hidden max-w-52 items-center gap-2 truncate rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] sm:inline-flex">{owner ? 'N1 · ' : ownerAssistant ? 'NK1 · ' : ''}{displayName} <ChevronDown size={14} className="text-[hsl(var(--muted-foreground))]" /></span>
              <button type="button" onClick={onLogout} className="focus-ring inline-flex items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" aria-label="Çıxış" data-testid="button-admin-logout"><LogOut size={15} /> <span className="hidden sm:inline">Çıxış</span></button>
           </div>
@@ -4558,37 +4651,20 @@ export function AdminPanel() {
         <TeacherStats canEdit={owner || ownerAssistant} canReadProfiles={canRead('students')} />
         <section className="mt-5 min-w-0 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 shadow-[var(--shadow-sm)] sm:p-4">
            <h2 className="mb-3 flex items-center gap-2 font-serif text-2xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]"><ShieldCheck size={18} /> İdarə paneli</h2>
-            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
-                  {([['announcement', 'Yeni elan', Megaphone, 'announcements'], ['student-notifications', 'Tələbələrə bildiriş', Send, 'announcements'], ['article', 'Məqalə', BookOpenText, 'articles'], ['benefit', 'Günün faydası', Quote, 'dailyBenefits'], ['student-management', 'Tələbələri idarə et', UsersRound, 'students'], ['application', 'Müraciətlər', UsersRound, 'applications'], ['exams', 'İmtahan və testlər', ClipboardList, 'assignments'], ['course-content', 'Tədris proqramı', BookOpenText, 'schedule'], ['users', 'İstifadəçi rolları', UserCog, 'userRoleManagement'], ['course-activation', 'Dərsləri idarə et', BookOpen, 'schedule'], ['statistics', 'Statistika', UsersRound, null], ['audit-history', 'Audit tarixçəsi', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <button key={value} type="button" onClick={() => toggleTab(value)} className={adminTileClass(value, tab === value)} data-testid={`tab-admin-${value}`}><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Icon size={16} /></span><span className="leading-4">{label} {value === 'application' && pendingApplicationCount > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'exams' && pendingExamReviewCount > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" title="Yoxlama gözləyən açıq cavablar" data-testid="badge-pending-exam-reviews">{pendingExamReviewCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</span></button>)}
-                   {(owner || ownerAssistant) && <button type="button" onClick={() => toggleTab('graduation-certificates')} className={adminTileClass('graduation-certificates', tab === 'graduation-certificates')} data-testid="tab-admin-graduation-certificates"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><FileBadge size={16} /></span><span className="leading-4">Şəhadətnamə idarəsi</span></button>}
-                   {(owner || ownerAssistant || activeRole === 'admin') && <button type="button" onClick={() => toggleTab('schedule-prep')} className={adminTileClass('schedule-prep', tab === 'schedule-prep')} data-testid="tab-admin-schedule-prep"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><CalendarRange size={16} /></span><span className="leading-4">Cədvəl hazırlama</span></button>}
-                   <button type="button" onClick={() => toggleTab('library')} className={adminTileClass('library', tab === 'library')} data-testid="tab-admin-library"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Library size={16} /></span><span className="leading-4">Mədrəsə Kitabxanası</span></button>
+            <div className="grid grid-flow-row-dense grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+                  {([['announcement', 'Yeni elan', Megaphone, 'announcements'], ['student-notifications', 'Tələbələrə bildiriş', Send, 'announcements'], ['article', 'Məqalə', BookOpenText, 'articles'], ['benefit', 'Günün faydası', Quote, 'dailyBenefits'], ['student-management', 'Tələbələri idarə et', UsersRound, 'students'], ['application', 'Müraciətlər', UsersRound, 'applications'], ['exams', 'İmtahan və testlər', ClipboardList, 'assignments'], ['course-content', 'Tədris proqramı', BookOpenText, 'schedule'], ['users', 'İstifadəçi rolları', UserCog, 'userRoleManagement'], ['course-activation', 'Dərsləri idarə et', BookOpen, 'schedule'], ['statistics', 'Statistika', UsersRound, null], ['audit-history', 'Audit tarixçəsi', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <Fragment key={value}><button type="button" onClick={() => toggleTab(value)} className={adminTileClass(value, tab === value)} aria-expanded={tab === value} aria-controls={tab === value ? `panel-admin-${value}` : undefined} data-testid={`tab-admin-${value}`}><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Icon size={16} /></span><span className="leading-4">{label} {value === 'application' && pendingApplicationCount > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'exams' && pendingExamReviewCount > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" title="Yoxlama gözləyən açıq cavablar" data-testid="badge-pending-exam-reviews">{pendingExamReviewCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</span>{tab === value && <TilePointer />}</button>{inlinePanel(value)}</Fragment>)}
+                   {(owner || ownerAssistant) && <button type="button" onClick={() => toggleTab('graduation-certificates')} className={adminTileClass('graduation-certificates', tab === 'graduation-certificates')} aria-expanded={tab === 'graduation-certificates'} aria-controls={tab === 'graduation-certificates' ? 'panel-admin-graduation-certificates' : undefined} data-testid="tab-admin-graduation-certificates"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><FileBadge size={16} /></span><span className="leading-4">Şəhadətnamə idarəsi</span>{tab === 'graduation-certificates' && <TilePointer />}</button>}{inlinePanel('graduation-certificates')}
+                   {(owner || ownerAssistant || activeRole === 'admin') && <button type="button" onClick={() => toggleTab('schedule-prep')} className={adminTileClass('schedule-prep', tab === 'schedule-prep')} aria-expanded={tab === 'schedule-prep'} aria-controls={tab === 'schedule-prep' ? 'panel-admin-schedule-prep' : undefined} data-testid="tab-admin-schedule-prep"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><CalendarRange size={16} /></span><span className="leading-4">Cədvəl hazırlama</span>{tab === 'schedule-prep' && <TilePointer />}</button>}{inlinePanel('schedule-prep')}
+                   <button type="button" onClick={() => toggleTab('library')} className={adminTileClass('library', tab === 'library')} aria-expanded={tab === 'library'} aria-controls={tab === 'library' ? 'panel-admin-library' : undefined} data-testid="tab-admin-library"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Library size={16} /></span><span className="leading-4">Mədrəsə Kitabxanası</span>{tab === 'library' && <TilePointer />}</button>{inlinePanel('library')}
             </div>
-               <div className="mb-4 mt-3 flex flex-wrap gap-1.5 border-t border-[hsl(var(--border))] pt-3">
-                 <button type="button" onClick={() => toggleTab('schedule')} className={adminTabButtonClass('schedule', tab === 'schedule')} data-testid="tab-admin-schedule"><CalendarRange size={16} /> Mənim cədvəlim</button>
-                  <button type="button" onClick={() => toggleTab('teachers-schedule')} className={adminTabButtonClass('teachers-schedule', tab === 'teachers-schedule')} data-testid="tab-admin-teachers-schedule"><CalendarRange size={16} /> Müəllimlər cədvəli</button>
-                   <button type="button" onClick={() => toggleTab('messages')} className={adminTabButtonClass('messages', tab === 'messages')} data-testid="tab-admin-messages"><Mail size={16} /> Məsləhətləşmə / Əlaqə {unreadMessageCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unreadMessageCount}</span>}</button>
-                   <button type="button" onClick={() => toggleTab('questions')} className={adminTabButtonClass('questions', tab === 'questions')} data-testid="tab-admin-questions"><HelpCircle size={16} /> Sual-cavab {unansweredQuestionCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unansweredQuestionCount}</span>}</button>
+               <div className="mt-3 flex flex-wrap gap-1.5 border-t border-[hsl(var(--border))] pt-3">
+                 <button type="button" onClick={() => toggleTab('schedule')} className={`relative ${adminTabButtonClass('schedule', tab === 'schedule')}`} aria-expanded={tab === 'schedule'} aria-controls={tab === 'schedule' ? 'panel-admin-schedule' : undefined} data-testid="tab-admin-schedule"><CalendarRange size={16} /> Mənim cədvəlim{tab === 'schedule' && <TilePointer />}</button>
+                  <button type="button" onClick={() => toggleTab('teachers-schedule')} className={`relative ${adminTabButtonClass('teachers-schedule', tab === 'teachers-schedule')}`} aria-expanded={tab === 'teachers-schedule'} aria-controls={tab === 'teachers-schedule' ? 'panel-admin-teachers-schedule' : undefined} data-testid="tab-admin-teachers-schedule"><CalendarRange size={16} /> Müəllimlər cədvəli{tab === 'teachers-schedule' && <TilePointer />}</button>
+                   <button type="button" onClick={() => toggleTab('messages')} className={`relative ${adminTabButtonClass('messages', tab === 'messages')}`} aria-expanded={tab === 'messages'} aria-controls={tab === 'messages' ? 'panel-admin-messages' : undefined} data-testid="tab-admin-messages"><Mail size={16} /> Məsləhətləşmə / Əlaqə {unreadMessageCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unreadMessageCount}</span>}{tab === 'messages' && <TilePointer />}</button>
+                   <button type="button" onClick={() => toggleTab('questions')} className={`relative ${adminTabButtonClass('questions', tab === 'questions')}`} aria-expanded={tab === 'questions'} aria-controls={tab === 'questions' ? 'panel-admin-questions' : undefined} data-testid="tab-admin-questions"><HelpCircle size={16} /> Sual-cavab {unansweredQuestionCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unansweredQuestionCount}</span>}{tab === 'questions' && <TilePointer />}</button>
               </div>
-              {tab === 'student-notifications' && rolePermissions.has('announcements') && <StudentNotificationForm />}
-              {tab === 'exams' && canManageAssignments && <AdminExamsSection resources={resourcesQuery.data ?? []} teacherClerkUserId={activeRole === 'teacher' || activeRole === 'admin' ? user?.id : undefined} owner={owner} />}
-            {tab === 'course-activation' && (owner || ownerAssistant) && <CourseActivationSettings />}
-               {tab === 'course-content' && canEditCourseContent && <div className="space-y-8" data-testid="section-course-content-management"><section><div className="mb-4"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Dərs idarəetməsi</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Semestr cədvəli</h3><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hər semestr üçün fənni, günü və saatı yazın. Eyni fənnə bir neçə müəllim əlavə edin və tələbələri qrupa seçin. Tələbə yalnız öz qrupunu görür.</p></div><ResourceForm teacherOnly={activeRole === 'teacher'} teacherName={fullName} onSaved={() => setLocation('/admin')} /></section></div>}
-              {tab === 'announcement' && <><button type="button" onClick={() => setIsAnnouncementListOpen((current) => !current)} aria-expanded={isAnnouncementListOpen} className="focus-ring mb-5 inline-flex items-center gap-2.5 rounded-xl border border-[hsl(var(--border))] px-5 py-3.5 text-sm font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-existing-announcements"><Megaphone size={18} /> Mövcud elanlar</button>{isAnnouncementListOpen && <AnnouncementList />}<AnnouncementForm onSaved={() => setLocation('/admin')} /></>}
-            {tab === 'article' && <ArticleForm />}
-            {tab === 'benefit' && <DailyBenefitForm />}
-            {tab === 'application' && <>{(owner || ownerAssistant) && <ApplicationWindowSettings />}<ApplicationList applications={applicationsQuery.data ?? []} isLoading={applicationsQuery.isLoading} busyId={decisionBusyId} onDecision={decideApplication} canDecide={!ownerAssistant} canAssignTeacher={owner || ownerAssistant} onAssignTeacher={assignApplicationTeacher} teacherBusyId={teacherBusyId} />{decisionNotice && <p className="mt-4 rounded-xl bg-[hsl(var(--secondary)/.35)] p-3 text-sm font-semibold text-[hsl(var(--secondary-foreground))]">{decisionNotice}</p>}</>}
-             {tab === 'student-management' && <StudentManagementSection pendingSubjectRequestCount={pendingSubjectRequestCount} pendingExcuseCount={pendingExcuseCount} onReadExcuses={() => setReadExcuseIds(excusesQuery.data?.map((item) => item.id) ?? [])} canViewDeletedStudents={owner} canGraduate={owner} resources={resourcesQuery.data ?? []} canManageAssignments={canManageAssignments} assignmentTeacherClerkUserId={activeRole === 'teacher' || activeRole === 'admin' ? user?.id : undefined} focusStudentId={focusStudentId} />}
-            {tab === 'users' && (owner || ownerAssistant) && <RoleManagement canConfigurePermissions={owner} />}
-            {tab === 'statistics' && owner && <><AnalyticsDashboard applications={applicationsQuery.data ?? []} profiles={academicProfilesQuery.data ?? []} resources={resourcesQuery.data ?? []} onRefresh={() => { void Promise.all([applicationsQuery.refetch(), academicProfilesQuery.refetch(), resourcesQuery.refetch()]); }} /><SystemStatisticsSettings /><StudentAiExternalSettings /></>}
-            {tab === 'audit-history' && owner && <AuditHistory />}
-            {tab === 'graduation-certificates' && (owner || ownerAssistant) && <GraduateCertificateSection canRevoke={owner} />}
-            {tab === 'schedule-prep' && (owner || ownerAssistant || activeRole === 'admin') && <SchedulePrepSection />}
-            {tab === 'library' && <MedreseLibrary canManage={owner || ownerAssistant || activeRole === 'admin'} />}
-             {tab === 'schedule' && <TeacherSchedule ownerName={fullName} />}
-              {tab === 'teachers-schedule' && <TeachersSchedule ownerName={fullName} />}
-               {tab === 'messages' && <MessageCenter staff />}
-                {tab === 'questions' && <QaCenter canAnswer onUnansweredCountChange={setUnansweredQuestionCount} />}
+              {tab && pillTabs.includes(tab) && inlinePanel(tab)}
+              {tab && !pillTabs.includes(tab) && !tileTabsRendered.has(tab) && inlinePanel(tab)}
           </section>
           <div className="mt-4 space-y-4">
             <DailyBenefitList benefits={dailyBenefits} />

@@ -3,7 +3,9 @@ import { ArrowLeft, BookOpen, BookText, CalendarDays, Check, ChevronLeft, Chevro
 import { Link } from 'wouter';
 import { useAuth, useUser } from '@clerk/react';
 import { DidYouMean, LibraryHitList } from '@/components/library-search-results';
-import { searchLibraryApi, type LibraryChapterSuggestion, type LibrarySearchItem } from '@/lib/library';
+import { LIBRARY_SLUG, libraryReaderHref, searchLibraryApi, type LibraryChapterSuggestion, type LibrarySearchItem } from '@/lib/library';
+import { courseBookRange, type CourseBookView } from '@/lib/course-books';
+import { courseTermLabel } from '@/components/course-books';
 
 // Mədinə AI — saytın daxili köməkçisi.
 // Söhbət tarixçəsi YALNIZ bu brauzerin localStorage-ində saxlanılır (açar: medine-ai-chat:<clerkUserId>).
@@ -39,7 +41,10 @@ type ResearchSources =
     book?: string | null;
     expanded?: string[];
     didYouMean?: LibraryChapterSuggestion[];
-  };
+  }
+  | { kind: 'course-books'; query: string; items: CourseBooksAnswerItem[] };
+
+type CourseBooksAnswerItem = { courseId: number; courseTitle: string; termNumber: number; books: CourseBookView[] };
 
 type ChatMessage = {
   id: string;
@@ -97,7 +102,7 @@ function safeSourceUrl(url: unknown, fallback: string) {
 function isResearchSources(value: unknown): value is ResearchSources {
   if (!value || typeof value !== 'object') return false;
   const sources = value as { kind?: unknown; items?: unknown; query?: unknown };
-  return (sources.kind === 'shamela' || sources.kind === 'dorar' || sources.kind === 'library') && Array.isArray(sources.items) && typeof sources.query === 'string';
+  return (sources.kind === 'shamela' || sources.kind === 'dorar' || sources.kind === 'library' || sources.kind === 'course-books') && Array.isArray(sources.items) && typeof sources.query === 'string';
 }
 
 function sourceGroups(value: unknown): ResearchSources[] {
@@ -350,7 +355,35 @@ function LibraryResults({ sources, getToken }: { sources: Extract<ResearchSource
   );
 }
 
+// Dərs kitabları: hər fənn üçün kitab(lar) və oxuyucunu seçilmiş fəsil/səhifədə açan «Oxu».
+function CourseBooksResults({ items }: { items: CourseBooksAnswerItem[] }) {
+  return (
+    <div className="mt-3 space-y-3" data-testid="ai-course-books">
+      {items.map((item) => (
+        <div key={`${item.courseId}-${item.termNumber}`} className="rounded-2xl border border-[#e3c27a]/20 bg-white/[.03] p-3">
+          <p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#e3c27a]">{item.courseTitle} · {courseTermLabel(item.termNumber)}</p>
+          <ul className="mt-2 space-y-2">
+            {item.books.filter((book) => book.available && LIBRARY_SLUG.test(book.slug)).map((book, index) => {
+              const range = courseBookRange(book);
+              return (
+                <li key={`${book.slug}-${index}`} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-[#f4ead5]">{book.bookShortTitle}</p>
+                    {(book.chapterTitle || range || book.note) && <p className="text-xs text-[#f4ead5]/60">{book.chapterTitle && <span dir="rtl" style={{ fontFamily: arabicFont }}>{book.chapterTitle}</span>}{book.chapterTitle && range && ' · '}{range}{book.note && <>{(book.chapterTitle || range) && ' · '}{book.note}</>}</p>}
+                  </div>
+                  <Link href={libraryReaderHref(book.slug, book.openPage)} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#e3c27a] px-3 py-1.5 text-xs font-bold text-[#17130c] hover:bg-[#f3dca6]" data-testid={`button-ai-course-book-read-${book.slug}`}><BookOpen size={13} /> Oxu</Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ResearchResults({ sources, getToken, heading, pageEndpoint }: { sources: ResearchSources; getToken: GetToken; heading?: boolean; pageEndpoint: string }) {
+  if (sources.kind === 'course-books') return <CourseBooksResults items={sources.items} />;
   if (sources.kind === 'library' && !heading) return <LibraryResults sources={sources} getToken={getToken} />;
   if (!sources.items.length) return null;
   if (heading) {

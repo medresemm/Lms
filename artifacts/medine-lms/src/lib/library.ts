@@ -18,15 +18,45 @@ export type LibraryBook = {
   pageCount: number;
   pageOffset: number;
   chapters: LibraryChapter[];
+  /** builtin — skan şəkilləri serverdə; upload — admin yükləyib, səhifələr brauzerdə pdf.js ilə çəkilir. */
+  source?: 'builtin' | 'upload';
+  hasText?: boolean;
+  hasCover?: boolean;
+  hasPdf?: boolean;
+  fileSize?: number | null;
+  version?: string;
 };
 
-type CatalogState = { books: LibraryBook[]; token: string; expiresAt: number };
+export type LibraryUploadsInfo =
+  | { available: true; maxPdfBytes: number; maxPages: number; subjects: string[] }
+  | { available: false; reason: 'table' | 'storage' | 'error'; message: string; maxPdfBytes: number; maxPages: number; subjects: string[] };
+
+type CatalogState = { books: LibraryBook[]; token: string; expiresAt: number; canManage: boolean; uploads: LibraryUploadsInfo | null };
 
 const siteBase = import.meta.env.BASE_URL.replace(/\/$/, '');
 export const arabicBookFont = '"Amiri", "Noto Naskh Arabic", "Scheherazade New", "Traditional Arabic", "Geeza Pro", serif';
 
 export function libraryPageUrl(slug: string, page: number, token: string) {
   return `${siteBase}/api/library/books/${encodeURIComponent(slug)}/pages/${page}?t=${encodeURIComponent(token)}`;
+}
+
+export function isUploadedBook(book: Pick<LibraryBook, 'source'>) {
+  return book.source === 'upload';
+}
+
+/** Orijinal PDF: download — yükləmə (attachment); json — oxuyucu üçün qısa ömürlü URL. */
+export function libraryFileUrl(slug: string, token: string, mode: 'download' | 'json' = 'download') {
+  return `${siteBase}/api/library/books/${encodeURIComponent(slug)}/file?mode=${mode}&t=${encodeURIComponent(token)}`;
+}
+
+export function libraryCoverUrl(book: LibraryBook, token: string) {
+  if (!isUploadedBook(book)) return libraryPageUrl(book.slug, 1, token);
+  return book.hasCover ? `${siteBase}/api/library/books/${encodeURIComponent(book.slug)}/cover?t=${encodeURIComponent(token)}` : null;
+}
+
+export function formatBytes(bytes: number) {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 export function libraryReaderHref(slug: string, page?: number) {
@@ -80,11 +110,17 @@ export function useLibraryCatalog() {
     try {
       const token = await getToken().catch(() => null);
       const response = await fetch(`${siteBase}/api/library/books`, { headers: token ? { authorization: `Bearer ${token}` } : {}, cache: 'no-store' });
-      const data = await response.json().catch(() => null) as { books?: LibraryBook[]; pageToken?: string; pageTokenExpiresAt?: string; error?: string } | null;
+      const data = await response.json().catch(() => null) as { books?: LibraryBook[]; pageToken?: string; pageTokenExpiresAt?: string; canManage?: boolean; uploads?: LibraryUploadsInfo | null; error?: string } | null;
       if (!response.ok || !data || !Array.isArray(data.books) || typeof data.pageToken !== 'string') {
         throw new Error(data?.error || 'Kitabxananı yükləmək mümkün olmadı.');
       }
-      setState({ books: data.books, token: data.pageToken, expiresAt: Date.parse(data.pageTokenExpiresAt ?? '') || Date.now() + 30 * 60_000 });
+      setState({
+        books: data.books,
+        token: data.pageToken,
+        expiresAt: Date.parse(data.pageTokenExpiresAt ?? '') || Date.now() + 30 * 60_000,
+        canManage: data.canManage === true,
+        uploads: data.uploads ?? null,
+      });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Kitabxananı yükləmək mümkün olmadı.');
     } finally {
@@ -101,7 +137,7 @@ export function useLibraryCatalog() {
     return () => window.clearTimeout(timer);
   }, [state, load]);
 
-  return { books: state?.books ?? null, token: state?.token ?? null, error, loading, reload: load };
+  return { books: state?.books ?? null, token: state?.token ?? null, canManage: state?.canManage ?? false, uploads: state?.uploads ?? null, error, loading, reload: load };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { findAssetPath } from "../assets.js";
 import { LIBRARY_BOOKS, chapterForPage, findLibraryBook, libraryPageAssetPath } from "./catalog.js";
@@ -9,6 +10,7 @@ import {
   lightStem,
   normalizeArabic,
   parseLibraryQuery,
+  registerLibraryTexts,
   resolveLibraryMessage,
   runLibraryQuery,
   searchLibrary,
@@ -17,7 +19,20 @@ import {
 } from "./search.js";
 import { HELD_OUT_SET, RECALL_SET, type RecallCase } from "./recall-set.js";
 import { TOPIC_SYNONYMS } from "./synonyms.js";
-import { createLibraryToken, verifyLibraryToken } from "./token.js";
+import { createLibraryToken, createUploadTicket, verifyLibraryToken, verifyUploadTicket } from "./token.js";
+import {
+  LIBRARY_MAX_PDF_BYTES,
+  builtinPdfKey,
+  isMissingTableError,
+  isUploadedSlug,
+  looksLikePdf,
+  parseUploadedText,
+  pdfContentDisposition,
+  uploadKeys,
+  uploadedRowToBook,
+  uploadedSlug,
+  validateBookFields,
+} from "./uploads.js";
 
 test("ərəb normallaşdırması: hərəkə, həmzə, tə-mərbuta, əlif-məqsura", () => {
   assert.equal(normalizeArabic("الصَّلَاةُ"), "الصلاه");
@@ -206,4 +221,110 @@ test("şəkil açarı: imza, istifadəçi, vaxt", () => {
   const [subject, , signature] = token.split(".");
   assert.equal(verifyLibraryToken(`${subject}.${expiresAt + 99999}.${signature}`, now, key), false);
   assert.equal(createLibraryToken("user_1", now + 60, key).token, token, "eyni saatda eyni URL (keş üçün)");
+});
+
+// ---------------------------------------------------------------------------
+// PDF endirmə və yüklənən kitablar
+
+
+test("bundled original PDFs exist for both scans and start with %PDF-", () => {
+  for (const book of LIBRARY_BOOKS) {
+    const file = findAssetPath(`library/${book.slug}/book.pdf`);
+    assert.ok(file, `${book.slug}: book.pdf`);
+    const head = readFileSync(file).subarray(0, 1024);
+    assert.ok(looksLikePdf(head));
+  }
+  assert.equal(builtinPdfKey("manhaj-as-salikin"), "library/builtin/manhaj-as-salikin.pdf");
+});
+
+test("Content-Disposition has an ASCII fallback and a UTF-8 name", () => {
+  const value = pdfContentDisposition("Şərhu Mənhəcis-Salikin", "manhaj-as-salikin");
+  assert.match(value, /^attachment; filename="Serhu-Menhecis-Salikin\.pdf"; filename\*=UTF-8''/);
+  assert.ok(value.includes(encodeURIComponent("Şərhu Mənhəcis-Salikin.pdf")));
+  const arabic = pdfContentDisposition("التحفة السنية", "at-tuhfa-as-saniyya");
+  assert.match(arabic, /filename="at-tuhfa-as-saniyya\.pdf"/);
+  assert.ok(!/["\r\n]/.test(pdfContentDisposition('a"b\r\nc', "x").split("filename*=")[1]));
+});
+
+test("upload ids, slugs and storage keys are strict", () => {
+  const id = "3f2c8a8e-1b2c-4d5e-8f90-123456789abc";
+  assert.equal(uploadedSlug(id), `u-${id}`);
+  assert.ok(isUploadedSlug(`u-${id}`));
+  assert.ok(!isUploadedSlug("u-../../etc"));
+  assert.ok(!isUploadedSlug("manhaj-as-salikin"));
+  assert.deepEqual(uploadKeys(id), {
+    pdf: `library/uploads/${id}/book.pdf`,
+    text: `library/uploads/${id}/text.json`,
+    cover: `library/uploads/${id}/cover.jpg`,
+  });
+  assert.equal(LIBRARY_MAX_PDF_BYTES, 100 * 1024 * 1024);
+});
+
+test("upload ticket is bound to user, storage id and expiry", () => {
+  const id = "3f2c8a8e-1b2c-4d5e-8f90-123456789abc";
+  const now = 1_800_000_000;
+  const ticket = createUploadTicket("user_a", id, now);
+  assert.ok(verifyUploadTicket(ticket, "user_a", id, now + 10));
+  assert.ok(!verifyUploadTicket(ticket, "user_b", id, now + 10));
+  assert.ok(!verifyUploadTicket(ticket, "user_a", "3f2c8a8e-1b2c-4d5e-8f90-123456789abd", now + 10));
+  assert.ok(!verifyUploadTicket(ticket, "user_a", id, now + 3601));
+  assert.ok(!verifyUploadTicket("1.x", "user_a", id, now));
+});
+
+test("book metadata validation: required fields, subject list, chapters within the PDF", () => {
+  const base = { title: "  كتاب التوحيد  ", author: "محمد بن عبد الوهاب", subject: "Əqidə", pageOffset: 2 };
+  const ok = validateBookFields({ ...base, chapters: [{ title: "باب ب", printedPage: 10, level: 2 }, { title: "باب أ", printedPage: 1 }] }, 50);
+  assert.ok(ok.ok);
+  if (ok.ok) {
+    assert.equal(ok.value.title, "كتاب التوحيد");
+    assert.deepEqual(ok.value.chapters.map((chapter) => [chapter.title, chapter.page, chapter.level]), [["باب أ", 3, 1], ["باب ب", 12, 2]]);
+    assert.equal(ok.value.commentator, null);
+  }
+  assert.ok(!validateBookFields({ ...base, title: "x" }, 50).ok);
+  assert.ok(!validateBookFields({ ...base, author: "" }, 50).ok);
+  assert.ok(!validateBookFields({ ...base, subject: "Kimya" }, 50).ok);
+  assert.ok(!validateBookFields({ ...base, chapters: [{ title: "باب", printedPage: 49 }] }, 50).ok, "49 + 2 > 50");
+  assert.ok(!validateBookFields({ ...base, chapters: [{ title: "", printedPage: 3 }] }, 50).ok);
+  assert.ok(!validateBookFields({ ...base, pageOffset: 1.5 }, 50).ok);
+  const bidi = validateBookFields({ ...base, title: "abc\u202Edef" }, 50);
+  assert.ok(bidi.ok && !bidi.value.title.includes("\u202E"));
+});
+
+test("PDF magic bytes and text-layer parsing (scans without text are not searchable)", () => {
+  assert.ok(looksLikePdf(Buffer.from("%PDF-1.7\n...")));
+  assert.ok(looksLikePdf(Buffer.concat([Buffer.alloc(10, 32), Buffer.from("%PDF-1.4")])));
+  assert.ok(!looksLikePdf(Buffer.from("<html>")));
+  const text = parseUploadedText(Buffer.from(JSON.stringify({ pages: ["", "باب الطهارة ".repeat(30)] })), 2);
+  assert.ok(text.ok && text.value.hasText);
+  const scan = parseUploadedText(Buffer.from(JSON.stringify({ pages: ["", " ", "x"] })), 3);
+  assert.ok(scan.ok && !scan.value.hasText);
+  assert.ok(!parseUploadedText(Buffer.from(JSON.stringify({ pages: ["a"] })), 2).ok, "page count mismatch");
+  assert.ok(!parseUploadedText(Buffer.from("not json"), 1).ok);
+});
+
+test("uploaded books with a text layer are searchable; edits re-index; missing table detected", () => {
+  const id = "3f2c8a8e-1b2c-4d5e-8f90-123456789abc";
+  const row = {
+    slug: uploadedSlug(id), storageId: id, title: "كتاب تجريبي", shortTitle: "Sınaq kitabı", author: "مؤلف", commentator: null,
+    publisher: "", year: "", subject: "Fiqh", pageCount: 3, pageOffset: 0,
+    chapters: [{ title: "باب المسح على الخفين", level: 1 as const, printedPage: 2, page: 2 }],
+    hasText: true, hasCover: false, fileSize: 1234, updatedAt: new Date("2026-10-09T10:00:00Z"),
+  };
+  const book = uploadedRowToBook(row);
+  registerLibraryTexts(book.slug, book.version, ["مقدمة", "باب المسح على الخفين ويجوز المسح للمقيم يوما وليلة", "خاتمة الكتاب في الحاسوبية"]);
+  const books = [...LIBRARY_BOOKS, book];
+  const hit = runLibraryQuery("الحاسوبية", { books });
+  assert.equal(hit.items[0]?.slug, book.slug);
+  assert.equal(hit.items[0]?.page, 3);
+  const chapter = runLibraryQuery("المسح على الخفين", { books, book: book.slug });
+  assert.equal(chapter.items[0]?.match, "chapter");
+  const edited = uploadedRowToBook({ ...row, chapters: [{ title: "باب الخاتمة", level: 1, printedPage: 3, page: 3 }], updatedAt: new Date("2026-10-09T11:00:00Z") });
+  registerLibraryTexts(edited.slug, edited.version, ["مقدمة", "باب المسح على الخفين", "خاتمة الكتاب في الحاسوبية"]);
+  const after = runLibraryQuery("الخاتمة", { books: [...LIBRARY_BOOKS, edited], book: edited.slug });
+  assert.equal(after.items[0]?.chapterTitle, "باب الخاتمة");
+  registerLibraryTexts(book.slug, "", null);
+  assert.equal(answerLibrary("الحاسوبية", { books: [...LIBRARY_BOOKS, edited] }).sources.total, 0);
+  assert.ok(isMissingTableError({ message: "query failed", cause: { code: "42P01" } }));
+  assert.ok(isMissingTableError(new Error('relation "lms_library_books" does not exist')));
+  assert.ok(!isMissingTableError(new Error("connection refused")));
 });

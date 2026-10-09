@@ -38,3 +38,21 @@ export function verifyLibraryToken(token: unknown, nowSeconds = Math.floor(Date.
   const given = Buffer.from(signature);
   return expected.length === given.length && timingSafeEqual(expected, given);
 }
+
+/** Yükləmə bileti: storageId yalnız onu alan idarəçi tərəfindən, 1 saat ərzində kitab kimi qeyd oluna bilər. */
+export function createUploadTicket(userId: string, storageId: string, nowSeconds = Math.floor(Date.now() / 1000), key = signingKey()) {
+  const expiresAt = nowSeconds + 60 * 60;
+  const payload = `upload.${Buffer.from(userId, "utf8").toString("base64url")}.${storageId}.${expiresAt}`;
+  return `${expiresAt}.${sign(payload, key)}`;
+}
+
+export function verifyUploadTicket(ticket: unknown, userId: string, storageId: string, nowSeconds = Math.floor(Date.now() / 1000), key = signingKey()) {
+  if (typeof ticket !== "string" || ticket.length > 200) return false;
+  const [expires, signature] = ticket.split(".");
+  const expiresAt = Number(expires);
+  if (!signature || !Number.isSafeInteger(expiresAt) || expiresAt <= nowSeconds) return false;
+  const payload = `upload.${Buffer.from(userId, "utf8").toString("base64url")}.${storageId}.${expiresAt}`;
+  const expected = Buffer.from(sign(payload, key));
+  const given = Buffer.from(signature);
+  return expected.length === given.length && timingSafeEqual(expected, given);
+}

@@ -91,7 +91,22 @@ interface BookIndex {
 
 export type TextLoader = (slug: string) => string[] | null;
 
+/** Yüklənmiş kitabların mətni (yaddaşdan oxunur, burada saxlanılır). version dəyişəndə indeks yenidən qurulur. */
+const registeredTexts = new Map<string, { version: string; pages: string[] }>();
+
+export function registerLibraryTexts(slug: string, version: string, pages: string[] | null) {
+  if (!pages) registeredTexts.delete(slug);
+  else registeredTexts.set(slug, { version, pages });
+  for (const key of indexCache.keys()) if (key.startsWith(`${slug}@`)) indexCache.delete(key);
+}
+
+export function registeredLibraryTextVersion(slug: string) {
+  return registeredTexts.get(slug)?.version ?? null;
+}
+
 const assetLoader: TextLoader = (slug) => {
+  const registered = registeredTexts.get(slug);
+  if (registered) return registered.pages;
   const raw = readAsset(`library/${slug}/text.json`);
   if (!raw) return null;
   try {
@@ -179,11 +194,19 @@ function buildIndex(book: LibraryBook, texts: string[]): BookIndex {
 const indexCache = new Map<string, BookIndex | null>();
 
 function loadIndex(book: LibraryBook, loader: TextLoader): BookIndex | null {
-  if (loader === assetLoader && indexCache.has(book.slug)) return indexCache.get(book.slug) ?? null;
+  // Yüklənmiş kitabda fəsillər redaktə oluna bilər — açar kitab obyektinin versiyasını da daxil edir.
+  const key = `${book.slug}@${registeredTexts.get(book.slug)?.version ?? ""}`;
+  const cached = loader === assetLoader ? indexCache.get(key) : undefined;
+  if (cached !== undefined && (cached === null || cached.book === book || sameChapters(cached.book, book))) return cached;
   const texts = loader(book.slug);
   const index = texts ? buildIndex(book, texts) : null;
-  if (loader === assetLoader) indexCache.set(book.slug, index);
+  if (loader === assetLoader) indexCache.set(key, index);
   return index;
+}
+
+function sameChapters(a: LibraryBook, b: LibraryBook) {
+  return a.title === b.title && a.shortTitle === b.shortTitle && a.pageOffset === b.pageOffset &&
+    JSON.stringify(a.chapters) === JSON.stringify(b.chapters);
 }
 
 /** İndeksləri əvvəlcədən qurur (məs. serverin ilk sorğusunda); qurulma müddəti ms ilə qaytarılır. */
@@ -864,7 +887,7 @@ export function answerLibrary(query: string, options: LibrarySearchOptions = {})
     };
   }
   const result = runLibraryQuery(query, options);
-  const bookName = result.book ? LIBRARY_BOOKS.find((book) => book.slug === result.book)?.shortTitle : null;
+  const bookName = result.book ? (options.books ?? LIBRARY_BOOKS).find((book) => book.slug === result.book)?.shortTitle : null;
   const scope = bookName ? `«${bookName}» kitabında` : "Mədrəsə Kitabxanasında";
   const expandedNote = result.expanded.length ? ` (axtarılan: ${result.expanded.join("، ")})` : "";
   const reply = result.total

@@ -176,3 +176,86 @@ export async function deleteAssignmentFile(objectPath: string) {
   const file = await getAssignmentFile(objectPath);
   await file.delete({ ignoreNotFound: true });
 }
+
+// ---------------------------------------------------------------------------
+// Library (Mədrəsə Kitabxanası): library/uploads/<uuid>/{book.pdf,text.json,cover.jpg}, library/builtin/<slug>.pdf
+// ---------------------------------------------------------------------------
+
+export function libraryStorageConfigured() {
+  return Boolean(
+    process.env.SUPABASE_S3_ENDPOINT &&
+    process.env.SUPABASE_S3_ACCESS_KEY_ID &&
+    process.env.SUPABASE_S3_SECRET_ACCESS_KEY &&
+    process.env.SUPABASE_STORAGE_BUCKET,
+  );
+}
+
+const libraryKeyPattern = /^library\/(?:uploads\/[0-9a-f-]{36}\/(?:book\.pdf|text\.json|cover\.jpg)|builtin\/[a-z0-9-]+\.pdf)$/;
+
+function assertLibraryKey(key: string) {
+  if (!libraryKeyPattern.test(key)) throw new Error("Yanlış kitabxana faylı yolu.");
+}
+
+export interface LibraryObjectStore {
+  signedPut(key: string, contentType: string): Promise<string>;
+  signedGet(key: string, options: { contentType: string; disposition?: string; expiresIn?: number }): Promise<string>;
+  head(key: string): Promise<{ size: number; contentType: string | null } | null>;
+  read(key: string, range?: { start: number; end: number }): Promise<Buffer>;
+  putFile(key: string, body: Buffer, contentType: string): Promise<void>;
+  delete(key: string): Promise<void>;
+}
+
+async function bodyToBuffer(body: unknown): Promise<Buffer> {
+  if (!body) return Buffer.alloc(0);
+  const chunks: Buffer[] = [];
+  for await (const chunk of body as AsyncIterable<Uint8Array>) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks);
+}
+
+export const s3LibraryStore: LibraryObjectStore = {
+  async signedPut(key, contentType) {
+    assertLibraryKey(key);
+    return signedPutUrl(key, contentType);
+  },
+  async signedGet(key, { contentType, disposition, expiresIn = 10 * 60 }) {
+    assertLibraryKey(key);
+    const command = new GetObjectCommand({
+      Bucket: bucketName(),
+      Key: key,
+      ResponseContentType: contentType,
+      ResponseContentDisposition: disposition,
+      ResponseCacheControl: "private, no-store",
+    });
+    return getSignedUrl(s3Client(), command, { expiresIn });
+  },
+  async head(key) {
+    assertLibraryKey(key);
+    try {
+      const head = await s3Client().send(new HeadObjectCommand({ Bucket: bucketName(), Key: key }));
+      return { size: head.ContentLength ?? 0, contentType: head.ContentType ?? null };
+    } catch {
+      return null;
+    }
+  },
+  async read(key, range) {
+    assertLibraryKey(key);
+    const result = await s3Client().send(new GetObjectCommand({
+      Bucket: bucketName(),
+      Key: key,
+      Range: range ? `bytes=${range.start}-${range.end}` : undefined,
+    }));
+    return bodyToBuffer(result.Body);
+  },
+  async putFile(key, body, contentType) {
+    assertLibraryKey(key);
+    await s3Client().send(new PutObjectCommand({ Bucket: bucketName(), Key: key, Body: body, ContentType: contentType }));
+  },
+  async delete(key) {
+    assertLibraryKey(key);
+    try {
+      await s3Client().send(new DeleteObjectCommand({ Bucket: bucketName(), Key: key }));
+    } catch {
+      // artıq silinib
+    }
+  },
+};

@@ -65,6 +65,11 @@ import {
   userIsSystemOwner,
 } from "./lms.js";
 import { answerLibrary, resolveLibraryMessage } from "../lib/library/search.js";
+import { searchableLibraryBooks } from "../lib/library/uploadedBooks.js";
+import { answerCourseBooks, detectCourseBooksQuestion, type StudentCourseRef } from "../lib/library/courseBooks.js";
+import { fullLibraryCatalog, loadCourseBooksRows } from "../lib/library/courseBooksRepo.js";
+import { parse as parseMessage } from "../lib/ai/text.js";
+import { titleMatches } from "../lib/ai/format.js";
 import {
   getAiProvider,
   type AdminAiContext,
@@ -243,6 +248,33 @@ async function toAiLessons(rows: ResourceRow[], forStudent = false): Promise<AiL
     teacherName: view.teacherName,
     isMandatory: view.isMandatory,
   }));
+}
+
+async function answerStudentCourseBooks(ctx: StudentAiContext, message: string) {
+  const [semesters, overview] = await Promise.all([ctx.semesters(), ctx.overview()]);
+  const courses: StudentCourseRef[] = semesters.flatMap((semester) => semester.subjects.map((subject) => ({ courseId: subject.courseId, title: subject.title, termNumber: semester.termNumber })));
+  if (overview.scheduleAccess.approved) {
+    for (const lesson of await ctx.lessons()) {
+      if (!courses.some((course) => course.courseId === lesson.courseId)) courses.push({ courseId: lesson.courseId, title: lesson.courseTitle, termNumber: lesson.termNumber });
+    }
+  }
+  // Cari semestrin fənləri əvvəl.
+  courses.sort((a, b) => Math.abs(overview.currentTermNumber - a.termNumber) - Math.abs(overview.currentTermNumber - b.termNumber));
+  const parsed = parseMessage(message, false);
+  const matched = new Set(courses.filter((course) => titleMatches(parsed, course.title)).map((course) => course.courseId));
+  const [{ available, rows }, catalog] = await Promise.all([
+    loadCourseBooksRows(Array.from(new Set(courses.map((course) => course.courseId)))),
+    fullLibraryCatalog(),
+  ]);
+  if (!available) {
+    return { reply: "Dərs kitabları bölməsi hələ aktiv deyil. Müəllimləriniz kitab təyin edəndən sonra burada görünəcək.", suggestions: ["Dərs cədvəlim", "Fənlərim"] };
+  }
+  const result = answerCourseBooks({ courses, matchedCourseIds: matched.size ? matched : null, currentTerm: overview.currentTermNumber, rows, catalog });
+  return {
+    reply: result.reply,
+    suggestions: ["Dərs cədvəlim", "Fənlərim", "Kitabxanada axtar: "],
+    ...(result.items.length ? { sources: { kind: "course-books" as const, query: "", items: result.items } } : {}),
+  };
 }
 
 function buildStudentContext(profile: ProfileRow, application: ApplicationRow): StudentAiContext {
@@ -895,11 +927,25 @@ router.post("/ai/student/chat", noStore, requireApprovedStudent, rateLimit, asyn
       res.status(result.status).json(result.body);
       return;
     }
+    // «Fiqh dərsində hansı kitabı keçəcəyik?» — dərsə bağlanmış Kitabxana kitabları (yalnız tələbənin öz fənləri).
+    if (detectCourseBooksQuestion(input.message)) {
+      const studentId = getAuth(req).userId as string;
+      const studentProfile = await getApprovedStudentProfile(studentId);
+      const [studentApplication] = studentProfile
+        ? await db.select().from(applicationsTable).where(eq(applicationsTable.id, studentProfile.applicationId)).limit(1)
+        : [];
+      if (!studentProfile || !studentApplication) {
+        res.status(404).json({ error: "Tələbə profili tapılmadı." });
+        return;
+      }
+      res.json(await answerStudentCourseBooks(buildStudentContext(studentProfile, studentApplication), input.message));
+      return;
+    }
     // Mədrəsə Kitabxanası daxili məlumatdır: «Daxili» rejimdə tələbəyə də açıqdır.
     // «Kitabxanada axtar» yazılmasa da: ərəbcə mətn, kitab adı, «hansı səhifədə …» və ya tanınan mövzu sözü.
     const libraryIntent = resolveLibraryMessage(input.message);
     if (libraryIntent) {
-      res.json(answerLibrary(libraryIntent.query));
+      res.json(answerLibrary(libraryIntent.query, { books: await searchableLibraryBooks() }));
       return;
     }
     const userId = getAuth(req).userId as string;
@@ -935,7 +981,7 @@ router.post("/ai/admin/chat", noStore, requireAiStaff, rateLimit, async (req, re
     if (selection.mode === "internal") {
       const libraryIntent = resolveLibraryMessage(input.message);
       if (libraryIntent) {
-        res.json(answerLibrary(libraryIntent.query));
+        res.json(answerLibrary(libraryIntent.query, { books: await searchableLibraryBooks() }));
         return;
       }
     }

@@ -735,6 +735,47 @@ const requireCertificateManager: RequestHandler = async (req, res, next) => {
   }
 };
 
+/** Kitabxananı idarə edən: sahib, sahib köməkçisi və ya «admin» rolu (admin panelindəki canManage ilə eyni). */
+export async function userCanManageLibrary(userId: string) {
+  const clerkUser = await getClerkUser(userId);
+  if (await userIsSystemOwner(userId, clerkUser)) return true;
+  const role = metadataRole(clerkUser?.publicMetadata);
+  return role === "owner_assistant" || role === "admin";
+}
+
+export const requireLibraryManager: RequestHandler = async (req, res, next) => {
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) {
+      res.status(401).json({ error: "Bu səhifəyə daxil olmaq üçün hesabınıza giriş edin." });
+      return;
+    }
+    if (await userCanManageLibrary(userId)) {
+      next();
+      return;
+    }
+    res.status(403).json({ error: "Kitabxananı yalnız sahib, sahib köməkçisi və admin idarə edə bilər." });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Dərs kitablarını kim dəyişə bilər: sahib, sahib köməkçisi, admin — istənilən dərs;
+ * müəllim — yalnız həmin fənn + semestrdə ona təyin olunmuş qrup varsa.
+ */
+export async function userCanEditCourseBooks(userId: string, courseId: number, termNumber: number) {
+  if (await userCanManageLibrary(userId)) return true;
+  const clerkUser = await getClerkUser(userId);
+  if (metadataRole(clerkUser?.publicMetadata) !== "teacher") return false;
+  const [resource] = await db.select({ id: resourcesTable.id }).from(resourcesTable).where(and(
+    eq(resourcesTable.courseId, courseId),
+    eq(resourcesTable.termNumber, termNumber),
+    eq(resourcesTable.teacherClerkUserId, userId),
+  )).limit(1);
+  return Boolean(resource);
+}
+
 export const requireOwnerOrAssistant: RequestHandler = async (req, res, next) => {
   return requireOwnerOrAssistantPermission("userRoleManagement")(req, res, next);
 };

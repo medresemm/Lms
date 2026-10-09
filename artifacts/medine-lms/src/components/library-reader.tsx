@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowLeft, ArrowRight, ChevronLeft, ListTree, Loader2, RotateCcw, Search, X } from 'lucide-react';
+import { PdfDownloadLink } from '@/components/medrese-library';
 import { Link, useSearch } from 'wouter';
 import { useAuth, useUser } from '@clerk/react';
 import { DidYouMean, LibraryHitList } from '@/components/library-search-results';
 import {
   arabicBookFont,
   chapterForPage,
+  isUploadedBook,
+  libraryFileUrl,
   libraryPageUrl,
   loadReadingPage,
   saveReadingPage,
@@ -23,6 +26,7 @@ function ReaderSearchPanel({ book, onClose, onOpenPage }: { book: LibraryBook; o
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const searchable = !(isUploadedBook(book) && book.hasText === false);
   useEffect(() => { inputRef.current?.focus(); }, []);
 
   async function run(offset: number) {
@@ -51,6 +55,12 @@ function ReaderSearchPanel({ book, onClose, onOpenPage }: { book: LibraryBook; o
           </div>
           <button type="button" onClick={onClose} className="focus-ring rounded-full p-2 hover:bg-black/5" aria-label="Bağla"><X size={18} /></button>
         </div>
+        {!searchable && (
+          <p className="m-4 rounded-lg border border-[#3a2a17]/15 bg-white/60 px-3 py-3 text-sm leading-6" data-testid="reader-search-unavailable">
+            Bu kitab skan PDF-dir (mətn qatı yoxdur), ona görə bu kitabda axtarış mümkün deyil. Mündəricat və səhifə keçidindən istifadə edin.
+          </p>
+        )}
+        {searchable && <>
         <form onSubmit={(event) => { event.preventDefault(); void run(0); }} className="flex gap-2 border-b border-[#3a2a17]/10 px-4 py-3">
           <input
             ref={inputRef}
@@ -83,8 +93,9 @@ function ReaderSearchPanel({ book, onClose, onOpenPage }: { book: LibraryBook; o
             </>
           )}
           {!result && !error && <p className="text-xs leading-5 text-[#3a2a17]/60">Ərəbcə söz/ifadə yazın (hərəkəsiz də olar) və ya mövzunu Azərbaycan/Türk dilində yazın: «dəstəmaz», «fail», «kana və bacıları».</p>}
-          <p className="text-[11px] text-[#3a2a17]/55">Axtarış skan mətninə (OCR) əsaslanır — kiçik xətalar ola bilər.</p>
+          <p className="text-[11px] text-[#3a2a17]/55">{isUploadedBook(book) ? 'Axtarış PDF-in mətn qatına əsaslanır.' : 'Axtarış skan mətninə (OCR) əsaslanır — kiçik xətalar ola bilər.'}</p>
         </div>
+        </>}
       </aside>
     </div>
   );
@@ -141,11 +152,114 @@ function printedLabel(book: LibraryBook, page: number) {
   return printed >= 1 ? String(printed) : page === 1 ? 'üz qabığı' : '—';
 }
 
+type PageSource = {
+  srcFor: (page: number) => string | null;
+  preload: (pages: number[]) => void;
+  error: string | null;
+};
+
+const PDF_CACHE_LIMIT = 24;
+
+/**
+ * Səhifə mənbəyi: daxili kitablar — serverdəki WebP şəkillər; yüklənmiş kitablar — PDF brauzerdə pdf.js ilə
+ * (HTTP Range ilə hissə-hissə) açılır və səhifələr növbə ilə JPEG-ə çəkilir (son 24 səhifə yaddaşda saxlanılır).
+ */
+function usePageSource(book: LibraryBook | null, token: string | null, pixelHeight: number): PageSource {
+  const uploaded = book ? isUploadedBook(book) : false;
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
+  const [doc, setDoc] = useState<import('@/lib/pdf').PdfDocument | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [, setVersion] = useState(0);
+  const cache = useRef(new Map<number, string>());
+  const queue = useRef<number[]>([]);
+  const busy = useRef(false);
+  const height = useRef(0);
+  if (!height.current && pixelHeight > 0) height.current = Math.min(2400, Math.max(800, Math.ceil(pixelHeight / 200) * 200));
+
+  useEffect(() => {
+    if (!book || !uploaded) return;
+    let cancelled = false;
+    let opened: import('@/lib/pdf').PdfDocument | null = null;
+    const urls = cache.current;
+    setError(null);
+    (async () => {
+      const current = tokenRef.current;
+      if (!current) return;
+      const response = await fetch(libraryFileUrl(book.slug, current, 'json'), { cache: 'no-store' });
+      const data = await response.json().catch(() => null) as { url?: string; error?: string } | null;
+      if (!response.ok || !data?.url) throw new Error(data?.error || 'PDF açılmadı.');
+      const { openPdf } = await import('@/lib/pdf');
+      opened = await openPdf({ url: data.url });
+      if (cancelled) { void opened.destroy(); return; }
+      setDoc(opened);
+    })().catch((caught) => { if (!cancelled) setError(caught instanceof Error && caught.message !== 'Failed to fetch' ? caught.message : 'PDF açılmadı. Şəbəkəni yoxlayıb yenidən cəhd edin.'); });
+    return () => {
+      cancelled = true;
+      setDoc(null);
+      if (opened) void opened.destroy();
+      for (const url of urls.values()) URL.revokeObjectURL(url);
+      urls.clear();
+      queue.current = [];
+    };
+  }, [book?.slug, uploaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pump = useCallback(async () => {
+    if (!doc || busy.current) return;
+    busy.current = true;
+    try {
+      while (queue.current.length) {
+        const page = queue.current.shift()!;
+        if (cache.current.has(page)) continue;
+        try {
+          const { renderPdfPage } = await import('@/lib/pdf');
+          const { blob } = await renderPdfPage(doc, page, height.current || 1400);
+          cache.current.set(page, URL.createObjectURL(blob));
+          while (cache.current.size > PDF_CACHE_LIMIT) {
+            const [oldest, url] = cache.current.entries().next().value as [number, string];
+            cache.current.delete(oldest);
+            URL.revokeObjectURL(url);
+          }
+          setVersion((value) => value + 1);
+        } catch {
+          // bu səhifə çəkilmədi — boş kağız qalır
+        }
+      }
+    } finally {
+      busy.current = false;
+    }
+  }, [doc]);
+
+  const preload = useCallback((pages: number[]) => {
+    if (!book) return;
+    if (!uploaded) {
+      if (!token) return;
+      pages.forEach((candidate) => { const image = new Image(); image.src = libraryPageUrl(book.slug, candidate, token); });
+      return;
+    }
+    // Görünən səhifələr əvvəl; artıq çəkilmişləri LRU üçün yenilə.
+    for (const page of pages) {
+      const url = cache.current.get(page);
+      if (url) { cache.current.delete(page); cache.current.set(page, url); }
+    }
+    queue.current = pages.filter((page) => !cache.current.has(page));
+    void pump();
+  }, [book, uploaded, token, pump]);
+
+  const srcFor = useCallback((page: number) => {
+    if (!book) return null;
+    if (!uploaded) return token ? libraryPageUrl(book.slug, page, token) : null;
+    return cache.current.get(page) ?? null;
+  }, [book, uploaded, token]);
+
+  return { srcFor, preload, error };
+}
+
 /** Kağız fonu + skan şəkli. `spine` cildin hansı tərəfdə olduğunu göstərir (kölgə üçün). */
-function PaperPage({ book, page, token, spine, onImageError, onAspect }: {
+function PaperPage({ book, page, srcFor, spine, onImageError, onAspect }: {
   book: LibraryBook;
   page: number | null;
-  token: string;
+  srcFor: (page: number) => string | null;
   spine: 'left' | 'right' | 'none';
   onImageError?: () => void;
   onAspect?: (aspect: number) => void;
@@ -163,10 +277,13 @@ function PaperPage({ book, page, token, spine, onImageError, onAspect }: {
         backgroundImage: page ? 'radial-gradient(ellipse at 30% 20%, rgba(255,250,235,.7), transparent 60%), radial-gradient(ellipse at 80% 90%, rgba(190,150,90,.18), transparent 55%)' : undefined,
       }}
     >
-      {page && (
+      {page && !srcFor(page) && (
+        <div className="absolute inset-0 grid place-items-center text-[#6b4a2b]/60"><Loader2 size={22} className="animate-spin" /></div>
+      )}
+      {page && srcFor(page) && (
         <>
           <img
-            src={libraryPageUrl(book.slug, page, token)}
+            src={srcFor(page)!}
             alt={`${book.shortTitle}, səhifə ${printedLabel(book, page)}`}
             className="absolute inset-0 h-full w-full select-none object-contain"
             style={{ mixBlendMode: 'multiply' }}
@@ -206,6 +323,7 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
 
   const spreadMode = stage.width >= 720;
   const total = book?.pageCount ?? 0;
+  const pageSource = usePageSource(book, token, stage.height * (typeof window !== 'undefined' ? Math.min(2, window.devicePixelRatio || 1) : 1));
 
   // İlk səhifə: ?page=N (AI nəticəsi) → yadda saxlanmış səhifə → 1.
   useEffect(() => {
@@ -289,17 +407,20 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
     return () => window.removeEventListener('keydown', onKey);
   }, [go, jumpTo, total, drawerOpen, searchOpen]);
 
-  // Qonşu səhifələri əvvəlcədən yüklə.
+  // Qonşu səhifələri əvvəlcədən yüklə (görünənlər birinci).
+  const { preload, srcFor, error: sourceError } = pageSource;
   useEffect(() => {
     if (!book || !token || current === null) return;
     const wanted = new Set<number>();
     const span = spreadMode ? 2 : 1;
-    for (let offset = -span * 2; offset <= span * 3; offset += 1) {
-      const candidate = current + offset;
+    const visible = spreadMode ? [current, current + 1] : [current];
+    const around = [];
+    for (let offset = 1; offset <= span * 3; offset += 1) around.push(current + (spreadMode ? 1 : 0) + offset, current - offset);
+    for (const candidate of [...visible, ...around]) {
       if (candidate >= 1 && candidate <= book.pageCount) wanted.add(candidate);
     }
-    wanted.forEach((candidate) => { const image = new Image(); image.src = libraryPageUrl(book.slug, candidate, token); });
-  }, [book, token, current, spreadMode]);
+    preload(Array.from(wanted));
+  }, [book, token, current, spreadMode, preload]);
 
   useEffect(() => {
     if (current === null || !book) return;
@@ -351,7 +472,7 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
 
   const renderBook = () => {
     if (!book || !token || current === null) return null;
-    const pageProps = { book, token, onImageError, onAspect: setAspect };
+    const pageProps = { book, srcFor, onImageError: isUploadedBook(book) ? undefined : onImageError, onAspect: setAspect };
     if (spreadMode) {
       const from = spreadPages(flip ? flip.from : current, total);
       const to = flip ? spreadPages(flip.to, total) : from;
@@ -434,6 +555,7 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
             <p dir="rtl" lang="ar" className="truncate text-xs leading-5 text-[#f3e7cf]/65" style={{ fontFamily: arabicBookFont }}>{currentChapter.title}</p>
           )}
         </div>
+        {book && token && <PdfDownloadLink book={book} token={token} tone="reader" />}
         <button
           type="button"
           onClick={() => setSearchOpen(true)}
@@ -471,6 +593,9 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
                 {error && <button type="button" onClick={() => void reload()} className="mt-2 inline-flex items-center gap-1 font-semibold underline"><RotateCcw size={13} /> Yenidən</button>}
               </div>
             ))}
+          {book && sourceError && (
+            <div className="absolute inset-x-0 top-3 z-10 mx-auto w-fit max-w-sm rounded-xl bg-black/50 px-4 py-2 text-center text-sm">{sourceError}</div>
+          )}
           {book && token && current !== null && pageHeight > 0 && (
             <div onClick={onBookClick} className="cursor-pointer" data-testid="library-book-stage">{renderBook()}</div>
           )}

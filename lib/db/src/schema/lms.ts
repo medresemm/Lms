@@ -188,6 +188,50 @@ export const applicationUploadIntentsTable = pgTable("lms_application_upload_int
   usedAt: text("used_at"),
 });
 
+/**
+ * Mədrəsə Kitabxanası — admin tərəfindən yüklənmiş kitablar (PDF Supabase yaddaşında: library/uploads/<storage_id>/).
+ * Daxili (skan) kitablar kodda statik kataloqdadır; bu cədvəl yalnız yüklənənlər üçündür.
+ */
+export const libraryBooksTable = pgTable("lms_library_books", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull(),
+  storageId: text("storage_id").notNull(),
+  title: text("title").notNull(),
+  shortTitle: text("short_title").notNull(),
+  author: text("author").notNull(),
+  commentator: text("commentator"),
+  publisher: text("publisher").notNull().default(""),
+  year: text("year").notNull().default(""),
+  subject: text("subject").notNull(),
+  pageCount: integer("page_count").notNull(),
+  pageOffset: integer("page_offset").notNull().default(0),
+  chapters: jsonb("chapters").$type<Array<{ title: string; level: 1 | 2; printedPage: number; page: number }>>().notNull().default([]),
+  hasText: boolean("has_text").notNull().default(false),
+  hasCover: boolean("has_cover").notNull().default(false),
+  fileSize: integer("file_size").notNull(),
+  originalFileName: text("original_file_name"),
+  uploadedByClerkUserId: text("uploaded_by_clerk_user_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  slugUnique: uniqueIndex("lms_library_books_slug_unique").on(table.slug),
+}));
+
+/**
+ * Dərsə (fənn + semestr) bağlanmış Kitabxana kitabları. books — [{slug, pageFrom, pageTo, chapterTitle, note}].
+ * Daxili və yüklənmiş kitablar slug ilə göstərilir; kitab silinərsə göstərilmir.
+ */
+export const courseBooksTable = pgTable("lms_course_books", {
+  id: serial("id").primaryKey(),
+  courseId: integer("course_id").notNull(),
+  termNumber: integer("term_number").notNull(),
+  books: jsonb("books").$type<Array<{ slug: string; pageFrom: number | null; pageTo: number | null; chapterTitle: string | null; note: string | null }>>().notNull().default([]),
+  updatedByClerkUserId: text("updated_by_clerk_user_id").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  courseTermUnique: uniqueIndex("lms_course_books_course_term_unique").on(table.courseId, table.termNumber),
+}));
+
 /** Immutable security/audit trail for privileged and high-impact LMS mutations. */
 export const auditEventsTable = pgTable("lms_audit_events", {
   id: serial("id").primaryKey(),
@@ -480,6 +524,7 @@ export type StudentAttendanceEntryRecord = typeof studentAttendanceRecordsTable.
 export type LessonJoinEventRecord = typeof lessonJoinEventsTable.$inferSelect;
 export type AssignmentUploadIntentRecord = typeof assignmentUploadIntentsTable.$inferSelect;
 export type AssignmentRecord = typeof assignmentsTable.$inferSelect;
+export type LibraryBookRecord = typeof libraryBooksTable.$inferSelect;
 export type AssignmentAttachmentRecord = typeof assignmentAttachmentsTable.$inferSelect;
 export type AssignmentSubmissionRecord = typeof assignmentSubmissionsTable.$inferSelect;
 export type ExamRecord = typeof examsTable.$inferSelect;

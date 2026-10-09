@@ -934,22 +934,7 @@ function OwnProfileCard({ onClose }: { onClose: () => void }) {
   </section>;
 }
 
-function ProgressRing({ progress, color }: { progress: number; color: string }) {
-  const radius = 23;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (Math.min(Math.max(progress, 0), 100) / 100) * circumference;
-  return (
-    <div className="relative flex h-[58px] w-[58px] shrink-0 items-center justify-center" aria-label={`${progress}% tamamlanıb`}>
-      <svg className="-rotate-90" width="58" height="58" viewBox="0 0 58 58">
-        <circle cx="29" cy="29" r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth="5" />
-        <circle cx="29" cy="29" r={radius} fill="none" stroke={color || 'hsl(var(--primary))'} strokeWidth="5" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={offset} className="transition-all duration-700 ease-out" />
-      </svg>
-      <span className="absolute text-[11px] font-bold text-[hsl(var(--primary))]" data-testid={`text-course-progress-${progress}`}>{progress}%</span>
-    </div>
-  );
-}
-
- function ResourceLink({ href, label, icon: Icon, external = false, courseId, download = false, onJoin, prominent = false }: { href: string | null | undefined; label: string; icon: typeof FileText; external?: boolean; courseId?: number; download?: boolean; onJoin?: () => void; prominent?: boolean }) {
+function ResourceLink({ href, label, icon: Icon, external = false, courseId, download = false, onJoin, prominent = false }: { href: string | null | undefined; label: string; icon: typeof FileText; external?: boolean; courseId?: number; download?: boolean; onJoin?: () => void; prominent?: boolean }) {
    const prominentClass = /telegram/i.test(label)
      ? 'bg-sky-500 text-white hover:bg-sky-600'
      : /zoom/i.test(label)
@@ -964,91 +949,6 @@ function ProgressRing({ progress, color }: { progress: number; color: string }) 
     ? `${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/courses/${courseId}/pdf${download ? '?download=1' : ''}`
     : href;
    return <a href={resolvedHref} download={download || undefined} target={external ? '_blank' : undefined} rel={external ? 'noreferrer' : undefined} onClick={(event) => { event.stopPropagation(); onJoin?.(); }} className={`focus-ring inline-flex items-center gap-3 transition ${prominent ? `min-h-12 rounded-xl px-4 py-3 text-sm font-black shadow-[0_4px_0_rgba(0,0,0,.18)] hover:-translate-y-0.5 ${prominentClass}` : 'gap-1.5 text-[10px] font-bold text-[hsl(var(--primary))] hover:text-[hsl(var(--destructive))]'}`} data-testid={`link-${label.toLowerCase().replace(' ', '-')}`}><Icon size={prominent ? 19 : 13} /> {label}</a>;
-}
-
-function CourseCard({ course, onContinue, onOpen, onJoin }: { course: Course; onContinue: (lesson: string) => void; onOpen: (course: Course) => void; onJoin?: () => void }) {
-  const color = course.color || 'hsl(var(--primary))';
-  return (
-    <article role="button" tabIndex={0} onClick={() => onOpen(course)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onOpen(course); }} className="group relative cursor-pointer overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)] transition duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-md)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--accent))]" data-testid={`card-course-${course.id}`}>
-      <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: color }} />
-      <div className="mb-7 flex items-start justify-between gap-3">
-        <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color, backgroundColor: `${color}1c` }} data-testid={`text-course-category-${course.id}`}>
-          {course.category}
-        </span>
-        <ProgressRing progress={course.progress} color={color} />
-      </div>
-         <h3 className="min-h-[47px] max-w-[230px] break-words font-serif text-[21px] leading-[1.12] tracking-[-0.025em] text-[hsl(var(--primary))]" data-testid={`text-course-title-${course.id}`}>
-        {course.title}
-      </h3>
-       {course.instructor ? <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]" data-testid={`text-course-instructor-${course.id}`}>{course.instructor}</p> : <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))]" data-testid={`text-course-instructor-${course.id}`}><span className="grid h-5 w-5 place-items-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"><UserRound size={12} strokeWidth={1.8} /></span><span>Müəllim tezliklə təyin olunacaq</span></p>}
-      <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[hsl(var(--border))] pt-3" aria-label="Dərs resursları">
-        <ResourceLink href={course.pdfUrl} label="PDF mətn" icon={FileText} courseId={course.id} />
-         <ResourceLink href={course.pdfUrl} label="PDF-i yüklə" icon={Download} courseId={course.id} download />
-        <ResourceLink href={course.telegramUrl} label="Telegram" icon={Send} external />
-       <ResourceLink href={course.zoomUrl} label="Zoom" icon={Video} external onJoin={onJoin} />
-       <ResourceLink href={course.googleMeetUrl} label="Google Meet" icon={Video} external onJoin={onJoin} />
-      </div>
-      <div className="mt-6 flex items-center justify-between border-t border-[hsl(var(--border))] pt-4">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.1em] text-[hsl(var(--muted-foreground))]">Dərslər</p>
-          <p className="mt-0.5 text-xs font-bold text-[hsl(var(--primary))]" data-testid={`text-course-lessons-${course.id}`}>{course.totalLessons > 0 ? `${course.completedLessons} / ${course.totalLessons} tamamlanıb` : 'Dərs sayı təyin edilməyib'}</p>
-        </div>
-        {course.nextLesson ? (
-          course.lessonUrl ? (
-            <a
-              href={course.lessonUrl}
-              onClick={(event) => event.stopPropagation()}
-              className="focus-ring inline-flex items-center gap-1 rounded-lg py-1.5 pl-2 text-xs font-bold text-[hsl(var(--primary))] transition hover:text-[hsl(var(--destructive))]"
-              data-testid={`link-lesson-course-${course.id}`}
-            >
-              Dərsə keç <ChevronRight size={15} />
-            </a>
-          ) : (
-          <button
-            type="button"
-            onClick={(event) => { event.stopPropagation(); onContinue(course.nextLesson as string); }}
-            className="focus-ring inline-flex items-center gap-1 rounded-lg py-1.5 pl-2 text-xs font-bold text-[hsl(var(--primary))] transition hover:text-[hsl(var(--destructive))]"
-            data-testid={`button-continue-course-${course.id}`}
-          >
-            Davam et <ChevronRight size={15} />
-          </button>
-          )
-        ) : (
-          <span className="inline-flex items-center gap-1 text-xs font-bold text-[hsl(var(--secondary-foreground))]" data-testid={`status-course-complete-${course.id}`}>
-            <CheckCircle2 size={15} /> Tamamlandı
-          </span>
-        )}
-      </div>
-    </article>
-  );
-}
-
-function CoursesSection({ courses, onContinue, onOpen, onJoin }: { courses: Course[]; onContinue: (lesson: string) => void; onOpen: (course: Course) => void; onJoin?: (courseId: number) => void }) {
-  const [isOpen, setIsOpen] = useState(true);
-  return (
-    <section id="ders-cedvelim" className="animate-rise-in delay-2" data-testid="section-courses">
-      <button type="button" onClick={() => setIsOpen((current) => !current)} aria-expanded={isOpen} className="focus-ring mb-5 flex w-full items-center justify-between gap-4 rounded-2xl border-2 border-[hsl(var(--accent))] bg-gradient-to-r from-[hsl(var(--primary))] to-[hsl(214_50%_28%)] p-4 text-left text-[hsl(var(--primary-foreground))] shadow-[0_5px_0_hsl(37_83%_52%)] transition hover:-translate-y-0.5 hover:shadow-[0_6px_0_hsl(37_83%_52%)]" data-testid="button-toggle-course-schedule">
-        <div className="flex items-center gap-3">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[hsl(var(--accent))] text-[hsl(var(--primary))] shadow-sm"><BookOpen size={24} strokeWidth={2.2} /></span>
-          <div>
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--accent))]">İnkişaf yolun</p>
-          <h2 className="font-serif text-[28px] leading-none tracking-[-0.035em] text-white">Dərs Cədvəlim</h2>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-[hsl(var(--accent))] px-2.5 py-1 text-[10px] font-black text-[hsl(var(--primary))]" data-testid="text-course-count">{courses.length} aktiv dərs</span>
-          <ChevronRight size={24} className={`text-[hsl(var(--accent))] transition ${isOpen ? 'rotate-90' : ''}`} />
-        </div>
-      </button>
-      {isOpen && courses.length ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {courses.map((course) => <CourseCard key={course.id} course={course} onContinue={onContinue} onOpen={onOpen} onJoin={() => onJoin?.(course.id)} />)}
-        </div>
-      ) : isOpen ? (
-        <EmptyState icon={<BookOpen size={21} />} title="Hələ dərs cədvəlin yoxdur" body="Semestr cədvəlinə fənn əlavə edildikdə burada görünəcək." />
-      ) : null}
-    </section>
-  );
 }
 
 function CourseDetailModal({ courseId, teacherName, teacherChoiceStatus, onClose }: { courseId: number; teacherName?: string | null; teacherChoiceStatus?: string | null; onClose: () => void }) {
@@ -1402,7 +1302,6 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
   const [showQuestions, setShowQuestions] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [activeNotification, setActiveNotification] = useState<StudentNotification | null>(null);
-  const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<{ id: number; teacherName?: string } | null>(null);
   useEffect(() => {
     void loadUnansweredQuestionCount().then(setUnansweredQuestionCount);
@@ -1461,60 +1360,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
    }, [apiBase, academicProfile?.id, scheduleAccessRefreshKey]);
   const notificationResourcesQuery = useGetResources({ termNumber: academicProfile?.currentTermNumber ?? 1 }, { query: { enabled: Boolean(academicProfile) && scheduleAccessLoaded && scheduleAccessApproved, queryKey: getGetResourcesQueryKey({ termNumber: academicProfile?.currentTermNumber ?? 1 }) } });
   const currentSemesterSubjects = academicProfile?.semesters.find((item) => item.termNumber === academicProfile.currentTermNumber)?.subjects ?? [];
-  const coursesWithCurrentSemesterSubjects = (() => {
-    const byId = new Map(resolvedCourses.map((course) => [course.id, course]));
-    currentSemesterSubjects.forEach((subject) => {
-      if (byId.has(subject.courseId)) return;
-      byId.set(subject.courseId, {
-        id: subject.courseId,
-        title: subject.title,
-        category: 'İslam elmləri',
-        instructor: subject.instructor ?? '',
-        progress: 0,
-        completedLessons: 0,
-        totalLessons: 0,
-        color: 'teal',
-        credits: subject.credits ?? 0,
-        hours: subject.hours ?? 0,
-        lessonDays: [],
-        lessonTime: null,
-        nextLesson: null,
-        pdfUrl: null,
-        telegramUrl: null,
-        zoomUrl: null,
-        googleMeetUrl: null,
-        lessonUrl: null,
-      });
-    });
-    return Array.from(byId.values());
-  })();
   const notificationCourseNames = new Map((currentSemesterSubjects.length ? currentSemesterSubjects : resolvedCourses.map((course) => ({ courseId: course.id, title: course.title }))).map((item) => [item.courseId, item.title]));
-  // The academic profile is the source of truth for the student's current
-  // semester. Resources can temporarily lag behind after a course/teacher
-  // assignment is edited, so do not make a successful but empty resources
-  // response erase the student's schedule.
-  const scheduledCourseIds = new Set([
-    ...currentSemesterSubjects.map((subject) => subject.courseId),
-    ...(notificationResourcesQuery.data ?? []).map((resource) => resource.courseId),
-  ]);
-  const scheduledCourseTeachers = new Map([
-    ...currentSemesterSubjects.map((subject) => [subject.courseId, subject.instructor ?? ''] as const),
-    ...(notificationResourcesQuery.data ?? []).filter((resource) => Boolean(resource.teacherName)).map((resource) => [resource.courseId, resource.teacherName!] as const),
-  ]);
-  const scheduledCourses = notificationResourcesQuery.isSuccess
-    ? coursesWithCurrentSemesterSubjects.filter((course) => scheduledCourseIds.has(course.id)).map((course) => ({
-      ...course,
-      instructor: scheduledCourseTeachers.get(course.id) || course.instructor,
-    }))
-    : coursesWithCurrentSemesterSubjects;
-  const recordLessonJoin = async (courseId: number) => {
-    const resource = (notificationResourcesQuery.data ?? []).find((item) => item.courseId === courseId && item.url);
-    if (!resource) return;
-    await fetch(`${apiBase}/api/student/lesson-joins`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resourceId: resource.id, termNumber: resource.termNumber }),
-    }).catch(() => undefined);
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -1608,15 +1454,8 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
             </div>
           )}
             <AcademicProfileSection profile={academicProfile} scheduleAccessApproved={scheduleAccessLoaded && scheduleAccessApproved} onboardingRequired={scheduleAccessLoaded && onboardingRequired} onboardingExamId={onboardingExamId} onOpenOnboardingExam={(examId) => { setShowExams(true); if (examId) setOnboardingExamId(examId); }} onOpenCourse={(courseId, teacherName) => setSelectedCourse({ id: courseId, teacherName: teacherName ?? undefined })} />
-          {selectedLesson && (
-            <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[hsl(var(--secondary-foreground)/.18)] bg-[hsl(var(--secondary)/.62)] px-4 py-3 text-xs text-[hsl(var(--secondary-foreground))]" data-testid="status-selected-lesson">
-              <span className="flex items-center gap-2"><CheckCircle2 size={16} /> <strong>{selectedLesson}</strong> üçün hazırsan.</span>
-              <button type="button" onClick={() => setSelectedLesson(null)} className="focus-ring rounded-md p-1 hover:bg-[hsl(var(--secondary-foreground)/.1)]" aria-label="Seçilmiş dərs bildirişini bağla" data-testid="button-dismiss-lesson"><X size={15} /></button>
-            </div>
-          )}
            {academicProfile && <div className="mt-5 grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2" data-testid="section-student-work-actions"><StudentAssignmentsSection termNumber={academicProfile.currentTermNumber} /><StudentExamsLauncher termNumber={academicProfile.currentTermNumber} onOpen={() => setShowExams(true)} /></div>}
-          <div className="mt-11 grid gap-10 xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-12">
-             {scheduleAccessLoaded && scheduleAccessApproved ? <CoursesSection courses={scheduledCourses} onContinue={setSelectedLesson} onOpen={(course) => setSelectedCourse({ id: course.id, teacherName: course.instructor })} onJoin={(courseId) => void recordLessonJoin(courseId)} /> : <div data-testid="student-schedule-access-placeholder" />}
+          <div className="mt-11">
             <AnnouncementsSection announcements={resolvedAnnouncements} />
           </div>
         </main>

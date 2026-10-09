@@ -2343,8 +2343,10 @@ router.get("/resources", requireApprovedStudent, async (req, res, next) => {
       .from(studentCourseSelectionsTable)
       .where(and(eq(studentCourseSelectionsTable.profileId, studentProfile.id), eq(studentCourseSelectionsTable.termNumber, termNumber)));
     const removedCourseIds = new Set(selections.filter((selection) => !selection.selected).map((selection) => selection.courseId));
-    res.json(GetResourcesResponse.parse(await resourceViews(resources.filter((resource) =>
-      !removedCourseIds.has(resource.courseId) && !resourceLinkIsExpired(resource)))));
+    const visible = resources
+      .filter((resource) => !removedCourseIds.has(resource.courseId))
+      .map((resource) => resourceLinkIsExpired(resource) ? { ...resource, url: null, expiresAt: null } : resource);
+    res.json(GetResourcesResponse.parse(await resourceViews(visible)));
   } catch (error) {
     next(error);
   }

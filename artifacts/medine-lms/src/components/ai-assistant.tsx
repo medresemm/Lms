@@ -777,7 +777,6 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
             <p className="absolute right-4 top-6 hidden max-w-[9rem] text-right font-serif text-xs italic text-[#f4ead5]/70 sm:block">“Rəbbim, elmimi artır.”<span className="mt-1 block text-[10px] not-italic text-[#f4ead5]/45">— Taha, 114</span></p>
             <BrandTile />
             <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight text-[#f4ead5] sm:mt-6 sm:text-4xl">Mədinə <span style={{ color: gold }}>AI</span></h2>
-            <p className="mt-2 text-[10px] uppercase tracking-[.28em] text-[#f4ead5]/70 sm:mt-3 sm:text-[11px] sm:tracking-[.32em]">Sizin dini elm köməkçiniz</p>
             <div className="mt-4 hidden w-full items-center gap-3 text-xs text-[#f4ead5]/80 sm:mt-5 sm:flex">
               <span className="h-px flex-1 bg-gradient-to-r from-transparent to-[#e3c27a]/50" />
               <span>Sual edin · Öyrənin · Dərinləşin</span>

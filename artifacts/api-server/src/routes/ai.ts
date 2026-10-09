@@ -64,6 +64,7 @@ import {
   termDetails,
   userIsSystemOwner,
 } from "./lms.js";
+import { answerLibrary, detectLibraryIntent } from "../lib/library/search.js";
 import {
   getAiProvider,
   type AdminAiContext,
@@ -894,6 +895,12 @@ router.post("/ai/student/chat", noStore, requireApprovedStudent, rateLimit, asyn
       res.status(result.status).json(result.body);
       return;
     }
+    // Mədrəsə Kitabxanası daxili məlumatdır: «Daxili» rejimdə tələbəyə də açıqdır.
+    const libraryIntent = detectLibraryIntent(input.message);
+    if (libraryIntent) {
+      res.json(answerLibrary(libraryIntent.query));
+      return;
+    }
     const userId = getAuth(req).userId as string;
     const profile = await getApprovedStudentProfile(userId);
     if (!profile) {
@@ -923,6 +930,13 @@ router.post("/ai/admin/chat", noStore, requireAiStaff, rateLimit, async (req, re
     if (!selection) {
       res.status(400).json({ error: "Mənbə rejimi düzgün deyil." });
       return;
+    }
+    if (selection.mode === "internal") {
+      const libraryIntent = detectLibraryIntent(input.message);
+      if (libraryIntent) {
+        res.json(answerLibrary(libraryIntent.query));
+        return;
+      }
     }
     const permissions = res.locals.aiPermissions as ReadonlySet<string>;
     const isOwner = res.locals.aiIsOwner === true;

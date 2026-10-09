@@ -34,6 +34,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { HomeLink } from '@/components/home-link';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
+import { LibraryReader } from '@/components/library-reader';
 import { Link, Route, Redirect, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { formatPersonName } from '@/lib/utils';
 
@@ -788,6 +789,17 @@ function MedineAiRoute() {
   return <AiAssistantPage mode="student" backHref="/user-portal" backLabel="Kabinetə qayıt" />;
 }
 
+// Kitab oxuyucusu (/kitabxana/:slug). Giriş icazəsini server yoxlayır (təsdiqlənmiş tələbə və ya heyət);
+// burada yalnız «geri» düyməsinin hara aparacağı rola görə seçilir.
+function LibraryReaderRoute({ slug }: { slug: string }) {
+  const { user, isLoaded } = useUser();
+  const signedIn = isLoaded && Boolean(user);
+  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: signedIn, queryKey: getGetOwnUserProfileQueryKey(), staleTime: 60_000 } });
+  const isStaff = isStaffRole(accountProfileQuery.data?.role) || (!accountProfileQuery.data && isTeacherAccount(user));
+  if (!isLoaded) return <AccountGateLoading />;
+  return <LibraryReader slug={slug} backHref={isStaff ? '/admin' : '/user-portal'} />;
+}
+
 function isOwnerMetadata(user: { publicMetadata?: unknown } | null | undefined) {
   const metadata = user?.publicMetadata;
   return typeof metadata === 'object' && metadata !== null && 'role' in metadata && (metadata as { role?: unknown }).role === 'owner';
@@ -854,6 +866,7 @@ function Router() {
         <Route path="/admin"><Show when="signed-in"><AdminRoute /></Show><Show when="signed-out"><Redirect to="/" /></Show></Route>
         <Route path="/ai"><Show when="signed-in"><MedineAiRoute /></Show><Show when="signed-out"><Redirect to="/" /></Show></Route>
         <Route path="/admin/ai"><Redirect to="/ai" /></Route>
+        <Route path="/kitabxana/:slug">{(params) => <><Show when="signed-in"><LibraryReaderRoute slug={params.slug} /></Show><Show when="signed-out"><Redirect to="/" /></Show></>}</Route>
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>

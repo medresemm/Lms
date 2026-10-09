@@ -317,7 +317,6 @@ export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
             <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--accent))]">Mədinə Tədris Akademiyası</p>
             <h1 className="mt-6 font-serif text-5xl leading-[.94] tracking-[-.05em]">Tədris üçün müraciət et.</h1>
             <p className="mt-6 text-sm leading-6 text-[hsl(var(--primary-foreground)/.7)]">Məlumatlarınız müəllim heyəti tərəfindən nəzərdən keçiriləcək. Bütün xanaları diqqətlə doldurun.</p>
-            <div className="mt-10 border-t border-[hsl(var(--primary-foreground)/.15)] pt-5 text-xs leading-5 text-[hsl(var(--primary-foreground)/.62)]">Şifrəniz yalnız hesabın yaradılması üçün Clerk tərəfindən emal olunur və müraciət siyahısında saxlanılmır.</div>
           </aside>
           <section className="rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-sm)] md:p-8">
             <div className="mb-7"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Yeni müraciət</p><h2 className="mt-2 font-serif text-3xl text-[hsl(var(--primary))]">Məlumatlarınızı daxil edin</h2></div>

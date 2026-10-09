@@ -264,11 +264,11 @@ function PublicStatistics({ statistics }: { statistics: PublicSystemStatistics }
     { label: 'Hazırkı tələbə', value: statistics.currentStudents, className: 'bg-emerald-100 text-emerald-900' },
     { label: 'Bitirmiş tələbə', value: statistics.graduatedStudents, className: 'bg-amber-100 text-amber-950' },
   ];
-  return <section className="mt-10 rounded-[30px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-6 py-8 shadow-[var(--shadow-sm)] md:px-10" data-testid="section-public-statistics">
+  return <section className="mt-8 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-5 py-5 shadow-[var(--shadow-sm)] md:px-6" data-testid="section-public-statistics">
     <p className="text-center text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Akademiyamız rəqəmlərlə</p>
-    <div className="mt-6 grid grid-cols-3 gap-3 sm:gap-6">
-      {items.map((item) => <div key={item.label} className="flex flex-col items-center gap-2 text-center">
-        <div className={`flex h-20 w-20 items-center justify-center rounded-full text-2xl font-black sm:h-28 sm:w-28 sm:text-4xl ${item.className}`}>{item.value}</div>
+    <div className="mt-4 grid grid-cols-3 gap-3">
+      {items.map((item) => <div key={item.label} className="flex flex-col items-center gap-1.5 text-center">
+        <div className={`flex h-14 w-14 items-center justify-center rounded-full text-lg font-black sm:h-16 sm:w-16 sm:text-xl ${item.className}`}>{item.value}</div>
         <span className="text-xs font-bold text-[hsl(var(--primary))]">{item.label}</span>
       </div>)}
     </div>
@@ -289,25 +289,25 @@ function HomePage() {
   }, []);
 
   return (
-    <main className="grain min-h-[100dvh] bg-[hsl(var(--background))] px-5 py-7 md:px-10">
+    <main className="grain min-h-[100dvh] bg-[hsl(var(--background))] px-5 py-5 md:px-8 md:py-6">
       <div className="mx-auto max-w-5xl">
          <div className="flex items-center justify-between gap-4"><BrandMark /><div className="flex items-center gap-2"><HomeLink /><Link href="/articles" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" data-testid="link-home-articles"><BookOpenText size={15} /> Məqalələr</Link><Link href="/sign-in" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" data-testid="link-home-sign-in"><LogIn size={15} /> Giriş</Link><Link href="/sign-up" className="focus-ring hidden rounded-xl bg-[hsl(var(--primary))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))] sm:inline-flex">Müraciət et</Link></div></div>
-        <section className="mt-12 grid gap-8 lg:grid-cols-[1.1fr_.9fr] lg:items-stretch">
-           <div className="rounded-[30px] bg-[hsl(var(--primary))] p-7 text-[hsl(var(--primary-foreground))] shadow-[0_24px_60px_hsl(203_55%_18%/.16)] sm:p-8 md:p-10">
+        <section className="mt-6 grid gap-4 lg:grid-cols-[1.15fr_.85fr] lg:items-start">
+           <div className="rounded-2xl bg-[hsl(var(--primary))] p-5 text-[hsl(var(--primary-foreground))] shadow-[0_12px_32px_hsl(203_55%_18%/.12)] sm:p-6">
             <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--accent))]">Mədinə Tədris Akademiyası</p>
-            <h1 className="mt-6 max-w-lg font-serif text-4xl leading-[1.02] tracking-[-.04em] sm:text-5xl md:text-6xl">Bu elm sizin dininizdir; dininizi kimdən öyrəndiyinizə diqqət edin.</h1>
-            <p className="mt-5 max-w-lg text-sm leading-7 text-[hsl(var(--primary-foreground)/.72)]">— İbn Sirin</p>
-             <div className="mt-9 flex flex-wrap items-center gap-3">
-               <Link href="/sign-in" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--primary-foreground)/.28)] bg-[hsl(var(--primary-foreground)/.08)] px-5 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5 hover:bg-[hsl(var(--primary-foreground)/.14)]" data-testid="link-home-app-entry">
+            <h1 className="mt-3 max-w-xl font-serif text-2xl leading-snug tracking-[-.03em] sm:text-3xl">Bu elm sizin dininizdir; dininizi kimdən öyrəndiyinizə diqqət edin.</h1>
+            <p className="mt-2 text-xs leading-5 text-[hsl(var(--primary-foreground)/.72)]">— İbn Sirin</p>
+             <div className="mt-5 flex flex-wrap items-center gap-2">
+               <Link href="/sign-in" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--primary-foreground)/.28)] bg-[hsl(var(--primary-foreground)/.08)] px-4 py-2.5 text-sm font-bold text-[hsl(var(--primary-foreground))] transition hover:bg-[hsl(var(--primary-foreground)/.14)]" data-testid="link-home-app-entry">
                  <LogIn size={16} /> Tətbiqə giriş
                </Link>
-               <Link href="/sign-up" className="focus-ring inline-flex items-center rounded-xl bg-[hsl(var(--accent))] px-5 py-3.5 text-sm font-bold text-[hsl(var(--primary))] transition hover:-translate-y-0.5" data-testid="link-home-application">Müraciət et</Link>
+               <Link href="/sign-up" className="focus-ring inline-flex items-center rounded-xl bg-[hsl(var(--accent))] px-4 py-2.5 text-sm font-bold text-[hsl(var(--primary))]" data-testid="link-home-application">Müraciət et</Link>
              </div>
           </div>
-          <div className="rounded-[30px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-8 shadow-[var(--shadow-sm)] md:p-10">
+          <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-sm)]">
             <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Tədris istiqamətləri</p>
-            <div className="mt-7 grid gap-3">{['Quran', 'Hədis', 'Əqidə', 'Fiqh', 'Ərəb dili'].map((course) => <div key={course} className="rounded-xl bg-[hsl(var(--muted)/.55)] px-4 py-3 text-sm font-semibold text-[hsl(var(--primary))]">{course}</div>)}</div>
-            <p className="mt-8 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Müraciətinizi göndərin, müəllim heyətimiz məlumatlarınızı nəzərdən keçirsin.</p>
+            <div className="mt-3 flex flex-wrap gap-2">{['Quran', 'Hədis', 'Əqidə', 'Fiqh', 'Ərəb dili'].map((course) => <div key={course} className="rounded-lg bg-[hsl(var(--muted)/.55)] px-3 py-1.5 text-sm font-semibold text-[hsl(var(--primary))]">{course}</div>)}</div>
+            <p className="mt-4 text-sm leading-5 text-[hsl(var(--muted-foreground))]">Müraciətinizi göndərin, müəllim heyətimiz məlumatlarınızı nəzərdən keçirsin.</p>
           </div>
         </section>
          <section className="mt-8 max-w-3xl">
@@ -317,7 +317,7 @@ function HomePage() {
            <div className="flex items-end justify-between gap-4">
              <div>
                <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]"><BookOpenText size={15} /> Akademiyadan</p>
-               <h2 className="mt-2 font-serif text-4xl leading-none tracking-[-.04em] text-[hsl(var(--primary))]">Məqalələr</h2>
+               <h2 className="mt-1 font-serif text-3xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]">Məqalələr</h2>
              </div>
              <Link href="/articles" className="focus-ring shrink-0 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" data-testid="link-home-articles-more">Hamısına bax</Link>
            </div>
@@ -330,7 +330,7 @@ function HomePage() {
             <div className="flex items-end justify-between gap-4">
               <div>
                 <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]"><Megaphone size={15} /> Akademiyadan</p>
-                <h2 className="mt-2 font-serif text-4xl leading-none tracking-[-.04em] text-[hsl(var(--primary))]">Yeniliklər</h2>
+                <h2 className="mt-1 font-serif text-3xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]">Yeniliklər</h2>
               </div>
             </div>
             {announcementsQuery.isLoading && <p className="mt-6 text-sm text-[hsl(var(--muted-foreground))]">Yeniliklər yüklənir...</p>}

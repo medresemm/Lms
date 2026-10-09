@@ -602,8 +602,12 @@ function SignInForm() {
         <section className="mt-10 rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-[var(--shadow-sm)] md:p-8">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[hsl(var(--accent)/.35)] text-[hsl(var(--primary))]"><KeyRound size={21} /></div>
           <p className="mt-7 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{stage === 'device-trust' ? 'Cihaz təsdiqi' : 'Tələbə kabineti'}</p>
-          <h1 className="mt-2 font-serif text-4xl leading-none text-[hsl(var(--primary))]">{stage === 'device-trust' ? 'Email kodunu yazın.' : 'Xoş gəlmisiniz.'}</h1>
-          <p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{stage === 'device-trust' ? 'Yeni cihazdan giriş etdiyiniz üçün email ünvanınıza göndərilən birdəfəlik təhlükəsizlik kodunu daxil edin.' : 'Kabinetinizə daxil olmaq üçün email ünvanınızı yazın.'}</p>
+          {stage === 'device-trust' && (
+            <>
+              <h1 className="mt-2 font-serif text-4xl leading-none text-[hsl(var(--primary))]">Email kodunu yazın.</h1>
+              <p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Yeni cihazdan giriş etdiyiniz üçün email ünvanınıza göndərilən birdəfəlik təhlükəsizlik kodunu daxil edin.</p>
+            </>
+          )}
           {stage === 'credentials' ? (
             <form className="mt-7 space-y-5" onSubmit={submit} data-testid="form-sign-in">
               <label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Email və ya tələbə nömrəsi</span><input required type="text" inputMode="email" autoComplete="username" placeholder="email@example.com və ya T0001" value={identifier} onChange={(event) => setIdentifier(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm text-[hsl(var(--foreground))] outline-none transition" data-testid="input-sign-in-identifier" /></label>

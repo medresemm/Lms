@@ -639,30 +639,31 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
   return (
     <>
     <section id="profil" className="mt-0 animate-rise-in" data-testid="section-academic-profile">
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Şəxsi kabinet</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Şəxsi kabinet</p>
         </div>
-        <span className="rounded-full bg-[hsl(var(--secondary)/.6)] px-3 py-2 text-xs font-bold text-[hsl(var(--secondary-foreground))]" data-testid="text-academic-status">{profile.statusLabel}</span>
+        <span className="rounded-full bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-xs font-bold text-[hsl(var(--secondary-foreground))]" data-testid="text-academic-status">{profile.statusLabel}</span>
       </div>
-       <aside className="rounded-2xl bg-[hsl(var(--primary))] p-4 text-[hsl(var(--primary-foreground))] shadow-[var(--shadow-xs)]">
-         <GraduationCap className="text-[hsl(var(--accent))]" size={22} />
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-           <p className="text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--primary-foreground)/.82)]">Tələbə məlumatı</p>
-             <div className="flex flex-col items-start sm:items-end" aria-label="Aktiv semestr">
+       <aside className="rounded-2xl bg-[hsl(var(--primary))] px-4 py-3 text-[hsl(var(--primary-foreground))] shadow-[var(--shadow-xs)]">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--primary-foreground)/.75)]"><GraduationCap className="text-[hsl(var(--accent))]" size={14} /> Tələbə məlumatı</p>
+              <p className="mt-1 break-words font-serif text-xl leading-tight">{formatFullName(profile.firstName, profile.lastName)}</p>
+              <p className="mt-1 text-xs font-bold text-[hsl(var(--accent))]" data-testid="text-student-number">Tələbə № T{String(profile.studentNumber).padStart(4, '0')}</p>
+            </div>
+            <div className="shrink-0 text-right" aria-label="Aktiv semestr">
               <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--accent))]">Aktiv semestr</p>
-               <p className="mt-0.5 font-serif text-lg text-[hsl(var(--primary-foreground))]" data-testid="text-current-semester">{currentSemesterLabel}</p>
-           </div>
-         </div>
-         <p className="mt-2 break-words font-serif text-2xl">{formatFullName(profile.firstName, profile.lastName)}</p>
-         <p className="mt-2 text-sm font-bold text-[hsl(var(--accent))]" data-testid="text-student-number">Tələbə № T{String(profile.studentNumber).padStart(4, '0')}</p>
-         <p className="mt-3 inline-flex rounded-full bg-[hsl(var(--primary-foreground)/.12)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--accent))]" data-testid="text-account-status">Status: Tələbə</p>
-          <div className="mt-4 grid gap-2 border-t border-[hsl(var(--primary-foreground)/.22)] pt-3 sm:grid-cols-2">
-             <div className="rounded-lg bg-[hsl(var(--primary-foreground)/.1)] p-2.5"><p className="text-xs font-semibold">Semestr ortalaması</p><p className="mt-1 text-lg font-bold text-[hsl(var(--accent))]" data-testid="text-semester-gpa">{semester.gpa === null ? '—' : semester.gpa.toFixed(2)}</p></div>
-           <div className="rounded-lg bg-[hsl(var(--sidebar-accent)/.55)] p-2.5"><button type="button" onClick={() => setShowAttendance((current) => !current)} className="focus-ring rounded-lg text-left" aria-expanded={showAttendance} data-testid="button-open-attendance"><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--primary-foreground)/.82)]">Davamiyyət</p><p className="mt-0.5 text-xl font-bold text-[hsl(var(--accent))]" data-testid="text-attendance-absence-count">{semester.subjects.reduce((count, subject) => count + subject.absenceCount, 0)} qayıb</p><p className="mt-0.5 text-xs leading-4 text-[hsl(var(--primary-foreground)/.82)]">Cari semestr üzrə ətraflı baxmaq üçün toxunun.</p></button></div>
-         </div>
+              <p className="mt-0.5 font-serif text-base leading-tight text-[hsl(var(--primary-foreground))]" data-testid="text-current-semester">{currentSemesterLabel}</p>
+              <p className="mt-1.5 inline-flex rounded-full bg-[hsl(var(--primary-foreground)/.12)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--accent))]" data-testid="text-account-status">Status: Tələbə</p>
+            </div>
+          </div>
+          <div className="mt-3 grid gap-2 border-t border-[hsl(var(--primary-foreground)/.22)] pt-2.5 sm:grid-cols-2">
+            <div className="rounded-lg bg-[hsl(var(--primary-foreground)/.1)] px-2.5 py-2"><p className="text-[10px] font-bold uppercase tracking-[.12em]">Semestr ortalaması</p><p className="mt-0.5 text-base font-bold text-[hsl(var(--accent))]" data-testid="text-semester-gpa">{semester.gpa === null ? '—' : semester.gpa.toFixed(2)}</p></div>
+            <div className="rounded-lg bg-[hsl(var(--sidebar-accent)/.55)] px-2.5 py-2"><button type="button" onClick={() => setShowAttendance((current) => !current)} className="focus-ring w-full rounded-lg text-left" aria-expanded={showAttendance} data-testid="button-open-attendance"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--primary-foreground)/.82)]">Davamiyyət</p><p className="mt-0.5 text-base font-bold text-[hsl(var(--accent))]" data-testid="text-attendance-absence-count">{semester.subjects.reduce((count, subject) => count + subject.absenceCount, 0)} qayıb</p></button></div>
+          </div>
           {showAttendance && <AttendanceDetails semester={semester} />}
-          <button type="button" onClick={() => void loadExcuses()} className="focus-ring mt-3 inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--destructive)/.28)] bg-[hsl(var(--card))] px-4 py-3 text-xs font-bold text-[hsl(var(--primary))] shadow-[var(--shadow-xs)] hover:bg-[hsl(var(--muted))]" aria-expanded={showExcuses} data-testid="button-open-excuses">Davamiyyətə görə üzr {excuses.length > 0 && <span className="rounded-full bg-[hsl(var(--destructive))] px-2 py-0.5 text-[10px] text-white">{excuses.length}</span>}</button>
+          <button type="button" onClick={() => void loadExcuses()} className="focus-ring mt-2 inline-flex items-center gap-2 rounded-lg border border-[hsl(var(--destructive)/.28)] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] shadow-[var(--shadow-xs)] hover:bg-[hsl(var(--muted))]" aria-expanded={showExcuses} data-testid="button-open-excuses">Davamiyyətə görə üzr {excuses.length > 0 && <span className="rounded-full bg-[hsl(var(--destructive))] px-2 py-0.5 text-[10px] text-white">{excuses.length}</span>}</button>
           {showExcuses && <StudentExcuses excuses={excuses} />}
        </aside>
         <div className="mt-5">

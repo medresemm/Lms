@@ -103,6 +103,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{label}</span>{children}</label>;
 }
 
+function ApplicationFooter() {
+  return (
+    <footer className="mt-8 border-t border-[hsl(var(--border))] py-4 text-center">
+      <p className="text-sm font-semibold text-[hsl(var(--primary))]">Mədinə Tədris Akademiyası</p>
+      <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">© 2026. Bütün hüquqlar qorunur.</p>
+    </footer>
+  );
+}
+
 export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
   const { signUp, isLoaded, setActive } = useSignUp();
   const { signOut } = useClerk();
@@ -304,6 +313,7 @@ export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
               </div>
             )}
           </section>
+          <ApplicationFooter />
         </div>
       </main>
     );
@@ -343,6 +353,7 @@ export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
             </form>
           </section>
         </div>
+        <ApplicationFooter />
       </div>
     </main>
   );

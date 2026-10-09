@@ -276,6 +276,15 @@ function PublicStatistics({ statistics }: { statistics: PublicSystemStatistics }
   </section>;
 }
 
+function SiteFooter({ className = 'mt-12' }: { className?: string }) {
+  return (
+    <footer className={`${className} border-t border-[hsl(var(--border))] py-5 text-center`} data-testid="site-footer">
+      <p className="text-sm font-semibold text-[hsl(var(--primary))]">Mədinə Tədris Akademiyası</p>
+      <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">© 2026. Bütün hüquqlar qorunur.</p>
+    </footer>
+  );
+}
+
 function HomePage() {
   const dailyBenefitQuery = useGetDailyBenefit({ query: { queryKey: getGetDailyBenefitQueryKey() } });
   const articlesQuery = useGetArticles({ query: { queryKey: getGetArticlesQueryKey() } });
@@ -290,8 +299,8 @@ function HomePage() {
   }, []);
 
   return (
-    <main className="grain min-h-[100dvh] bg-[hsl(var(--background))] px-5 py-5 md:px-8 md:py-6">
-      <div className="mx-auto max-w-5xl">
+    <main className="grain flex min-h-[100dvh] flex-col bg-[hsl(var(--background))] px-5 py-5 md:px-8 md:py-6">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col">
          <div className="flex items-center justify-between gap-4"><BrandMark /><div className="flex items-center gap-2"><HomeLink /><Link href="/articles" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" data-testid="link-home-articles"><BookOpenText size={15} /> Məqalələr</Link><Link href="/sign-in" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" data-testid="link-home-sign-in"><LogIn size={15} /> Giriş</Link><Link href="/sign-up" className="focus-ring hidden rounded-xl bg-[hsl(var(--primary))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))] sm:inline-flex">Müraciət et</Link></div></div>
         <section className="mt-6 grid gap-4 lg:grid-cols-[1.15fr_.85fr] lg:items-start">
            <div className="rounded-2xl bg-[hsl(var(--primary))] p-5 text-[hsl(var(--primary-foreground))] shadow-[0_12px_32px_hsl(203_55%_18%/.12)] sm:p-6">
@@ -340,6 +349,7 @@ function HomePage() {
             {!announcementsQuery.isLoading && !announcementsQuery.isError && Boolean(announcementsQuery.data?.length) && <div className="mt-6 space-y-3">{announcementsQuery.data?.slice(0, 3).map((announcement) => <AnnouncementCard key={announcement.id} announcement={announcement} />)}</div>}
           </section>
         {statistics && <PublicStatistics statistics={statistics} />}
+        <SiteFooter className="mt-auto pt-8" />
       </div>
     </main>
   );
@@ -388,6 +398,7 @@ function ArticlesPage() {
           {!articlesQuery.isLoading && !articlesQuery.isError && !articles.length && <p className="mt-10 rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">Hələ məqalə yayımlanmayıb.</p>}
           {!articlesQuery.isLoading && !articlesQuery.isError && articles.length > 0 && <div className="mt-9 space-y-4">{articles.map((article) => <ArticleCard key={article.id} article={article} />)}</div>}
         </section>
+        <SiteFooter />
       </div>
     </main>
   );
@@ -421,6 +432,7 @@ function PublicArticlesPage() {
           {!articlesQuery.isLoading && !articlesQuery.isError && !articles.length && <p className="mt-10 rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">Hələ məqalə yayımlanmayıb.</p>}
           {!articlesQuery.isLoading && !articlesQuery.isError && articles.length > 0 && <div className="mt-9 space-y-4">{articles.map((article) => <ArticleCard key={article.id} article={article} />)}</div>}
         </section>
+        <SiteFooter />
       </div>
     </main>
   );
@@ -621,6 +633,7 @@ function SignInForm() {
           {notice && <p className={`mt-4 rounded-xl px-3.5 py-3 text-sm font-semibold ${isNoticeError ? 'bg-[hsl(var(--destructive)/.08)] text-[hsl(var(--destructive))]' : 'bg-[hsl(var(--secondary)/.45)] text-[hsl(var(--secondary-foreground))]'}`} role={isNoticeError ? 'alert' : 'status'} data-testid="text-sign-in-notice">{notice}</p>}
           {stage === 'credentials' && <p className="mt-6 border-t border-[hsl(var(--border))] pt-5 text-center text-xs text-[hsl(var(--muted-foreground))]">Hesabınız yoxdur? <Link href="/sign-up" className="font-bold text-[hsl(var(--secondary-foreground))]">Müraciət edin</Link></p>}
         </section>
+        <SiteFooter />
       </div>
     </main>
   );
@@ -710,6 +723,7 @@ function PasswordResetForm() {
           {notice && <p className={`mt-4 rounded-xl px-3.5 py-3 text-sm font-semibold ${isError ? 'bg-[hsl(var(--destructive)/.08)] text-[hsl(var(--destructive))]' : 'bg-[hsl(var(--secondary)/.45)] text-[hsl(var(--secondary-foreground))]'}`} role="status">{notice}</p>}
           {stage !== 'success' && <p className="mt-6 border-t border-[hsl(var(--border))] pt-5 text-center text-xs text-[hsl(var(--muted-foreground))]">Şifrənizi xatırladınız? <Link href="/sign-in" className="font-bold text-[hsl(var(--secondary-foreground))]">Giriş edin</Link></p>}
         </section>
+        <SiteFooter />
       </div>
     </main>
   );

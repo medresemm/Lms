@@ -13,7 +13,7 @@ function spies() {
   const deps: AdminRoutingDeps = {
     internal: async () => {
       calls.internal += 1;
-      return { reply: "LMS cavabı", suggestions: [] };
+      return { reply: "Akademiya cavabı", suggestions: [] };
     },
     research: async (intent) => {
       calls.research.push(intent);
@@ -40,6 +40,7 @@ test("internal mode never calls external sources, even for Shamela/Dorar command
     assert.equal(reply.mode, "internal");
     assert.equal(reply.sources, undefined);
     assert.match(reply.reply, /«Xarici» rejimə keçin/);
+    assert.ok(!reply.reply.includes("LMS"));
   }
 });
 
@@ -48,7 +49,7 @@ test("internal mode answers LMS questions from LMS data only", async () => {
   const reply = await routeAdminMessage({ message: "Qayıbı çox olanlar", mode: "internal", target: "shamela", canReadLms: true }, deps);
   assert.equal(calls.internal, 1);
   assert.equal(calls.fetch.length, 0);
-  assert.equal(reply.reply, "LMS cavabı");
+  assert.equal(reply.reply, "Akademiya cavabı");
 });
 
 test("internal mode refuses LMS data politely without the students permission", async () => {
@@ -57,6 +58,8 @@ test("internal mode refuses LMS data politely without the students permission", 
   assert.equal(calls.internal, 0);
   assert.equal(calls.fetch.length, 0);
   assert.match(reply.reply, /«Tələbələr» icazəsi lazımdır/);
+  assert.match(reply.reply, /Akademiya məlumatlarına/);
+  assert.ok(!reply.reply.includes("LMS"));
 });
 
 test("external mode never queries LMS data and searches whatever is typed (default Shamela)", async () => {

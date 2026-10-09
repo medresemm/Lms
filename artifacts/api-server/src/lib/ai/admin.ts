@@ -189,7 +189,7 @@ export const ADMIN_SUGGESTIONS = ["Tələbə axtar", "Qayıbı çox olanlar", "N
 export function adminHelp(ctx: AdminAiContext) {
   const can = (permission: string) => ctx.isOwner || ctx.permissions.has(permission);
   return reply([
-    "Mən Mədinə AI-yam — admin paneli üçün daxili köməkçi. Cavablar yalnız LMS bazasındakı məlumatlardan qurulur; hərf səhvlərini də başa düşürəm.",
+    "Mən Mədinə AI-yam — admin paneli üçün daxili köməkçi. Cavablar yalnız Akademiya bazasındakı məlumatlardan qurulur; hərf səhvlərini də başa düşürəm.",
     "Nümunələr:",
     "• Tələbə: «Əli Məmmədov», «mammadov ali», «T0012», «ali@mail.com», «050 123 45 67»",
     "• Filtrlər: «2-ci semestr tələbələri», «qayıbı çox olanlar», «ortalaması 60-dan aşağı olanlar», «tapşırığı təhvil verməyənlər», «ərəb dili səviyyəsi»",

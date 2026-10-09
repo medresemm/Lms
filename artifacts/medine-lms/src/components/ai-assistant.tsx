@@ -438,12 +438,12 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
     ? 'Nə ilə kömək edim?'
     : external
       ? source.target === 'dorar' ? 'Hədis mətnindən bir hissə yazın (ərəbcə)…' : source.target === 'all' ? 'Şamilə və Dorar-da axtarış (ərəbcə)…' : 'Şamilədə axtarış (ərəbcə açar söz)…'
-      : 'LMS üzrə sual verin…';
+      : 'Akademiya üzrə sual verin…';
   const intro = !isStaff
     ? 'Yalnız sizin dərsləriniz, cədvəliniz, tapşırıqlarınız və nəticələriniz əsasında cavab verirəm.'
     : external
-      ? 'Xarici rejim: yazdığınızı yalnız Şamilə kitabxanasında və/və ya Dorar hədis bazasında axtarıram. LMS məlumatlarına baxılmır. Mətnlər burada göstərilir, saytda saxlanmır.'
-      : 'Daxili rejim: tələbələr, müəllimlər, dərslər, müraciətlər, tapşırıqlar, testlər və elanlar üzrə yalnız LMS bazasından cavab verirəm — hərf səhvlərini də başa düşürəm.';
+      ? 'Xarici rejim: yazdığınızı yalnız Şamilə kitabxanasında və/və ya Dorar hədis bazasında axtarıram. Akademiya məlumatlarına baxılmır. Mətnlər burada göstərilir, saytda saxlanmır.'
+      : 'Daxili rejim: tələbələr, müəllimlər, dərslər, müraciətlər, tapşırıqlar, testlər və elanlar üzrə yalnız Akademiya bazasından cavab verirəm — hərf səhvlərini də başa düşürəm.';
   // Telefon və planşetdə (≤1024px) kartlar bir sətirlik, üfüqi sürüşən kiçik düymələrdir; yalnız böyük ekranda iri kartlar.
   const chipRow = 'flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
@@ -470,7 +470,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
         {isStaff && (
           <div className="mt-2.5 flex flex-wrap items-center gap-2 sm:mt-3">
             <div role="radiogroup" aria-label="Mənbə rejimi" className="inline-flex rounded-full border border-[#e3c27a]/40 bg-black/30 p-0.5" data-testid="ai-source-switch">
-              {([['internal', 'Daxili', 'Yalnız LMS məlumatları'], ['external', 'Xarici', 'Yalnız xarici mənbələr: Şamilə, Dorar']] as const).map(([value, label, title]) => (
+              {([['internal', 'Daxili', 'Yalnız Akademiya məlumatları'], ['external', 'Xarici', 'Yalnız xarici mənbələr: Şamilə, Dorar']] as const).map(([value, label, title]) => (
                 <button key={value} type="button" role="radio" aria-checked={source.mode === value} title={title} onClick={() => changeSource({ mode: value })} disabled={sending}
                   className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition sm:px-4 ${source.mode === value ? 'bg-gradient-to-br from-[#f3dca6] to-[#c49a4c] text-[#17130c] shadow-[0_0_14px_rgba(227,194,122,.3)]' : 'text-[#f4ead5]/70 hover:text-[#f3dca6]'}`}
                   data-testid={`button-ai-source-${value}`}>
@@ -489,7 +489,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
                 ))}
               </div>
             )}
-            {!external && !canReadLms && <span className="text-[10px] text-[#f4ead5]/50">LMS məlumatları üçün «Tələbələr» icazəsi lazımdır.</span>}
+            {!external && !canReadLms && <span className="text-[10px] text-[#f4ead5]/50">Akademiya məlumatları üçün «Tələbələr» icazəsi lazımdır.</span>}
           </div>
         )}
       </header>

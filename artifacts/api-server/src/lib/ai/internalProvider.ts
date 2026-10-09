@@ -331,7 +331,7 @@ async function answerStudent(parsed: ParsedMessage, ctx: StudentAiContext): Prom
   if (countKeywords(parsed, KW.greeting)) return studentHelp(overview.firstName);
   if (countKeywords(parsed, KW.help)) return studentHelp();
   return reply([
-    "Bu sualı tam başa düşmədim. Mən daxili köməkçiyəm və yalnız sizin LMS məlumatlarınız əsasında cavab verirəm.",
+    "Bu sualı tam başa düşmədim. Mən daxili köməkçiyəm və yalnız sizin Akademiya məlumatlarınız əsasında cavab verirəm.",
     "Bunları soruşa bilərsiniz: dərs cədvəli, tapşırıqlar, imtahanlar, qiymətlər, davamiyyət, resurslar, fənlər, profil, elanlar.",
     `Saytdan istifadə mövzuları: ${guideTopicList("student").join(", ")}. Məsələn: «Tapşırığı necə göndərim?»`,
     "Dini və ya elmi suallar üçün kabinetdəki «Sual-cavab» bölməsindən müəllimlərə yaza bilərsiniz.",

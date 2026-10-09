@@ -213,7 +213,7 @@ export async function sendCriticalEventEmail({
   details?: string;
 }) {
   assertEmail(to, "Bildiriş email ünvanı düzgün deyil.");
-  const eventLabel = criticalEventLabels[eventType] ?? "LMS-də mühüm dəyişiklik edildi";
+  const eventLabel = criticalEventLabels[eventType] ?? "Akademiyada mühüm dəyişiklik edildi";
   const detailText = readableDetails(details);
   const subject = `Mədinə Akademiyası – ${eventLabel}`;
   const text = [

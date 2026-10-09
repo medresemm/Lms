@@ -73,7 +73,7 @@ export async function routeAdminMessage(input: AdminRoutingInput, deps: AdminRou
   if (detectResearchIntent(input.message)) {
     return {
       mode: "internal",
-      reply: "Bu, xarici mənbə (Şamilə / Dorar) sorğusuna oxşayır. «Daxili» rejimdə yalnız LMS məlumatlarında axtarıram və xarici saytlara müraciət etmirəm.\n\nŞamilə və ya Dorar-da axtarmaq üçün yuxarıdakı «Xarici» rejimə keçin.",
+      reply: "Bu, xarici mənbə (Şamilə / Dorar) sorğusuna oxşayır. «Daxili» rejimdə yalnız Akademiya məlumatlarında axtarıram və xarici saytlara müraciət etmirəm.\n\nŞamilə və ya Dorar-da axtarmaq üçün yuxarıdakı «Xarici» rejimə keçin.",
       suggestions: [],
     };
   }
@@ -82,7 +82,7 @@ export async function routeAdminMessage(input: AdminRoutingInput, deps: AdminRou
     if (topic && (topic.id === "admin-research" || topic.id === "ai")) return { mode: "internal", ...guideReply(topic) };
     return {
       mode: "internal",
-      reply: "Bağışlayın, LMS məlumatlarına (tələbələr, dərslər, qiymətlər və s.) baxmaq üçün «Tələbələr» icazəsi lazımdır. Bunun üçün idarəçiyə müraciət edin.\n\nŞamilə kitabxanasında və Dorar hədis bazasında axtarmaq üçün yuxarıdakı «Xarici» rejimə keçin.",
+      reply: "Bağışlayın, Akademiya məlumatlarına (tələbələr, dərslər, qiymətlər və s.) baxmaq üçün «Tələbələr» icazəsi lazımdır. Bunun üçün idarəçiyə müraciət edin.\n\nŞamilə kitabxanasında və Dorar hədis bazasında axtarmaq üçün yuxarıdakı «Xarici» rejimə keçin.",
       suggestions: [],
     };
   }

@@ -787,7 +787,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
             <BrandTile />
             <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight text-[#f4ead5] sm:mt-6 sm:text-4xl">Mədinə <span style={{ color: gold }}>AI</span></h2>
             {!isStaff && <p dir="rtl" className="mt-3 max-w-xs text-[15px] font-semibold leading-8 sm:text-base" style={{ color: gold, fontFamily: arabicFont }} data-testid="text-student-hadith">مَنْ يُرِدِ اللَّهُ بِهِ خَيْرًا يُفَقِّهْهُ فِي الدِّينِ</p>}
-            {!isStaff && <img src={`${import.meta.env.BASE_URL}student-ai-books.png`} alt="" className="mt-3 h-32 w-auto sm:h-40" data-testid="img-student-ai-books" />}
+            <img src={`${import.meta.env.BASE_URL}student-ai-books.png`} alt="" className="mt-3 h-32 w-auto sm:h-40" data-testid="img-ai-books" />
             <div className="mt-4 hidden w-full items-center gap-3 text-xs text-[#f4ead5]/80 sm:mt-5 sm:flex">
               <span className="h-px flex-1 bg-gradient-to-r from-transparent to-[#e3c27a]/50" />
               <span>Sual edin · Öyrənin · Dərinləşin</span>

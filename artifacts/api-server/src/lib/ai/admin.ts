@@ -137,9 +137,11 @@ function termLabel(term: number) {
   return `${term}-ci semestr`;
 }
 
-function bullet(lines: string[], items: string[], cap: number, more = "nəfər") {
+function bullet(lines: string[], items: string[], requestedCap: number, more = "nəfər") {
+  // Brauzer siyahını 5-5 göstərir («Daha çox göstər»), ona görə burada daha çox element göndərilir.
+  const cap = Math.max(requestedCap, 40);
   lines.push(...items.slice(0, cap));
-  if (items.length > cap) lines.push(`…və daha ${items.length - cap} ${more}. Sorğunu dəqiqləşdirin.`);
+  if (items.length > cap) lines.push(`…və daha ${items.length - cap} ${more} var — siyahını daraltmaq üçün sualı dəqiqləşdirin.`);
 }
 
 function studentLine(student: AiStudentMatch, extra?: string) {
@@ -192,7 +194,7 @@ export function adminHelp(ctx: AdminAiContext) {
     "Mən Mədinə AI-yam — admin paneli üçün daxili köməkçi. Cavablar yalnız Akademiya bazasındakı məlumatlardan qurulur; hərf səhvlərini də başa düşürəm.",
     "Nümunələr:",
     "• Tələbə: «Əli Məmmədov», «mammadov ali», «T0012», «ali@mail.com», «050 123 45 67»",
-    "• Filtrlər: «2-ci semestr tələbələri», «qayıbı çox olanlar», «ortalaması 60-dan aşağı olanlar», «tapşırığı təhvil verməyənlər», «ərəb dili səviyyəsi»",
+    "• Seçmə nümunələri: «2-ci semestr tələbələri», «qayıbı çox olanlar», «ortalaması 60-dan aşağı olanlar», «tapşırığı təhvil verməyənlər», «ərəb dili səviyyəsi»",
     can("schedule") ? "• Müəllim və dərslər: «Neçə müəllim var?», «Ustad Əli», «Əli müəllimin tələbələri», «Müəllim cədvəli», «Dərs siyahısı», «Quran tələbələri»" : null,
     "• Testlər: «Quran imtahan nəticələri», «testlər»",
     can("assignments") ? "• Tapşırıqlar: «tapşırıqlar», «yoxlanılmamış tapşırıqlar», «Fatihə tapşırığı»" : null,
@@ -252,10 +254,10 @@ function studentDetailsReply(details: AiStudentDetails): AiReply {
 async function showStudents(ctx: AdminAiContext, matches: AiStudentMatch[], heading?: string): Promise<AiReply> {
   if (matches.length === 1) {
     const details = await ctx.studentDetails(matches[0].profileId);
-    if (!details) return reply(["Tələbə tapıldı, amma akademik profili əlçatan deyil."], ADMIN_SUGGESTIONS);
+    if (!details) return reply(["Tələbəni tapdım, amma onun akademik məlumatları hələ hazır deyil."], ADMIN_SUGGESTIONS);
     return studentDetailsReply(details);
   }
-  const lines = [heading ?? `${matches.length} tələbə tapıldı. Tam məlumat üçün T-nömrəni yazın:`];
+  const lines = [heading ?? `${matches.length} tələbə tapdım. Ətraflı baxmaq üçün tələbə nömrəsini yazın (məs. T0012):`];
   bullet(lines, matches.map((student) => `${studentLine(student)} · ${student.email}`), 15);
   return reply(lines, matches.slice(0, 4).map((student) => studentCode(student.studentNumber)));
 }
@@ -475,7 +477,7 @@ async function studentBranch(ctx: AdminAiContext, parsed: ParsedMessage, entitie
   const sorter = filters.find((filter) => filter.sort)?.sort;
   result = sorter ? [...result].sort(sorter) : result;
   const metrics = filters.map((filter) => filter.metric).filter((metric): metric is NonNullable<StudentFilter["metric"]> => Boolean(metric));
-  const heading = `Filtr: ${filters.map((filter) => filter.label).join(" · ")}`;
+  const heading = `Seçim: ${filters.map((filter) => filter.label).join(" · ")}`;
   if (isCount) {
     const byTerm = new Map<number, number>();
     for (const student of result) byTerm.set(student.currentTermNumber, (byTerm.get(student.currentTermNumber) ?? 0) + 1);
@@ -485,7 +487,7 @@ async function studentBranch(ctx: AdminAiContext, parsed: ParsedMessage, entitie
       ...Array.from(byTerm.entries()).sort(([a], [b]) => a - b).map(([term, count]) => `• ${termLabel(term)}: ${count} nəfər`),
     ], ["Siyahını göstər", "Ümumi statistika"]);
   }
-  const lines = [heading, `${result.length} tələbə tapıldı.`];
+  const lines = [heading, `${result.length} tələbə tapdım.`];
   if (!result.length) lines.push("Bu filtrə uyğun tələbə yoxdur.");
   bullet(lines, result.map((student) => studentLine(student, metrics.map((metric) => metric(student)).join(" · ") || undefined)), 25);
   return reply(lines, result.slice(0, 4).map((student) => studentCode(student.studentNumber)));
@@ -603,10 +605,11 @@ async function applicationBranch(ctx: AdminAiContext, parsed: ParsedMessage, sta
     const matches = bestMatches(rankItems(filtered, nameTokens, (item) => [item.firstName, item.lastName, item.username, item.email.split("@")[0]]));
     if (matches.length) list = matches.map((entry) => entry.item);
   }
-  const label = status ? `«${STATUS_LABELS[status]}» statuslu ` : "";
+  const headings: Record<string, string> = { pending: "Gözləyən müraciətlər", approved: "Təsdiqlənmiş müraciətlər", rejected: "Rədd edilmiş müraciətlər", graduated: "Məzun olanların müraciətləri" };
+  const heading = (status && headings[status]) || "Müraciətlər";
   const lines = [
-    `${showDeleted ? "Silinmiş " : ""}${label}müraciətlər: ${list.length}`,
-    !status && list === filtered ? `Statuslar: ${countByStatus(active) || "—"}` : null,
+    `${showDeleted ? "Silinmiş — " : ""}${heading}: ${list.length}`,
+    !status && list === filtered ? `Vəziyyət üzrə: ${countByStatus(active) || "—"}` : null,
   ].filter((line): line is string => Boolean(line));
   if (!isCount) {
     bullet(lines, list.map((item) => `• ${item.firstName} ${item.lastName} · ${item.email} · ${item.phone} · ərəb dili: ${item.arabicLevel} · ${STATUS_LABELS[item.status] ?? item.status} · ${formatDate(item.createdAt)}${item.rejectionReason ? ` · səbəb: ${snippet(item.rejectionReason, 60)}` : ""}`), 20, "müraciət");
@@ -618,7 +621,7 @@ async function subjectRequestBranch(ctx: AdminAiContext, status: Status | null, 
   const all = await ctx.subjectRequests();
   if (!all) return noPermission("Müraciətlər");
   const list = statusFilter(all, status);
-  const lines = [`Fənn silmə müraciətləri${status ? ` («${STATUS_LABELS[status]}»)` : ""}: ${list.length}`, status ? null : `Statuslar: ${countByStatus(all) || "—"}`]
+  const lines = [`Fənn silmə müraciətləri${status ? ` («${STATUS_LABELS[status]}»)` : ""}: ${list.length}`, status ? null : `Vəziyyət üzrə: ${countByStatus(all) || "—"}`]
     .filter((line): line is string => Boolean(line));
   if (!isCount) bullet(lines, list.map((item) => `• ${item.studentName}${item.studentNumber ? ` (${studentCode(item.studentNumber)})` : ""} — ${item.courseTitle} · ${termLabel(item.termNumber)} · ${STATUS_LABELS[item.status] ?? item.status} · ${snippet(item.reason, 60)}`), 20, "müraciət");
   return reply(lines, ["Gözləyən müraciətlər", "Gözləyən üzrlər"]);
@@ -633,7 +636,7 @@ async function excuseBranch(ctx: AdminAiContext, parsed: ParsedMessage, status: 
     const matches = bestMatches(rankItems(list, nameTokens, (item) => [item.studentName, item.courseTitle]));
     if (matches.length) list = matches.map((entry) => entry.item);
   }
-  const lines = [`Davamiyyət üzrləri${status ? ` («${STATUS_LABELS[status]}»)` : ""}: ${list.length}`, status ? null : `Statuslar: ${countByStatus(all) || "—"}`]
+  const lines = [`Davamiyyət üzrləri${status ? ` («${STATUS_LABELS[status]}»)` : ""}: ${list.length}`, status ? null : `Vəziyyət üzrə: ${countByStatus(all) || "—"}`]
     .filter((line): line is string => Boolean(line));
   if (!isCount) bullet(lines, list.map((item) => `• ${item.studentName}${item.studentNumber ? ` (${studentCode(item.studentNumber)})` : ""} — ${item.courseTitle}${item.attendanceDate ? ` · ${formatDate(item.attendanceDate)}` : ""} · ${STATUS_LABELS[item.status] ?? item.status} · ${snippet(item.reason, 70)}`), 20, "üzr");
   return reply(lines, ["Gözləyən üzrlər", "Qayıbı çox olanlar"]);
@@ -871,7 +874,7 @@ async function globalSearch(ctx: AdminAiContext, tokens: string[]): Promise<AiRe
       if (!groups.has(entry.item.type)) groups.set(entry.item.type, []);
       groups.get(entry.item.type)!.push(entry);
     }
-    const lines = [`Axtarış nəticələri (${matches.length}):`];
+    const lines = [`${matches.length} uyğun nəticə tapdım:`];
     for (const [type, entries] of groups) {
       lines.push("", `${type} (${entries.length}):`);
       bullet(lines, entries.map((entry) => `• ${entry.item.label}`), 5, "nəticə");
@@ -918,11 +921,11 @@ export async function answerAdmin(parsed: ParsedMessage, ctx: AdminAiContext): P
   if (!entities.size && !residual.length) {
     if (countKeywords(parsed, KW.thanks)) return reply(["Dəyməz! Başqa nə lazım olsa, yazın."], ADMIN_SUGGESTIONS);
     if (isCount || has(parsed, ["statistika", "istatistik", "umumi"])) return overallStats(ctx);
-    if (strong) return reply(["Bu identifikatora uyğun tələbə tapılmadı. E-poçtu, telefonu və ya T-nömrəni yoxlayın."], ADMIN_SUGGESTIONS);
+    if (strong) return reply(["Bu məlumatla tələbə tapa bilmədim. E-poçtu, telefonu və ya tələbə nömrəsini (məs. T0012) bir daha yoxlayın."], ADMIN_SUGGESTIONS);
     return adminHelp(ctx);
   }
   if (strong && !residual.length && !entities.size) {
-    return reply(["Bu identifikatora uyğun tələbə tapılmadı. E-poçtu, telefonu və ya T-nömrəni yoxlayın."], ADMIN_SUGGESTIONS);
+    return reply(["Bu məlumatla tələbə tapa bilmədim. E-poçtu, telefonu və ya tələbə nömrəsini (məs. T0012) bir daha yoxlayın."], ADMIN_SUGGESTIONS);
   }
   if (has(parsed, ["umumi statistika", "umumi veziyyet", "hesabat", "dashboard", "icmal"]) && !residual.length) return overallStats(ctx);
 

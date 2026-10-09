@@ -5,6 +5,7 @@
 // qoşmaq lazım olsa, yeni provayder bu interfeysi tətbiq edib `MEDINE_AI_PROVIDER` env dəyişəni ilə
 // seçilə bilər. Provayder heç nə saxlamamalıdır: söhbət tarixçəsi yalnız brauzerdə (localStorage) qalır.
 import { internalAiProvider } from "./internalProvider.js";
+import type { AiBlock } from "./blocks.js";
 
 export type AiMode = "student" | "admin";
 
@@ -16,6 +17,8 @@ export interface AiChatTurn {
 export interface AiReply {
   reply: string;
   suggestions: string[];
+  /** Strukturlu kart blokları (bax: blocks.ts). Köhnə müştərilər `reply` mətnini göstərir. */
+  blocks?: AiBlock[];
 }
 
 export interface AiScheduleAccess {

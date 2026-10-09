@@ -4,6 +4,7 @@
 // interfeysindən (artifacts/medine-lms/src/...) götürülüb. İnterfeys dəyişəndə bu fayl da yenilənməlidir.
 import type { AiMode, AiReply } from "./aiProvider.js";
 import { countKeywords, hasKeyword, type ParsedMessage } from "./text.js";
+import { blockReply } from "./blocks.js";
 
 export interface GuideTopic {
   id: string;
@@ -336,7 +337,7 @@ export const GUIDE_TOPICS: GuideTopic[] = [
       "Şamilə kitabxanasında axtarmaq üçün yazın: «Şamilədə axtar: إنما الأعمال بالنيات» (və ya «shamela …», «kitablarda axtar …», «الشاملة …»).",
       "Hədisi Dorar (الدرر السنية) bazasında yoxlamaq üçün yazın: «Hədis yoxla: إنما الأعمال بالنيات» (və ya «dorar …», «hədis axtar …», «hadis ara …»).",
       "Nəticələr Mədinə AI-ın içində göstərilir: Şamilədə kitab, müəllif, cild/səhifə və səhifə mətni; Dorar-da hədis mətni, ravi, mühəddis, mənbə, səhifə/nömrə və hökm.",
-      "Şamilə nəticəsində «Tam səhifə» düyməsi səhifəni burada açır; «Əvvəlki / Növbəti səhifə» ilə vərəqləyə bilərsiniz. «Kopyala» düyməsi mətni kopyalayır.",
+      "Şamilə nəticəsində «Davamı» düyməsi səhifənin tam mətnini burada açır, hədis kartında isə hədisin tam mətnini gətirir; «Əvvəlki / Növbəti səhifə» ilə vərəqləyə bilərsiniz. «Kopyala» düyməsi mətni kopyalayır.",
     ],
     tips: [
       "Ən yaxşı nəticə üçün ərəbcə açar sözlər yazın.",
@@ -436,9 +437,7 @@ export function findGuideTopic(parsed: ParsedMessage, mode: AiMode): GuideTopic 
 }
 
 export function guideReply(topic: GuideTopic): AiReply {
-  const lines = [`${topic.title}:`, ...topic.steps.map((step, index) => `${index + 1}. ${step}`)];
-  if (topic.tips?.length) lines.push("", ...topic.tips.map((tip) => `• ${tip}`));
-  return { reply: lines.join("\n"), suggestions: (topic.related ?? []).slice(0, 4) };
+  return blockReply([{ type: "steps", title: topic.title, steps: topic.steps, tips: topic.tips?.length ? topic.tips : undefined }], topic.related ?? []);
 }
 
 export function guideTopicList(mode: AiMode) {

@@ -1,6 +1,12 @@
-import { BookOpen } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { BookOpen, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { Link } from 'wouter';
 import { arabicBookFont, groupLibraryItems, LIBRARY_SLUG, type LibraryChapterSuggestion, type LibrarySearchItem } from '@/lib/library';
+
+/** «Davamı»: nəticənin bütün səhifə mətni (vurğulanmış hissələrlə). */
+export type LibraryPageLoader = (item: LibrarySearchItem) => Promise<{ text: string; parts?: Array<{ text: string; hit?: boolean }>; truncated?: boolean }>;
+/** Genişlənmə zamanı görünən sahəni sabit saxlayan köməkçi (Mədinə AI ötürür). */
+export type AnchorKeeper = (anchor: Element | null, change: () => void) => void;
 
 // Kitabxana axtarış nəticələri: Mədinə AI-də (tünd fon) və oxuyucunun axtarış panelində (kağız fon).
 // Mətn yalnız mətn kimi göstərilir (xam HTML yoxdur); vurğulama serverin qaytardığı hissələrlə edilir.
@@ -43,8 +49,40 @@ export function HighlightedSnippet({ item, markClass }: { item: LibrarySearchIte
   );
 }
 
-function ResultCard({ item, tone, onOpen }: { item: LibrarySearchItem; tone: Tone; onOpen?: (item: LibrarySearchItem) => void }) {
+function ResultCard({ item, tone, onOpen, loadPage, keep }: { item: LibrarySearchItem; tone: Tone; onOpen?: (item: LibrarySearchItem) => void; loadPage?: LibraryPageLoader; keep?: AnchorKeeper }) {
   const classes = toneClasses[tone];
+  const card = useRef<HTMLElement>(null);
+  const [full, setFull] = useState<{ parts: Array<{ text: string; hit?: boolean }>; truncated?: boolean } | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const cut = Boolean(item.snippet) && /…/.test(item.snippet);
+  const apply = (change: () => void) => (keep ? keep(card.current, change) : change());
+  async function toggle() {
+    if (expanded) {
+      apply(() => setExpanded(false));
+      return;
+    }
+    if (full) {
+      apply(() => setExpanded(true));
+      return;
+    }
+    if (!loadPage) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await loadPage(item);
+      const parts = Array.isArray(data.parts) && data.parts.length ? data.parts : [{ text: data.text }];
+      apply(() => {
+        setFull({ parts, truncated: data.truncated });
+        setExpanded(true);
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Səhifə mətnini açmaq olmadı.');
+    } finally {
+      setLoading(false);
+    }
+  }
   const page = Number.isSafeInteger(item.page) && item.page > 0 ? item.page : 1;
   const slug = LIBRARY_SLUG.test(item.slug) ? item.slug : '';
   const path = Array.isArray(item.chapterPath) && item.chapterPath.length ? item.chapterPath : item.chapterTitle ? [item.chapterTitle] : [];
@@ -54,7 +92,7 @@ function ResultCard({ item, tone, onOpen }: { item: LibrarySearchItem; tone: Ton
     </>
   );
   return (
-    <article className={classes.card} data-testid="library-search-result">
+    <article ref={card} className={classes.card} data-testid="library-search-result">
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
           <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${classes.badge}`}>s. {item.printedPage ?? page}</span>
@@ -70,9 +108,22 @@ function ResultCard({ item, tone, onOpen }: { item: LibrarySearchItem; tone: Ton
         )}
       </header>
       {item.snippet && (
-        <p dir="rtl" lang="ar" className={`mt-2 text-right text-[16px] leading-8 ${classes.snippet}`} style={{ fontFamily: arabicBookFont }}>
-          <HighlightedSnippet item={item} markClass={classes.mark} />
-        </p>
+        expanded && full ? (
+          <div dir="rtl" lang="ar" tabIndex={0} className={`mt-2 max-h-[28rem] overflow-y-auto whitespace-pre-wrap text-right text-[16px] leading-8 ${classes.snippet}`} style={{ fontFamily: arabicBookFont }} data-testid="library-result-full">
+            <HighlightedSnippet item={{ ...item, parts: full.parts, snippet: full.parts.map((part) => part.text).join('') }} markClass={classes.mark} />
+          </div>
+        ) : (
+          <p dir="rtl" lang="ar" className={`mt-2 text-right text-[16px] leading-8 ${classes.snippet}`} style={{ fontFamily: arabicBookFont }}>
+            <HighlightedSnippet item={item} markClass={classes.mark} />
+          </p>
+        )
+      )}
+      {expanded && full && <p className={`mt-1 text-[11px] opacity-60 ${classes.path}`}>Səhifənin tam mətni (skan mətni{full.truncated ? ', ilk hissə' : ''}).</p>}
+      {error && <p className="mt-1 text-xs text-red-300">{error}</p>}
+      {loadPage && cut && (
+        <button type="button" onClick={() => void toggle()} disabled={loading} className={`mt-2 mr-2 inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold transition disabled:opacity-50 ${classes.badge}`} data-testid="button-library-result-more">
+          {loading ? <Loader2 size={12} className="animate-spin" /> : expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />} {expanded ? 'Qısalt' : 'Davamı'}
+        </button>
       )}
       {onOpen ? (
         <button type="button" onClick={() => onOpen(item)} className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition hover:brightness-105 ${classes.button}`} data-testid="button-library-result-open">{action}</button>
@@ -83,7 +134,7 @@ function ResultCard({ item, tone, onOpen }: { item: LibrarySearchItem; tone: Ton
   );
 }
 
-export function LibraryHitList({ items, tone, onOpen, groupHeadings = true }: { items: LibrarySearchItem[]; tone: Tone; onOpen?: (item: LibrarySearchItem) => void; groupHeadings?: boolean }) {
+export function LibraryHitList({ items, tone, onOpen, groupHeadings = true, loadPage, keep }: { items: LibrarySearchItem[]; tone: Tone; onOpen?: (item: LibrarySearchItem) => void; groupHeadings?: boolean; loadPage?: LibraryPageLoader; keep?: AnchorKeeper }) {
   const classes = toneClasses[tone];
   const groups = groupLibraryItems(items);
   return (
@@ -95,7 +146,7 @@ export function LibraryHitList({ items, tone, onOpen, groupHeadings = true }: { 
               {group.items[0].bookTitle} <span className="font-sans text-[11px] opacity-70" dir="ltr">· {group.items.length}</span>
             </h4>
           )}
-          {group.items.map((item) => <ResultCard key={`${item.slug}-${item.page}-${item.match ?? 'text'}`} item={item} tone={tone} onOpen={onOpen} />)}
+          {group.items.map((item) => <ResultCard key={`${item.slug}-${item.page}-${item.match ?? 'text'}`} item={item} tone={tone} onOpen={onOpen} loadPage={loadPage} keep={keep} />)}
         </section>
       ))}
     </div>

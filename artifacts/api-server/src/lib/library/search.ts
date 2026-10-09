@@ -539,6 +539,41 @@ function queryWords(arabic: string) {
 }
 
 /** Ərəbcə sorğu ilə axtarış (fəsil başlıqları + səhifə mətni). */
+const PAGE_TEXT_MAX_WORDS = 1500;
+
+/**
+ * «Davamı»: axtarış nəticəsinin bütün səhifə mətni (OCR qatı), sorğu sözləri vurğulanmış halda.
+ * Yalnız düymə ilə istənilir; heç nə saxlanmır.
+ */
+export function libraryPageText(slug: string, page: number, query: string, options: { books?: readonly LibraryBook[]; loader?: TextLoader } = {}) {
+  const book = (options.books ?? LIBRARY_BOOKS).find((item) => item.slug === slug);
+  if (!book || !Number.isSafeInteger(page) || page < 1) return null;
+  const index = loadIndex(book, options.loader ?? assetLoader);
+  const data = index?.pages[page - 1];
+  if (!index || !data) return null;
+  const wanted = queryWords(query);
+  const stems = new Set(wanted.map(lightStem));
+  const exact = new Set(wanted);
+  const hitWords = new Set<number>();
+  data.tokens.forEach((token, position) => {
+    if (STOPWORDS.has(token)) return;
+    if (exact.has(token) || stems.has(lightStem(token))) hitWords.add(data.tokenWord[position]);
+  });
+  const end = Math.min(data.original.length, PAGE_TEXT_MAX_WORDS);
+  const parts: SnippetPart[] = [];
+  const push = (text: string, hit: boolean) => {
+    const last = parts[parts.length - 1];
+    if (last && Boolean(last.hit) === hit) last.text += text;
+    else parts.push(hit ? { text, hit: true } : { text });
+  };
+  for (let word = 0; word < end; word += 1) {
+    if (word > 0) push(" ", false);
+    push(data.original[word], hitWords.has(word));
+  }
+  if (end < data.original.length) parts.push({ text: " …" });
+  return { slug, page, printedPage: page - book.pageOffset, text: parts.map((part) => part.text).join(""), parts, truncated: end < data.original.length };
+}
+
 export function searchLibraryPaged(query: string, options: LibrarySearchOptions = {}): LibrarySearchResult {
   const books = options.books ?? LIBRARY_BOOKS;
   const loader = options.loader ?? assetLoader;
@@ -891,7 +926,7 @@ export function answerLibrary(query: string, options: LibrarySearchOptions = {})
   const scope = bookName ? `«${bookName}» kitabında` : "Mədrəsə Kitabxanasında";
   const expandedNote = result.expanded.length ? ` (axtarılan: ${result.expanded.join("، ")})` : "";
   const reply = result.total
-    ? `${scope} «${query}»${expandedNote} üzrə ${result.total} nəticə tapıldı. «Kitabda aç» ilə həmin səhifəni oxuya bilərsiniz.`
+    ? `${scope} «${query}»${expandedNote} üzrə ${result.total} nəticə tapdım. «Kitabda aç» ilə həmin səhifəni oxuya, «Davamı» ilə səhifənin tam mətnini burada görə bilərsiniz.`
     : result.didYouMean.length
       ? `${scope} «${query}»${expandedNote} üzrə nəticə tapılmadı. Bunu nəzərdə tuturdunuz?`
       : `${scope} «${query}»${expandedNote} üzrə nəticə tapılmadı. Ərəbcə başqa söz və ya qısa ifadə ilə yoxlayın.`;

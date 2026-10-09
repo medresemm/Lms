@@ -19,7 +19,7 @@ import { findAssetPath, readAsset } from "../lib/assets.js";
 import { recordAuditEvent } from "../lib/audit.js";
 import { findLibraryBook, libraryPageAssetPath } from "../lib/library/catalog.js";
 import { createLibraryToken, createUploadTicket, verifyLibraryToken, verifyUploadTicket } from "../lib/library/token.js";
-import { LIBRARY_PAGE_SIZE, runLibraryQuery } from "../lib/library/search.js";
+import { LIBRARY_PAGE_SIZE, libraryPageText, runLibraryQuery } from "../lib/library/search.js";
 import {
   LIBRARY_MAX_COVER_BYTES,
   LIBRARY_MAX_PAGES,
@@ -255,6 +255,32 @@ router.post("/library/search", noStore, requireApprovedStudentOrTeacher, async (
     book = body.book;
   }
   res.json({ query, ...runLibraryQuery(query, { offset, limit, book, books }) });
+});
+
+// «Davamı»: nəticənin bütün səhifə mətni (yalnız düymə ilə; sorğu jurnala yazılmır).
+router.post("/library/page-text", noStore, requireApprovedStudentOrTeacher, async (req, res, next) => {
+  try {
+    const userId = getAuth(req).userId as string;
+    if (!allowSearch(userId)) {
+      res.status(429).json({ error: "Çox sürətli sorğu göndərilir. Bir dəqiqə sonra yenidən cəhd edin." });
+      return;
+    }
+    const body = (req.body ?? {}) as { slug?: unknown; page?: unknown; query?: unknown };
+    const page = Number(body.page);
+    const query = typeof body.query === "string" ? body.query.trim().slice(0, 200) : "";
+    if (typeof body.slug !== "string" || !Number.isSafeInteger(page) || page < 1 || page > 5000) {
+      res.status(400).json({ error: "Kitab və ya səhifə düzgün deyil." });
+      return;
+    }
+    const result = libraryPageText(body.slug, page, query, { books: await searchableLibraryBooks() });
+    if (!result) {
+      res.status(404).json({ error: "Bu səhifənin mətni tapılmadı." });
+      return;
+    }
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
 });
 
 // ---------------------------------------------------------------------------

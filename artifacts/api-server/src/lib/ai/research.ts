@@ -16,7 +16,8 @@ const DEFAULT_TIMEOUT_MS = 6000;
 const SEARCH_PAGE_MAX_CHARS = 2500;
 const OPEN_PAGE_MAX_CHARS = 8000;
 const MAX_SHAMELA_ITEMS = 5;
-const MAX_DORAR_ITEMS = 10;
+const MAX_DORAR_ITEMS = 15;
+const SHAMELA_FULL_MAX_CHARS = 40000;
 const MAX_QUERY_LENGTH = 300;
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -56,6 +57,8 @@ export interface ShamelaItem {
 }
 
 export interface DorarItem {
+  /** Mənbənin özü hədisi qısaldıbsa («…», «الحديث»). Belə halda «Davamı» tam mətni axtarır. */
+  abridged?: boolean;
   text: string;
   narrator: string;
   muhaddith: string;
@@ -65,7 +68,7 @@ export interface DorarItem {
 }
 
 export type ResearchSources =
-  | { kind: "shamela"; query: string; sourceUrl: string; items: ShamelaItem[]; error?: UpstreamErrorCode }
+  | { kind: "shamela"; query: string; sourceUrl: string; items: ShamelaItem[]; error?: UpstreamErrorCode; hasMore?: boolean; cursor?: string | null }
   | { kind: "dorar"; query: string; sourceUrl: string; items: DorarItem[]; error?: UpstreamErrorCode };
 
 export class ResearchUpstreamError extends Error {
@@ -302,34 +305,73 @@ function itemFromSources(meta: { bookId: number; pageId: number; title: string; 
   };
 }
 
-export async function searchShamela(query: string, options: ResearchOptions = {}): Promise<ShamelaItem[]> {
-  const found = await callShamelaTool("shamela_find", { keywords: [query.slice(0, 200)], difficulty: "easy" }, options);
-  // `found.notice` qəsdən oxunmur — o, dil modelləri üçün təlimatdır.
-  const layers = Array.isArray(found.layers) ? found.layers as Array<Record<string, unknown>> : [];
-  const ordered = [...layers].sort((a, b) => (a.key === "main" ? 0 : 1) - (b.key === "main" ? 0 : 1));
-  const metas: Array<{ bookId: number; pageId: number; title: string; author: string; preview: string; citation: string }> = [];
-  const seen = new Set<string>();
-  for (const layer of ordered) {
-    for (const raw of Array.isArray(layer.results) ? layer.results as Array<Record<string, unknown>> : []) {
-      const bookId = asInt(raw?.book_id);
-      const pageId = asInt(raw?.page_id);
-      if (!bookId || !pageId || seen.has(`${bookId}`)) continue;
-      seen.add(`${bookId}`);
-      metas.push({
-        bookId,
-        pageId,
-        title: cleanText(asString(raw.title)),
-        author: cleanText(asString(raw.author)),
-        preview: cleanText(asString(raw.preview)),
-        citation: asString((raw.citation as Record<string, unknown> | undefined)?.markdown),
-      });
-      if (metas.length >= MAX_SHAMELA_ITEMS) break;
-    }
-    if (metas.length >= MAX_SHAMELA_ITEMS) break;
-  }
-  if (!metas.length) return [];
+export interface ShamelaSearchPage {
+  items: ShamelaItem[];
+  /** Eyni sorğu üzrə daha çox nəticə olub-olmadığı. */
+  hasMore: boolean;
+  /** Növbəti Şamilə səhifəsi üçün kursor (yalnız cari cavab tükənəndə lazımdır). */
+  cursor: string | null;
+}
 
-  const evidence = readSources((found.evidence as Record<string, unknown> | undefined)?.sources);
+export interface ShamelaSearchOptions {
+  seenBookIds?: number[];
+  cursor?: string | null;
+  limit?: number;
+}
+
+export async function searchShamelaPage(query: string, options: ResearchOptions = {}, paging: ShamelaSearchOptions = {}): Promise<ShamelaSearchPage> {
+  const limit = Math.min(Math.max(paging.limit ?? MAX_SHAMELA_ITEMS, 1), MAX_SHAMELA_ITEMS);
+  const seen = new Set<string>((paging.seenBookIds ?? []).slice(0, 200).map((id) => `${id}`));
+  const metas: Array<{ bookId: number; pageId: number; title: string; author: string; preview: string; citation: string }> = [];
+  let cursor: string | null = paging.cursor ?? null;
+  let evidenceRaw: unknown = undefined;
+  let leftover = false;
+  // Cari cavabda yeni kitab qalmayıbsa, Şamilənin növbəti səhifəsinə keçilir (ən çox 3 dəfə).
+  for (let round = 0; round < 3 && metas.length < limit; round += 1) {
+    const args: Record<string, unknown> = { keywords: [query.slice(0, 200)], difficulty: "easy" };
+    if (cursor) args.cursor = cursor;
+    const found = await callShamelaTool("shamela_find", args, options);
+    // `found.notice` qəsdən oxunmur — o, dil modelləri üçün təlimatdır.
+    if (round === 0) evidenceRaw = (found.evidence as Record<string, unknown> | undefined)?.sources;
+    const layers = Array.isArray(found.layers) ? found.layers as Array<Record<string, unknown>> : [];
+    const ordered = [...layers].sort((a, b) => (a.key === "main" ? 0 : 1) - (b.key === "main" ? 0 : 1));
+    leftover = false;
+    for (const layer of ordered) {
+      for (const raw of Array.isArray(layer.results) ? layer.results as Array<Record<string, unknown>> : []) {
+        const bookId = asInt(raw?.book_id);
+        const pageId = asInt(raw?.page_id);
+        if (!bookId || !pageId || seen.has(`${bookId}`)) continue;
+        if (metas.length >= limit) { leftover = true; break; }
+        seen.add(`${bookId}`);
+        metas.push({
+          bookId,
+          pageId,
+          title: cleanText(asString(raw.title)),
+          author: cleanText(asString(raw.author)),
+          preview: cleanText(asString(raw.preview)),
+          citation: asString((raw.citation as Record<string, unknown> | undefined)?.markdown),
+        });
+      }
+      if (leftover) break;
+    }
+    const next = typeof found.next_cursor === "string" && found.next_cursor ? found.next_cursor.slice(0, 4096) : null;
+    if (leftover || metas.length >= limit || !next) {
+      // Kursor yalnız cari cavab tam işlənəndə irəli çəkilir; əks halda eyni səhifə təkrar oxunur.
+      const nextCursor = leftover ? cursor : next;
+      return { items: await hydrateShamela(metas, evidenceRaw, options), hasMore: leftover || Boolean(next), cursor: nextCursor };
+    }
+    cursor = next;
+  }
+  return { items: await hydrateShamela(metas, evidenceRaw, options), hasMore: Boolean(cursor), cursor };
+}
+
+async function hydrateShamela(
+  metas: Array<{ bookId: number; pageId: number; title: string; author: string; preview: string; citation: string }>,
+  evidenceRaw: unknown,
+  options: ResearchOptions,
+): Promise<ShamelaItem[]> {
+  if (!metas.length) return [];
+  const evidence = readSources(evidenceRaw);
   const missing = metas.filter((meta) => !evidence.some((source) => source.bookId === meta.bookId && source.text));
   let opened: RawSource[] = [];
   if (missing.length) {
@@ -364,12 +406,30 @@ export async function searchShamela(query: string, options: ResearchOptions = {}
   }).filter((item) => item.text);
 }
 
+export async function searchShamela(query: string, options: ResearchOptions = {}): Promise<ShamelaItem[]> {
+  return (await searchShamelaPage(query, options)).items;
+}
+
+/** Bir Şamilə səhifəsini tam açır: mətn uzundursa `next_cursor` ilə davam edir (ən çox ~40 000 simvol). */
 export async function openShamelaPage(bookId: number, pageId: number, options: ResearchOptions = {}): Promise<ShamelaItem> {
-  const result = await callShamelaTool("shamela_open", { book_id: bookId, page_id: pageId, max_chars: OPEN_PAGE_MAX_CHARS }, options);
+  let result = await callShamelaTool("shamela_open", { book_id: bookId, page_id: pageId, max_chars: OPEN_PAGE_MAX_CHARS }, options);
   const [source] = readSources([result]);
   if (!source || source.bookId !== bookId) throw new ResearchUpstreamError("page not found");
+  let fullText = source.text;
+  let more = typeof result.next_cursor === "string" && result.next_cursor ? result.next_cursor : null;
+  for (let round = 0; more && fullText.length < SHAMELA_FULL_MAX_CHARS && round < 6; round += 1) {
+    try {
+      result = await callShamelaTool("shamela_open", { book_id: bookId, page_id: source.pageId, max_chars: OPEN_PAGE_MAX_CHARS, cursor: more }, options);
+    } catch {
+      break;
+    }
+    const piece = cleanText(asString(result.text));
+    if (!piece) break;
+    fullText += piece.startsWith("\n") || fullText.endsWith("\n") ? piece : ` ${piece}`;
+    more = typeof result.next_cursor === "string" && result.next_cursor ? result.next_cursor : null;
+  }
   const citation = parseCitation(source.citation);
-  const { text, truncated } = clip(source.text, OPEN_PAGE_MAX_CHARS);
+  const { text, truncated } = clip(fullText, SHAMELA_FULL_MAX_CHARS);
   return {
     bookId,
     pageId: source.pageId,
@@ -380,7 +440,7 @@ export async function openShamelaPage(bookId: number, pageId: number, options: R
     url: shamelaPageUrl(bookId, source.pageId),
     prevPageId: source.prev,
     nextPageId: source.next,
-    truncated: truncated || typeof result.next_cursor === "string",
+    truncated: truncated || Boolean(more),
   };
 }
 
@@ -408,7 +468,7 @@ export function htmlToText(html: string) {
   return cleanText(decodeEntities(withoutBlocks).replace(/<[^>]*>/g, " ").replace(/[<>]/g, " "));
 }
 
-const DORAR_LABELS: Array<[keyof Omit<DorarItem, "text">, string]> = [
+const DORAR_LABELS: Array<[keyof Omit<DorarItem, "text" | "abridged">, string]> = [
   ["narrator", "الراوي"],
   ["muhaddith", "المحدث"],
   ["source", "المصدر"],
@@ -416,14 +476,31 @@ const DORAR_LABELS: Array<[keyof Omit<DorarItem, "text">, string]> = [
   ["grading", "خلاصة حكم المحدث"],
 ];
 
+/**
+ * Dorar mətninin sonu. API hər hədisin sonuna əlavə « ." qoyur (məs. «فريضةٌ . .» = «فريضةٌ.»). Mənbə hədisi
+ * özü qısaldıbsa sonda «...» / «. . .» və ya «الحديث» olur — bu, həqiqi qısaltmadır.
+ */
+export function normalizeDorarText(raw: string, fromApi: boolean) {
+  let text = raw.replace(/\s+/g, " ").trim();
+  if (fromApi) text = text.replace(/\s*\.\s*$/, "").trim();
+  const ellipsisAtEnd = /(?:\.\s*){3,}$|…$/.test(text);
+  const hadithTail = /(?:\.\s*){3,}\s*(?:الحديث|الحَديث|الحديثَ)[\s.]*$|(?:\.\.\.|…)\s*(?:الحديث|الحَديث)/.test(text);
+  // «… ، الحديث» — mənbə hədisin qalanını «الحديث» sözü ilə qısaldıb.
+  const lastWord = /[،,.…]\s*(\S+?)[\s.]*$/.exec(text)?.[1] ?? "";
+  const hadithWordTail = lastWord.replace(/[\u064b-\u065f\u0670]/g, "") === "الحديث";
+  const abridged = ellipsisAtEnd || hadithTail || hadithWordTail;
+  text = text.replace(/(?:\s*\.){3,}\s*$/, " …").replace(/\s+\.$/, ".").trim();
+  return { text, abridged };
+}
+
 export function parseDorarHtml(html: string): DorarItem[] {
   const items: DorarItem[] = [];
   const pattern = /<div[^>]*class=["']hadith["'][^>]*>([\s\S]*?)<\/div>\s*(?:<div[^>]*class=["']hadith-info["'][^>]*>([\s\S]*?)<\/div>)?/gi;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(html)) && items.length < MAX_DORAR_ITEMS) {
-    const text = htmlToText(match[1]).replace(/^\d+\s*-\s*/, "").replace(/(?:\s*\.){2,}\s*$/, " …").replace(/\s+\.$/, ".").trim();
+    const { text, abridged } = normalizeDorarText(htmlToText(match[1]).replace(/^\d+\s*-\s*/, ""), true);
     if (!text) continue;
-    const item: DorarItem = { text, narrator: "", muhaddith: "", source: "", page: "", grading: "" };
+    const item: DorarItem = { abridged, text, narrator: "", muhaddith: "", source: "", page: "", grading: "" };
     const info = match[2] ?? "";
     const parts = info.split(/<span[^>]*class=["']info-subtitle["'][^>]*>/i).slice(1);
     for (const part of parts) {
@@ -502,6 +579,211 @@ export async function searchDorar(query: string, options: ResearchOptions = {}):
     report({ status: response.status, code, cfMitigated: response.cfMitigated, contentType: response.contentType });
     throw error;
   }
+}
+
+// ---------------------------------------------------------------------------
+// «Davamı»: hədisin tam mətni (yalnız düymə basılanda, heç nə saxlanmır)
+//
+// 1) Dorar-ın öz axtarış səhifəsi (dorar.net/hadith/search?q=…) — API-dən fərqli olaraq hər hədisin daimi
+//    keçidi (/h/<kod>) və «التخريج» sahəsi var. Hədis mühəddis + mənbə + səhifə ilə tapılır.
+// 2) Mənbə hədisi özü qısaldıbsa, Dorar-ın «أصول الحديث» səhifəsi (/h/<kod>?osoul=1) əsl kitablardakı tam
+//    mətni verir.
+// 3) Bunlar alınmasa — Şamilədə hədisin parçası ilə axtarış; tapılan mətn mənbəsi ilə göstərilir.
+// 4) Heç biri alınmasa — dürüst şəkildə yalnız parçanın mövcud olduğu bildirilir.
+
+export interface DorarHadithRef {
+  query: string;
+  text: string;
+  narrator?: string;
+  muhaddith?: string;
+  source?: string;
+  page?: string;
+}
+
+export interface DorarPageHadith {
+  id: string | null;
+  text: string;
+  abridged: boolean;
+  grading: string;
+  narrator: string;
+  muhaddith: string;
+  source: string;
+  page: string;
+  takhrij: string;
+}
+
+export type HadithFullStatus = "full" | "origin" | "shamela" | "fragment";
+
+export interface HadithFullResult {
+  status: HadithFullStatus;
+  text: string;
+  /** Tam mətnin götürüldüyü kitab (əsl mənbə və ya Şamilə kitabı). */
+  sourceTitle: string | null;
+  takhrij: string | null;
+  url: string | null;
+}
+
+const DORAR_HTML_HEADERS: Readonly<Record<string, string>> = {
+  ...DORAR_HEADERS,
+  Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+};
+const FULL_TEXT_MAX_CHARS = 6000;
+
+async function dorarGet(url: string, options: ResearchOptions) {
+  const timeoutMs = options.timeoutMs ?? 8000;
+  const response = options.fetchImpl
+    ? await fetchWithTimeout(url, { method: "GET", headers: { ...DORAR_HTML_HEADERS } }, { ...options, timeoutMs }, true)
+    : await httpGetText(url, { ...DORAR_HTML_HEADERS }, timeoutMs);
+  if (response.status < 200 || response.status >= 300) {
+    throw new ResearchUpstreamError(`upstream status ${response.status}`, classifyStatus(response.status, response.contentType, response.cfMitigated));
+  }
+  return response.body;
+}
+
+/** Ərəb mətnini müqayisə üçün sadələşdirir: hərəkələr, təhvil, həmzə formaları və durğu işarələri atılır. */
+export function arabicKey(value: string) {
+  return value
+    .replace(/[\u064b-\u065f\u0670\u0640\u06d6-\u06ed]/g, "")
+    .replace(/[إأآٱ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه").replace(/ؤ/g, "و").replace(/ئ/g, "ي")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function fieldValue(block: string, label: string) {
+  let from = 0;
+  for (;;) {
+    const index = block.indexOf(label, from);
+    if (index < 0) return "";
+    from = index + label.length;
+    // «المحدث» həm də «خلاصة حكم المحدث» içində keçir — onu ötürürük.
+    if (label === "المحدث" && /حكم\s*$/.test(block.slice(Math.max(0, index - 8), index))) continue;
+    const span = /^\s*:?\s*(?:<a\b[^>]*>\s*)?<span\b[^>]*>([\s\S]*?)<\/span>/i.exec(block.slice(from));
+    if (span) return htmlToText(span[1]).slice(0, 1500);
+  }
+}
+
+/** dorar.net/hadith/search və /h/<kod> səhifələrindəki hədis bloklarını oxuyur (yalnız düz mətn). */
+export function parseDorarSearchPage(html: string): DorarPageHadith[] {
+  const out: DorarPageHadith[] = [];
+  const pattern = /<article\b[^>]*>\s*<h5\b[^>]*>([\s\S]*?)<\/h5>\s*<\/article>([\s\S]*?)(?=<article\b|$)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(html)) && out.length < 120) {
+    const info = match[2].slice(0, 12000);
+    const { text, abridged } = normalizeDorarText(htmlToText(match[1]).replace(/^\s*\d*\s*-\s*/, ""), false);
+    if (!text) continue;
+    const id = /href="(?:https:\/\/dorar\.net)?\/h\/([A-Za-z0-9]{4,32})(?:"|\?)/.exec(info)?.[1] ?? null;
+    out.push({
+      id,
+      text,
+      abridged,
+      grading: fieldValue(info, "خلاصة حكم المحدث"),
+      narrator: fieldValue(info, "الراوي"),
+      muhaddith: fieldValue(info, "المحدث"),
+      source: fieldValue(info, "المصدر"),
+      page: fieldValue(info, "الصفحة أو الرقم"),
+      takhrij: fieldValue(info, "التخريج"),
+    });
+  }
+  return out;
+}
+
+/** «أصول الحديث» səhifəsi: birinci blok hədisin özüdür, qalanları əsl kitablardakı mətnlərdir. */
+export function parseDorarOrigins(html: string): Array<{ book: string; text: string }> {
+  const out: Array<{ book: string; text: string }> = [];
+  const pattern = /<article\b[^>]*>\s*<h5\b[^>]*>([\s\S]*?)<\/h5>/gi;
+  let match: RegExpExecArray | null;
+  let index = 0;
+  while ((match = pattern.exec(html)) && out.length < 10) {
+    index += 1;
+    if (index === 1) continue;
+    const text = htmlToText(match[1]).replace(/^\s*-\s*/, "").replace(/[ \t]*\n[\s]*/g, "\n").trim();
+    const book = (/^\[\s*\[?\s*([^\]]{2,120})\]/.exec(text)?.[1] ?? /^([^\[\]():]{2,120}?)\s*\(\s*\d/.exec(text)?.[1] ?? "").trim();
+    if (text.length > 20) out.push({ book, text: text.slice(0, FULL_TEXT_MAX_CHARS) });
+  }
+  return out;
+}
+
+function sameField(left: string | undefined, right: string) {
+  if (!left || !right) return false;
+  const a = arabicKey(left.replace(/[[\]]/g, ""));
+  const b = arabicKey(right.replace(/[[\]]/g, ""));
+  return a.length > 0 && a === b;
+}
+
+function samePage(left: string | undefined, right: string) {
+  if (!left || !right) return false;
+  return left.replace(/\s+/g, "") === right.replace(/\s+/g, "");
+}
+
+export function findDorarMatch(ref: DorarHadithRef, candidates: DorarPageHadith[]): DorarPageHadith | null {
+  const exact = candidates.find((item) => sameField(ref.muhaddith, item.muhaddith) && sameField(ref.source, item.source) && samePage(ref.page, item.page));
+  if (exact) return exact;
+  const fragment = arabicKey(ref.text.replace(/…/g, " "));
+  const head = fragment.split(" ").slice(0, 6).join(" ");
+  return candidates.find((item) => sameField(ref.source, item.source) && head.length > 4 && arabicKey(item.text).includes(head)) ?? null;
+}
+
+/** Hədisdən axtarış üçün qısa parça (ilk ~8 söz, «…» və mötərizəsiz). */
+export function hadithFragment(text: string, words = 8) {
+  return text.replace(/\[[^\]]*\]/g, " ").replace(/…|\.{3,}/g, " ").replace(/[«»"]/g, " ").replace(/\s+/g, " ").trim().split(" ").slice(0, words).join(" ");
+}
+
+function excerptAround(text: string, fragmentKey: string, max = FULL_TEXT_MAX_CHARS) {
+  if (text.length <= max) return text;
+  // Uyğun yerin ətrafından kəsilir (təxmini — açar mətnin mövqeyinə görə).
+  const ratio = Math.max(0, arabicKey(text).indexOf(fragmentKey)) / Math.max(1, arabicKey(text).length);
+  const start = Math.max(0, Math.floor(ratio * text.length) - Math.floor(max / 3));
+  return `${start > 0 ? "… " : ""}${text.slice(start, start + max).trim()} …`;
+}
+
+export async function fetchHadithFull(ref: DorarHadithRef, options: ResearchOptions = {}, fallback: { shamela?: boolean } = {}): Promise<HadithFullResult> {
+  const base = (options.dorarBaseUrl ?? "https://dorar.net").replace(/\/$/, "");
+  const fragment = hadithFragment(ref.text);
+  let match: DorarPageHadith | null = null;
+  for (const query of Array.from(new Set([ref.query, fragment].filter((value) => value && value.length >= 2)))) {
+    try {
+      const html = await dorarGet(`${base}/hadith/search?q=${encodeURIComponent(query.slice(0, 200))}`, options);
+      match = findDorarMatch(ref, parseDorarSearchPage(html));
+    } catch {
+      match = null;
+    }
+    if (match) break;
+  }
+  const permalink = match?.id ? `https://dorar.net/h/${match.id}` : null;
+  if (match && !match.abridged) {
+    return { status: "full", text: match.text.slice(0, FULL_TEXT_MAX_CHARS), sourceTitle: match.source || null, takhrij: match.takhrij || null, url: permalink };
+  }
+  if (match?.id) {
+    try {
+      const origins = parseDorarOrigins(await dorarGet(`${base}/h/${match.id}?osoul=1`, options));
+      if (origins.length) {
+        return { status: "origin", text: origins[0].text, sourceTitle: origins[0].book || null, takhrij: match.takhrij || null, url: `${permalink}?osoul=1` };
+      }
+    } catch {
+      // Şamiləyə keçilir
+    }
+  }
+  const fragmentKey = arabicKey(fragment);
+  if (fallback.shamela !== false && fragmentKey.split(" ").length >= 2) {
+    try {
+      const items = await searchShamela(fragment, options);
+      const hit = items.find((item) => arabicKey(item.text).includes(fragmentKey));
+      if (hit) {
+        let pageText = hit.text;
+        if (hit.truncated) {
+          try {
+            pageText = (await openShamelaPage(hit.bookId, hit.pageId, options)).text;
+          } catch {
+            // axtarış parçası kifayət edir
+          }
+        }
+        return { status: "shamela", text: excerptAround(pageText, fragmentKey), sourceTitle: [hit.title, hit.author].filter(Boolean).join(" — ") || null, takhrij: match?.takhrij || null, url: hit.url };
+      }
+    } catch {
+      // parça qaytarılır
+    }
+  }
+  return { status: "fragment", text: match?.text ?? ref.text, sourceTitle: match?.source || ref.source || null, takhrij: match?.takhrij || null, url: permalink ?? dorarSearchUrl(fragment || ref.query) };
 }
 
 // ---------------------------------------------------------------------------
@@ -609,13 +891,13 @@ const RESEARCH_SUGGESTIONS = ["Şamilədə axtar: إنما الأعمال بال
 export async function answerResearch(intent: ResearchIntent, options: ResearchOptions = {}): Promise<ResearchReply> {
   if (intent.kind === "shamela") {
     try {
-      const items = await searchShamela(intent.query, options);
+      const { items, hasMore, cursor } = await searchShamelaPage(intent.query, options);
       return {
         reply: items.length
-          ? `Şamilə kitabxanasında «${intent.query}» üzrə ${items.length} nəticə tapıldı. Mətnlər aşağıdadır; «Tam səhifə» ilə səhifəni burada oxuya bilərsiniz.`
+          ? `Şamilə kitabxanasında «${intent.query}» üzrə ${items.length} nəticə tapdım. Mətnlər aşağıdadır; «Davamı» ilə səhifənin tam mətnini burada oxuya bilərsiniz.`
           : `Şamilədə «${intent.query}» üzrə nəticə tapılmadı. Ərəbcə açar sözlərlə (məs. «إنما الأعمال بالنيات») yenidən yoxlayın.`,
         suggestions: RESEARCH_SUGGESTIONS,
-        sources: { kind: "shamela", query: intent.query, sourceUrl: SHAMELA_FALLBACK_URL, items },
+        sources: { kind: "shamela", query: intent.query, sourceUrl: SHAMELA_FALLBACK_URL, items, hasMore, cursor },
       };
     } catch {
       return {
@@ -630,7 +912,7 @@ export async function answerResearch(intent: ResearchIntent, options: ResearchOp
     const items = await searchDorar(intent.query, options);
     return {
       reply: items.length
-        ? `Dorar (الدرر السنية) bazasında «${intent.query}» üzrə ${items.length} hədis tapıldı: mətn, ravi, mühəddis, mənbə və hökm aşağıdadır.`
+        ? `Dorar (الدرر السنية) bazasında «${intent.query}» üzrə ${items.length} hədis tapdım: mətn, ravi, mühəddis, mənbə və hökm aşağıdadır. «Davamı» hədisin tam mətnini gətirir.`
         : `Dorar-da «${intent.query}» üzrə hədis tapılmadı. Hədisin ərəbcə mətnindən bir hissə yazaraq yenidən yoxlayın.`,
       suggestions: RESEARCH_SUGGESTIONS,
       sources: { kind: "dorar", query: intent.query, sourceUrl, items },

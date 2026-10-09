@@ -24,6 +24,7 @@ import {
   ATTENDANCE_STATUS, WEEKDAY_LABELS, WEEKDAY_ORDER, bakuWeekday, detectTermNumber, detectWeekday, formatDate, formatDateTime,
   formatGrade, lessonDaysLabel, reply, snippet, studentCode, titleMatches,
 } from "./format.js";
+import { blockReply, ensureBlocks, type AiBlock, type AiItem, type AiRow } from "./blocks.js";
 import { answerAdmin } from "./admin.js";
 import { answerGuide, guideTopicList } from "./siteGuide.js";
 
@@ -35,239 +36,312 @@ export { normalizeText } from "./text.js";
 
 const STUDENT_SUGGESTIONS = ["Dərs cədvəlim", "Tapşırıqlarım", "Qiymətlərim", "Saytdan istifadə"];
 
+function plural(count: number, word: string) {
+  return `${count} ${word}`;
+}
+
 function studentHelp(name?: string) {
-  return reply([
-    name ? `Salam, ${name}! Mən Mədinə AI-yam — akademiyanın daxili köməkçisi.` : "Mən Mədinə AI-yam — akademiyanın daxili köməkçisi.",
-    "Yalnız sizin öz tədris məlumatlarınıza əsasən cavab verirəm. Məsələn, soruşa bilərsiniz:",
-    "• «Dərs cədvəlim» və ya «Bu gün dərsim var?»",
-    "• «Tapşırıqlarım» — açıq ev tapşırıqları və son tarixlər",
-    "• «İmtahanlarım» — testlər və nəticələr",
-    "• «Qiymətlərim» — fənn qiymətləri və orta bal",
-    "• «Davamiyyətim» — qayıblar",
-    "• «Resurslar» — dərs materialları və linklər",
-    "• «Fənlərim», «Profilim», «Elanlar»",
-    "Fənnin adını da yaza bilərsiniz, məsələn: «Quran qiymətim».",
-    "",
-    "Saytdan istifadə ilə bağlı da soruşa bilərsiniz, məsələn:",
-    "• «Tapşırığı necə göndərim?», «Dərs cədvəlini harada görüm?», «Qayıb üçün üzr necə yazım?»",
-    "• «Resurslar haradadır?», «Müəllimə necə mesaj yazım?», «Sual-cavab necə işləyir?»",
-    "• «Profilimi necə dəyişim?», «İmtahan necə verilir?», «Bildirişlər harada?», «Çıxış necə edim?»",
+  return blockReply([
+    { type: "text", text: name ? `Salam, ${name}! Mən Mədinə AI-yam. Dərsləriniz, tapşırıqlarınız və nəticələrinizlə bağlı sizə kömək edə bilərəm.` : "Mən Mədinə AI-yam. Dərsləriniz, tapşırıqlarınız və nəticələrinizlə bağlı sizə kömək edə bilərəm." },
+    {
+      type: "card",
+      title: "Məndən soruşa bilərsiniz",
+      items: [
+        { title: "Dərs cədvəlim", detail: "və ya «Bu gün dərsim var?»" },
+        { title: "Tapşırıqlarım", detail: "açıq ev tapşırıqları və son tarixlər" },
+        { title: "İmtahanlarım", detail: "testlər və nəticələr" },
+        { title: "Qiymətlərim", detail: "fənlər üzrə qiymətlər və orta bal" },
+        { title: "Davamiyyətim", detail: "buraxılan dərslər" },
+        { title: "Resurslar", detail: "dərs materialları və linklər" },
+        { title: "Fənlərim, Profilim, Elanlar" },
+      ],
+      note: "Fənnin adını da yaza bilərsiniz, məsələn: «Quran qiymətim».",
+    },
+    {
+      type: "card",
+      title: "Saytdan istifadə",
+      items: [
+        { title: "Tapşırığı necə göndərim?" },
+        { title: "Qayıb üçün üzr necə yazım?" },
+        { title: "Müəllimə necə mesaj yazım?" },
+        { title: "Profilimi necə dəyişim?" },
+      ],
+    },
   ], STUDENT_SUGGESTIONS);
+}
+
+function lessonItem(lesson: AiLesson, joinToday = false): AiItem {
+  return {
+    title: lesson.courseTitle,
+    detail: lesson.title && lesson.title !== lesson.courseTitle ? lesson.title : undefined,
+    meta: [lesson.lessonTime ? `saat ${lesson.lessonTime}` : "saatı hələ bəlli deyil", lesson.teacherName ? lesson.teacherName : null].filter((part): part is string => Boolean(part)),
+    action: joinToday && lesson.lessonTime ? { label: "Dərsə qoşul", href: `/api/lessons/${lesson.resourceId}/join` } : undefined,
+  };
 }
 
 async function studentSchedule(ctx: StudentAiContext, parsed: ParsedMessage, courseFilter: Set<number> | null) {
   const overview = await ctx.overview();
   if (!overview.scheduleAccess.approved) {
-    return reply([
-      "Dərs cədvəliniz hələ açılmayıb.",
-      overview.scheduleAccess.onboardingRequired && overview.scheduleAccess.onboardingExamTitle
-        ? `Əvvəlcə «${overview.scheduleAccess.onboardingExamTitle}» qəbul testini tamamlamalısınız; müəllim təsdiqindən sonra cədvəl açılacaq.`
-        : "Müəllim təsdiqindən sonra cədvəl avtomatik açılacaq.",
-    ], ["Profilim", "İmtahanlarım"]);
+    return blockReply([{
+      type: "card",
+      title: "Dərs cədvəliniz hələ açılmayıb",
+      badge: { text: "gözləmədə", tone: "warn" },
+      note: overview.scheduleAccess.onboardingRequired && overview.scheduleAccess.onboardingExamTitle
+        ? `Əvvəlcə «${overview.scheduleAccess.onboardingExamTitle}» qəbul testini tamamlayın. Müəllim təsdiqləyəndən sonra cədvəliniz açılacaq.`
+        : "Müəllim təsdiqləyən kimi cədvəliniz avtomatik açılacaq.",
+    }], ["Profilim", "İmtahanlarım"]);
   }
   const lessons = (await ctx.lessons()).filter((lesson) => !courseFilter || courseFilter.has(lesson.courseId));
   if (!lessons.length) {
-    return reply([`${overview.termLabel} üçün hələ dərs cədvəli əlavə olunmayıb.`], ["Fənlərim", "Elanlar"]);
+    return blockReply([{ type: "text", text: `${overview.termLabel} üçün dərs cədvəli hələ hazırlanmayıb. Hazır olanda burada görəcəksiniz.` }], ["Fənlərim", "Elanlar"]);
   }
   const weekday = detectWeekday(parsed);
-  const lessonLine = (lesson: AiLesson) => `• ${lesson.lessonTime ?? "saat təyin olunmayıb"} — ${lesson.courseTitle}${lesson.title && lesson.title !== lesson.courseTitle ? ` (${lesson.title})` : ""}${lesson.teacherName ? ` · ${lesson.teacherName}` : ""}`;
+  const today = bakuWeekday(0);
   const byTime = (left: AiLesson, right: AiLesson) => (left.lessonTime ?? "99").localeCompare(right.lessonTime ?? "99");
   if (weekday) {
     const dayLessons = lessons.filter((lesson) => lesson.lessonDays.includes(weekday.day)).sort(byTime);
-    return reply([
-      dayLessons.length ? `${weekday.label} dərsləriniz:` : `${weekday.label} dərsiniz yoxdur.`,
-      ...dayLessons.map(lessonLine),
-      dayLessons.length ? "Dərs linkləri «Resurslar» bölməsindədir." : null,
+    if (!dayLessons.length) {
+      return blockReply([{ type: "text", text: `${weekday.label} dərsiniz yoxdur — istirahət edə bilərsiniz.` }], ["Dərs cədvəlim", "Tapşırıqlarım"]);
+    }
+    return blockReply([
+      { type: "text", text: `${weekday.label} ${plural(dayLessons.length, "dərsiniz")} var:` },
+      { type: "card", title: weekday.label, items: dayLessons.map((lesson) => lessonItem(lesson, weekday.day === today)), note: "Dərs linkləri «Resurslar» bölməsində də var." },
     ], ["Dərs cədvəlim", "Resurslar"]);
   }
-  const lines: string[] = [`${overview.termLabel} üzrə həftəlik dərs cədvəliniz:`];
+  const blocks: AiBlock[] = [];
+  let weeklyCount = 0;
   for (const day of WEEKDAY_ORDER) {
     const dayLessons = lessons.filter((lesson) => lesson.lessonDays.includes(day)).sort(byTime);
     if (!dayLessons.length) continue;
-    lines.push("", `${WEEKDAY_LABELS[day]}:`, ...dayLessons.map(lessonLine));
+    weeklyCount += dayLessons.length;
+    blocks.push({ type: "card", title: WEEKDAY_LABELS[day], badge: day === today ? { text: "bu gün", tone: "good" } : undefined, items: dayLessons.map((lesson) => lessonItem(lesson, day === today)) });
   }
   const unscheduled = lessons.filter((lesson) => !lesson.lessonDays.length);
-  if (unscheduled.length) lines.push("", "Günü təyin olunmayan:", ...unscheduled.map(lessonLine));
-  return reply(lines, ["Bu gün dərsim var?", "Resurslar", "Tapşırıqlarım"]);
+  if (unscheduled.length) blocks.push({ type: "card", title: "Günü hələ bəlli olmayan dərslər", items: unscheduled.map((lesson) => lessonItem(lesson)) });
+  return blockReply([
+    { type: "text", text: weeklyCount ? `Bu həftə ${plural(weeklyCount, "dərsiniz")} var (${overview.termLabel}):` : `${overview.termLabel} üzrə dərsləriniz:` },
+    ...blocks,
+  ], ["Bu gün dərsim var?", "Resurslar", "Tapşırıqlarım"]);
 }
 
 async function studentResources(ctx: StudentAiContext, courseFilter: Set<number> | null) {
   const overview = await ctx.overview();
   if (!overview.scheduleAccess.approved) {
-    return reply(["Dərs materiallarınız cədvəl təsdiqləndikdən sonra açılacaq."], ["Profilim"]);
+    return blockReply([{ type: "text", text: "Dərs materialları cədvəliniz təsdiqlənəndən sonra açılacaq." }], ["Profilim"]);
   }
   const lessons = (await ctx.lessons()).filter((lesson) => !courseFilter || courseFilter.has(lesson.courseId));
-  if (!lessons.length) return reply(["Hazırda sizə açıq resurs yoxdur."], ["Dərs cədvəlim"]);
-  const lines = [`${overview.termLabel} üzrə sizə açıq resurslar:`];
-  for (const lesson of lessons.slice(0, 20)) {
-    lines.push(`• ${lesson.courseTitle}${lesson.title && lesson.title !== lesson.courseTitle ? ` — ${lesson.title}` : ""}${lesson.teacherName ? ` (${lesson.teacherName})` : ""}`);
-    const body = snippet(lesson.body);
-    if (body) lines.push(`  ${body}`);
-    if (lesson.url) lines.push(`  Link: ${lesson.url}`);
-  }
-  if (lessons.length > 20) lines.push(`…və daha ${lessons.length - 20} resurs. Tam siyahı kabinetinizdədir.`);
-  return reply(lines, ["Dərs cədvəlim", "Tapşırıqlarım"]);
+  if (!lessons.length) return blockReply([{ type: "text", text: "Hazırda sizə açıq material yoxdur." }], ["Dərs cədvəlim"]);
+  return blockReply([
+    { type: "text", text: `${overview.termLabel} üzrə ${plural(lessons.length, "material")} sizə açıqdır:` },
+    {
+      type: "card",
+      title: "Dərs materialları",
+      items: lessons.slice(0, 40).map((lesson) => ({
+        title: lesson.courseTitle,
+        detail: [lesson.title && lesson.title !== lesson.courseTitle ? lesson.title : null, snippet(lesson.body)].filter(Boolean).join(" — ") || undefined,
+        meta: lesson.teacherName ? [lesson.teacherName] : undefined,
+        action: lesson.url ? { label: "Linki aç", href: lesson.url } : undefined,
+      })),
+    },
+  ], ["Dərs cədvəlim", "Tapşırıqlarım"]);
 }
 
-function submissionLabel(assignment: AiAssignment) {
+function submissionBadge(assignment: AiAssignment): AiItem["badge"] {
   const submission = assignment.submission;
-  if (!submission) return assignment.status === "open" ? "təhvil verilməyib" : "təhvil verilməyib (müddət bitib)";
-  if (submission.status === "graded") return `qiymətləndirilib: ${submission.score ?? "—"}/${assignment.maxScore}`;
-  if (submission.status === "resubmission_requested") return "yenidən təhvil vermək tələb olunub";
-  return `təhvil verilib (${formatDateTime(submission.submittedAt)}), yoxlanılır`;
+  if (!submission) return assignment.status === "open" ? { text: "göndərilməyib", tone: "warn" } : { text: "vaxtı bitib", tone: "muted" };
+  if (submission.status === "graded") return { text: `qiymət: ${submission.score ?? "—"}/${assignment.maxScore}`, tone: "good" };
+  if (submission.status === "resubmission_requested") return { text: "yenidən göndərin", tone: "warn" };
+  return { text: "yoxlanılır", tone: "default" };
 }
 
 async function studentAssignments(ctx: StudentAiContext, courseFilter: Set<number> | null, courseTitles: Map<number, string>) {
   const titleFilter = courseFilter ? new Set(Array.from(courseFilter).map((id) => courseTitles.get(id)).filter(Boolean)) : null;
   const assignments = (await ctx.assignments()).filter((assignment) => !titleFilter || titleFilter.has(assignment.courseTitle));
-  if (!assignments.length) return reply(["Hazırda sizə verilmiş ev tapşırığı yoxdur."], ["İmtahanlarım", "Dərs cədvəlim"]);
+  if (!assignments.length) return blockReply([{ type: "text", text: "Hazırda sizə verilmiş ev tapşırığı yoxdur." }], ["İmtahanlarım", "Dərs cədvəlim"]);
   const open = assignments.filter((item) => item.status === "open").sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
   const closed = assignments.filter((item) => item.status !== "open").sort((a, b) => b.dueAt.getTime() - a.dueAt.getTime());
   const pending = open.filter((item) => !item.submission || item.submission.status === "resubmission_requested");
-  const line = (item: AiAssignment) => {
-    const feedback = item.submission?.feedback ? ` · rəy: ${snippet(item.submission.feedback, 90)}` : "";
-    return `• ${item.title} — ${item.courseTitle} · son tarix: ${formatDateTime(item.dueAt)} · ${submissionLabel(item)}${feedback}`;
-  };
-  return reply([
-    `Cəmi ${assignments.length} tapşırıq: ${open.length} açıq${pending.length ? `, ${pending.length} təhvil gözləyir` : ""}.`,
-    open.length ? "" : null,
-    open.length ? "Açıq tapşırıqlar:" : null,
-    ...open.slice(0, 10).map(line),
-    closed.length ? "" : null,
-    closed.length ? "Bağlanmış tapşırıqlar:" : null,
-    ...closed.slice(0, 8).map(line),
-    pending.length ? "\nTəhvil vermək üçün kabinetdə «Ev tapşırıqları» bölməsini açın." : null,
+  const item = (assignment: AiAssignment): AiItem => ({
+    title: assignment.title,
+    detail: assignment.submission?.feedback ? `Müəllimin rəyi: ${snippet(assignment.submission.feedback, 120)}` : undefined,
+    meta: [assignment.courseTitle, `son tarix: ${formatDateTime(assignment.dueAt)}`],
+    badge: submissionBadge(assignment),
+  });
+  const intro = pending.length
+    ? `Sizi ${plural(pending.length, "tapşırıq")} gözləyir. Cəmi ${plural(assignments.length, "tapşırığınız")} var.`
+    : `Cəmi ${plural(assignments.length, "tapşırığınız")} var, gözləyən tapşırıq yoxdur — əla!`;
+  return blockReply([
+    { type: "text", text: intro },
+    open.length ? { type: "card", title: "Açıq tapşırıqlar", items: open.map(item), note: pending.length ? "Göndərmək üçün kabinetdə «Ev tapşırıqları» bölməsini açın." : undefined } : null,
+    closed.length ? { type: "card", title: "Bağlanmış tapşırıqlar", items: closed.slice(0, 30).map(item) } : null,
   ], ["İmtahanlarım", "Qiymətlərim"]);
 }
 
 async function studentExams(ctx: StudentAiContext, courseFilter: Set<number> | null, courseTitles: Map<number, string>) {
   const titleFilter = courseFilter ? new Set(Array.from(courseFilter).map((id) => courseTitles.get(id)).filter(Boolean)) : null;
   const exams = (await ctx.exams()).filter((exam) => !titleFilter || titleFilter.has(exam.courseTitle));
-  if (!exams.length) return reply(["Hazırda sizə açıq imtahan və ya test yoxdur."], ["Tapşırıqlarım", "Qiymətlərim"]);
-  const line = (exam: AiExam) => {
-    const result = exam.result
-      ? `nəticə: ${exam.result.correctCount}/${exam.result.totalQuestions} (${exam.result.percentage}%)`
-      : exam.status === "open" ? "hələ cavab verməmisiniz" : "cavab verilməyib";
-    const duration = exam.durationMinutes ? ` · ${exam.durationMinutes} dəq.` : "";
-    return `• ${exam.title} — ${exam.courseTitle}${exam.isOnboarding ? " (qəbul testi)" : ""} · ${exam.status === "open" ? "açıq" : "bağlanıb"}${duration} · ${result}`;
-  };
-  const open = exams.filter((exam) => exam.status === "open" && !exam.result);
-  return reply([
-    `İmtahan və testləriniz (${exams.length}):`,
-    ...exams.slice(0, 15).map(line),
-    open.length ? `\n${open.length} test sizi gözləyir — kabinetdə «İmtahan və testlər» bölməsindən başlaya bilərsiniz.` : null,
+  if (!exams.length) return blockReply([{ type: "text", text: "Hazırda sizə açıq imtahan və ya test yoxdur." }], ["Tapşırıqlarım", "Qiymətlərim"]);
+  const waiting = exams.filter((exam) => exam.status === "open" && !exam.result);
+  return blockReply([
+    { type: "text", text: waiting.length ? `Sizi ${plural(waiting.length, "test")} gözləyir. Kabinetdə «İmtahan və testlər» bölməsindən başlaya bilərsiniz.` : `${plural(exams.length, "test")} üzrə məlumatınız:` },
+    {
+      type: "card",
+      title: "İmtahan və testlər",
+      items: exams.slice(0, 40).map((exam) => ({
+        title: exam.title,
+        meta: [exam.courseTitle, exam.isOnboarding ? "qəbul testi" : null, exam.durationMinutes ? `${exam.durationMinutes} dəqiqə` : null].filter((part): part is string => Boolean(part)),
+        badge: exam.result
+          ? { text: `${exam.result.correctCount}/${exam.result.totalQuestions} düzgün (${exam.result.percentage}%)`, tone: "good" }
+          : exam.status === "open" ? { text: "hələ verməmisiniz", tone: "warn" } : { text: "bağlanıb", tone: "muted" },
+      })),
+    },
   ], ["Tapşırıqlarım", "Qiymətlərim"]);
 }
 
-function semesterGradeLines(semester: AiSemester, courseFilter: Set<number> | null) {
+function gradeTable(semester: AiSemester, courseFilter: Set<number> | null): AiBlock {
   const subjects = semester.subjects.filter((subject) => !courseFilter || courseFilter.has(subject.courseId));
-  const lines = [`${semester.label} — orta bal: ${formatGrade(semester.gpa)}`];
-  if (!subjects.length) lines.push("• Bu semestr üçün fənn yoxdur.");
-  for (const subject of subjects) {
-    const components = subject.gradingComponents.filter((component) => component.score !== null);
-    lines.push(`• ${subject.title}: ${formatGrade(subject.grade)}${components.length ? ` (${components.map((component) => `${component.name}: ${component.score}`).join(", ")})` : ""}`);
-  }
-  return lines;
+  if (!subjects.length) return { type: "card", title: semester.label, note: "Bu semestrdə fənn yoxdur." };
+  return {
+    type: "card",
+    title: semester.label,
+    badge: { text: `orta bal: ${formatGrade(semester.gpa)}`, tone: semester.gpa === null ? "muted" : "good" },
+    items: subjects.map((subject) => {
+      const components = subject.gradingComponents.filter((component) => component.score !== null);
+      return {
+        title: subject.title,
+        detail: components.length ? components.map((component) => `${component.name}: ${component.score}`).join(", ") : undefined,
+        badge: { text: subject.grade === null ? "hələ qiymət yoxdur" : String(formatGrade(subject.grade)), tone: subject.grade === null ? "muted" : "default" },
+      };
+    }),
+  };
 }
 
 async function studentGrades(ctx: StudentAiContext, parsed: ParsedMessage, courseFilter: Set<number> | null) {
   const semesters = await ctx.semesters();
-  if (!semesters.length) return reply(["Hələ qiymət məlumatınız yoxdur."], ["Fənlərim"]);
+  if (!semesters.length) return blockReply([{ type: "text", text: "Hələ qiymətiniz yoxdur. Müəllimlər qiymət yazan kimi burada görünəcək." }], ["Fənlərim"]);
   const requestedTerm = detectTermNumber(parsed);
   const selected = requestedTerm ? semesters.filter((item) => item.termNumber === requestedTerm) : [...semesters].reverse();
-  if (!selected.length) return reply([`${requestedTerm}-ci semestr üzrə məlumat sizə hələ açıq deyil.`], ["Qiymətlərim"]);
-  const lines = ["Qiymətləriniz (5 bal şkalası ilə):"];
-  for (const semester of selected) lines.push("", ...semesterGradeLines(semester, courseFilter));
-  return reply(lines, ["Davamiyyətim", "Tapşırıqlarım"]);
+  if (!selected.length) return blockReply([{ type: "text", text: `${requestedTerm}-ci semestrin məlumatları sizə hələ açılmayıb.` }], ["Qiymətlərim"]);
+  return blockReply([
+    { type: "text", text: "Qiymətləriniz (5 ballıq şkala ilə):" },
+    ...selected.map((semester) => gradeTable(semester, courseFilter)),
+  ], ["Davamiyyətim", "Tapşırıqlarım"]);
 }
 
 async function studentAttendance(ctx: StudentAiContext, parsed: ParsedMessage, courseFilter: Set<number> | null) {
   const semesters = await ctx.semesters();
-  if (!semesters.length) return reply(["Davamiyyət məlumatınız hələ yoxdur."], ["Qiymətlərim"]);
+  if (!semesters.length) return blockReply([{ type: "text", text: "Davamiyyət məlumatınız hələ yoxdur." }], ["Qiymətlərim"]);
   const requestedTerm = detectTermNumber(parsed);
   const selected = requestedTerm ? semesters.filter((item) => item.termNumber === requestedTerm) : semesters.slice(-1);
-  if (!selected.length) return reply([`${requestedTerm}-ci semestr üzrə məlumat sizə hələ açıq deyil.`], ["Davamiyyətim"]);
-  const lines: string[] = [];
+  if (!selected.length) return blockReply([{ type: "text", text: `${requestedTerm}-ci semestrin məlumatları sizə hələ açılmayıb.` }], ["Davamiyyətim"]);
+  const blocks: AiBlock[] = [];
   for (const semester of selected) {
-    lines.push(`${semester.label} — ümumi qayıb faizi: ${semester.absencePercent === null ? "hesablanmayıb" : `${semester.absencePercent}%`}`);
-    for (const subject of semester.subjects.filter((item) => !courseFilter || courseFilter.has(item.courseId))) {
-      lines.push(`• ${subject.title}: ${subject.absenceCount} qayıb${subject.absencePercent === null ? "" : ` · ${subject.absencePercent}%`}`);
-    }
-    const records = semester.attendanceRecords.filter((record) => record.status !== "present").slice(0, 6);
+    const subjects = semester.subjects.filter((item) => !courseFilter || courseFilter.has(item.courseId));
+    const total = subjects.reduce((sum, subject) => sum + subject.absenceCount, 0);
+    blocks.push({ type: "text", text: total ? `${semester.label} ərzində ${plural(total, "dərs")} buraxmısınız.` : `${semester.label} ərzində heç bir dərs buraxmamısınız — əla!` });
+    blocks.push({
+      type: "card",
+      title: semester.label,
+      badge: semester.absencePercent === null ? undefined : { text: `qayıb: ${semester.absencePercent}%`, tone: semester.absencePercent >= 20 ? "warn" : "good" },
+      items: subjects.map((subject) => ({
+        title: subject.title,
+        badge: { text: subject.absenceCount ? `${subject.absenceCount} qayıb${subject.absencePercent === null ? "" : ` (${subject.absencePercent}%)`}` : "qayıb yoxdur", tone: subject.absenceCount ? "warn" : "good" },
+      })),
+    });
+    const records = semester.attendanceRecords.filter((record) => record.status !== "present").slice(0, 20);
     if (records.length) {
-      lines.push("", "Son qeydlər:");
-      lines.push(...records.map((record) => `• ${formatDate(record.attendanceDate)} — ${record.courseTitle}: ${ATTENDANCE_STATUS[record.status] ?? record.status}`));
+      blocks.push({
+        type: "card",
+        title: "Son qeydlər",
+        items: records.map((record) => ({ title: record.courseTitle, meta: [formatDate(record.attendanceDate)], badge: { text: ATTENDANCE_STATUS[record.status] ?? "qeyd olunub", tone: record.status === "excused" ? "muted" : "warn" } })),
+      });
     }
-    lines.push("");
   }
-  lines.push("Qayıb üçün üzrlü səbəb bildirmək istəsəniz, kabinetdə davamiyyət bölməsindən müraciət edə bilərsiniz.");
-  return reply(lines, ["Qiymətlərim", "Dərs cədvəlim"]);
+  blocks.push({ type: "text", text: "Üzrlü səbəbiniz varsa, kabinetdə «Davamiyyətə görə üzr» düyməsi ilə bildirə bilərsiniz.", tone: "muted" });
+  return blockReply(blocks, ["Qiymətlərim", "Dərs cədvəlim"]);
 }
 
 async function studentCourses(ctx: StudentAiContext) {
   const [overview, semesters, lessons] = await Promise.all([ctx.overview(), ctx.semesters(), ctx.overview().then((item) => item.scheduleAccess.approved ? ctx.lessons() : [])]);
   const current = semesters.find((item) => item.termNumber === overview.currentTermNumber) ?? semesters[semesters.length - 1];
-  if (!current || !current.subjects.length) return reply([`${overview.termLabel} üçün fənn siyahısı hələ hazır deyil.`], ["Profilim"]);
-  const lines = [`${current.label} fənləriniz:`];
-  for (const subject of current.subjects) {
-    const subjectLessons = lessons.filter((lesson) => lesson.courseId === subject.courseId);
-    const days = Array.from(new Set(subjectLessons.flatMap((lesson) => lesson.lessonDays)));
-    const time = subjectLessons.find((lesson) => lesson.lessonTime)?.lessonTime;
-    lines.push(`• ${subject.title} — ${subject.instructor || "müəllim təyin olunmayıb"}${subject.isMandatory ? "" : " (seçmə)"}${subject.credits ? ` · ${subject.credits} kredit` : ""}${days.length ? ` · ${lessonDaysLabel(days)}${time ? ` ${time}` : ""}` : ""}`);
-  }
-  return reply(lines, ["Dərs cədvəlim", "Qiymətlərim"]);
+  if (!current || !current.subjects.length) return blockReply([{ type: "text", text: `${overview.termLabel} üçün fənn siyahısı hələ hazır deyil.` }], ["Profilim"]);
+  return blockReply([
+    { type: "text", text: `${current.label} ${plural(current.subjects.length, "fənniniz")} var:` },
+    {
+      type: "card",
+      title: current.label,
+      items: current.subjects.map((subject) => {
+        const subjectLessons = lessons.filter((lesson) => lesson.courseId === subject.courseId);
+        const days = Array.from(new Set(subjectLessons.flatMap((lesson) => lesson.lessonDays)));
+        const time = subjectLessons.find((lesson) => lesson.lessonTime)?.lessonTime;
+        return {
+          title: subject.title,
+          detail: subject.instructor ? `Müəllim: ${subject.instructor}` : "Müəllim hələ təyin olunmayıb",
+          meta: [days.length ? `${lessonDaysLabel(days)}${time ? `, saat ${time}` : ""}` : null, subject.credits ? `${subject.credits} kredit` : null].filter((part): part is string => Boolean(part)),
+          badge: subject.isMandatory ? undefined : { text: "seçmə", tone: "muted" as const },
+        };
+      }),
+    },
+  ], ["Dərs cədvəlim", "Qiymətlərim"]);
 }
 
 async function studentProfile(ctx: StudentAiContext) {
   const [overview, semesters] = await Promise.all([ctx.overview(), ctx.semesters()]);
   const current = semesters.find((item) => item.termNumber === overview.currentTermNumber);
-  return reply([
-    `${overview.firstName} ${overview.lastName} (${studentCode(overview.studentNumber)})`,
-    `• Cari semestr: ${overview.termLabel}`,
-    overview.program ? `• Proqram: ${overview.program}` : null,
-    `• Dərs cədvəli: ${overview.scheduleAccess.approved ? "açıqdır" : overview.scheduleAccess.onboardingRequired ? "qəbul testi tamamlanmalıdır" : "müəllim təsdiqini gözləyir"}`,
-    current ? `• Bu semestr orta bal: ${formatGrade(current.gpa)}` : null,
-    current ? `• Fənn sayı: ${current.subjects.length}` : null,
-    "Şəxsi məlumatları dəyişmək üçün kabinetdə «Məlumatlarımı düzəlt» bölməsindən istifadə edin.",
+  return blockReply([
+    {
+      type: "card",
+      title: `${overview.firstName} ${overview.lastName}`,
+      subtitle: `Tələbə nömrəsi: ${studentCode(overview.studentNumber)}`,
+      rows: [
+        { label: "Semestr", value: overview.termLabel },
+        overview.program ? { label: "Proqram", value: overview.program } : null,
+        { label: "Dərs cədvəli", value: overview.scheduleAccess.approved ? "açıqdır" : overview.scheduleAccess.onboardingRequired ? "qəbul testindən sonra açılacaq" : "müəllim təsdiqini gözləyir" },
+        current ? { label: "Orta bal", value: formatGrade(current.gpa) } : null,
+        current ? { label: "Fənlər", value: String(current.subjects.length) } : null,
+      ].filter((row): row is AiRow => Boolean(row)),
+      note: "Məlumatlarınızı dəyişmək üçün kabinetdə «Məlumatlarımı düzəlt» bölməsini açın.",
+    },
   ], ["Fənlərim", "Qiymətlərim"]);
 }
 
 async function studentNotices(ctx: StudentAiContext) {
   const { announcements, notifications } = await ctx.notices();
-  if (!announcements.length && !notifications.length) return reply(["Hazırda yeni elan və ya bildiriş yoxdur."], STUDENT_SUGGESTIONS);
-  return reply([
-    notifications.length ? "Sizə aid bildirişlər:" : null,
-    ...notifications.slice(0, 5).map((item) => `• ${item.title}${item.date ? ` (${formatDate(item.date)})` : ""}: ${snippet(item.body, 160)}`),
-    announcements.length ? `${notifications.length ? "\n" : ""}Son elanlar:` : null,
-    ...announcements.slice(0, 3).map((item) => `• ${item.title}${item.date ? ` (${formatDate(item.date)})` : ""}: ${snippet(item.body, 160)}`),
+  if (!announcements.length && !notifications.length) return blockReply([{ type: "text", text: "Hazırda yeni elan və ya bildiriş yoxdur." }], STUDENT_SUGGESTIONS);
+  const item = (notice: { title: string; body: string; date: string | null }): AiItem => ({ title: notice.title, detail: snippet(notice.body, 200) || undefined, meta: notice.date ? [formatDate(notice.date)] : undefined });
+  return blockReply([
+    notifications.length ? { type: "card", title: "Sizə aid bildirişlər", items: notifications.slice(0, 20).map(item) } : null,
+    announcements.length ? { type: "card", title: "Son elanlar", items: announcements.slice(0, 20).map(item) } : null,
   ], ["Dərs cədvəlim", "Tapşırıqlarım"]);
 }
 
 async function studentCourseFocus(ctx: StudentAiContext, courseIds: Set<number>) {
   const [overview, semesters] = await Promise.all([ctx.overview(), ctx.semesters()]);
   const lessons = overview.scheduleAccess.approved ? await ctx.lessons() : [];
-  const lines: string[] = [];
+  const blocks: AiBlock[] = [];
   for (const courseId of courseIds) {
     const subject = [...semesters].reverse().flatMap((item) => item.subjects).find((item) => item.courseId === courseId);
     const courseLessons = lessons.filter((lesson) => lesson.courseId === courseId);
     const title = subject?.title ?? courseLessons[0]?.courseTitle;
     if (!title) continue;
-    lines.push(`${title}:`);
+    const rows: AiRow[] = [];
     if (subject) {
-      lines.push(`• Müəllim: ${subject.instructor || "təyin olunmayıb"}`);
-      lines.push(`• Qiymət: ${formatGrade(subject.grade)} · qayıb: ${subject.absenceCount}`);
+      rows.push({ label: "Müəllim", value: subject.instructor || "hələ təyin olunmayıb" });
+      rows.push({ label: "Qiymət", value: formatGrade(subject.grade) });
+      rows.push({ label: "Qayıb", value: subject.absenceCount ? String(subject.absenceCount) : "yoxdur" });
     }
+    let action: AiItem["action"];
     if (courseLessons.length) {
       const days = Array.from(new Set(courseLessons.flatMap((lesson) => lesson.lessonDays)));
       const time = courseLessons.find((lesson) => lesson.lessonTime)?.lessonTime;
-      lines.push(`• Dərs günləri: ${lessonDaysLabel(days)}${time ? `, saat ${time}` : ""}`);
+      rows.push({ label: "Dərs günləri", value: `${lessonDaysLabel(days)}${time ? `, saat ${time}` : ""}` });
       const link = courseLessons.find((lesson) => lesson.url)?.url;
-      if (link) lines.push(`• Link: ${link}`);
+      if (link) action = { label: "Dərs linkini aç", href: link };
     }
-    lines.push("");
+    blocks.push({ type: "card", title, rows, items: action ? [{ title: "Dərs linki", action }] : undefined });
   }
-  if (!lines.length) return null;
-  return reply(lines, ["Tapşırıqlarım", "Qiymətlərim"]);
+  if (!blocks.length) return null;
+  return blockReply(blocks, ["Tapşırıqlarım", "Qiymətlərim"]);
 }
 
 async function answerStudent(parsed: ParsedMessage, ctx: StudentAiContext): Promise<AiReply> {
@@ -289,7 +363,7 @@ async function answerStudent(parsed: ParsedMessage, ctx: StudentAiContext): Prom
 
   if (countKeywords(parsed, KW.others)) {
     return reply([
-      "Bağışlayın, mən yalnız sizin öz tədris məlumatlarınız haqqında danışa bilərəm. Digər tələbələrin məlumatları məxfidir.",
+      "Bağışlayın, başqa tələbələrin məlumatları məxfidir. Mən yalnız sizin öz dərsləriniz və nəticələriniz barədə danışa bilərəm.",
     ], STUDENT_SUGGESTIONS);
   }
 
@@ -330,11 +404,19 @@ async function answerStudent(parsed: ParsedMessage, ctx: StudentAiContext): Prom
   if (countKeywords(parsed, KW.thanks)) return reply(["Dəyməz! Başqa sualınız olsa, buradayam."], STUDENT_SUGGESTIONS);
   if (countKeywords(parsed, KW.greeting)) return studentHelp(overview.firstName);
   if (countKeywords(parsed, KW.help)) return studentHelp();
-  return reply([
-    "Bu sualı tam başa düşmədim. Mən daxili köməkçiyəm və yalnız sizin Akademiya məlumatlarınız əsasında cavab verirəm.",
-    "Bunları soruşa bilərsiniz: dərs cədvəli, tapşırıqlar, imtahanlar, qiymətlər, davamiyyət, resurslar, fənlər, profil, elanlar.",
-    `Saytdan istifadə mövzuları: ${guideTopicList("student").join(", ")}. Məsələn: «Tapşırığı necə göndərim?»`,
-    "Dini və ya elmi suallar üçün kabinetdəki «Sual-cavab» bölməsindən müəllimlərə yaza bilərsiniz.",
+  return blockReply([
+    { type: "text", text: "Bağışlayın, sualınızı tam başa düşmədim. Bir az başqa cür yaza bilərsiniz?" },
+    {
+      type: "card",
+      title: "Bunlarda kömək edə bilərəm",
+      items: [
+        { title: "Dərslər", detail: "dərs cədvəli, fənlər, materiallar" },
+        { title: "Nəticələr", detail: "qiymətlər, testlər, davamiyyət" },
+        { title: "Tapşırıqlar", detail: "açıq tapşırıqlar və son tarixlər" },
+        { title: "Saytdan istifadə", detail: guideTopicList("student").slice(0, 5).join(", ") },
+      ],
+      note: "Dini və ya elmi suallarınızı kabinetdəki «Sual-cavab» bölməsində müəllimlərə yaza bilərsiniz.",
+    },
   ], STUDENT_SUGGESTIONS);
 }
 
@@ -343,6 +425,7 @@ function mergeReplies(replies: AiReply[]): AiReply {
   return {
     reply: replies.map((item) => item.reply).join("\n\n— — —\n\n"),
     suggestions: Array.from(new Set(replies.flatMap((item) => item.suggestions))).slice(0, 4),
+    blocks: replies.flatMap((item) => ensureBlocks(item).blocks),
   };
 }
 
@@ -354,6 +437,7 @@ export const internalAiProvider: AiProvider = {
   name: "internal",
   async answer(input: { message: string; history: AiChatTurn[] }, context: AiContext): Promise<AiReply> {
     const parsed = parse(input.message, context.mode === "admin");
-    return context.mode === "student" ? answerStudent(parsed, context) : answerAdmin(parsed, context);
+    // Hər daxili cavab kart blokları ilə qaytarılır (əl ilə qurulmayıbsa, mətndən çevrilir).
+    return ensureBlocks(context.mode === "student" ? await answerStudent(parsed, context) : await answerAdmin(parsed, context));
   },
 };

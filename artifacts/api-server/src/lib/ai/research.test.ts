@@ -147,7 +147,8 @@ test("parseDorarHtml extracts hadith fields as plain text", () => {
   const items = parseDorarHtml(DORAR_HTML);
   assert.equal(items.length, 2);
   assert.deepEqual(items[0], {
-    text: "إنَّما الأعمالُ بالنِّيَّاتِ.",
+    abridged: false,
+    text: "إنَّما الأعمالُ بالنِّيَّاتِ",
     narrator: "عمر بن الخطاب",
     muhaddith: "ابن تيمية",
     source: "مجموع الفتاوى",

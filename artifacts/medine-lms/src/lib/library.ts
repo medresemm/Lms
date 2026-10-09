@@ -184,6 +184,20 @@ export async function searchLibraryApi(getToken: () => Promise<string | null>, i
   return data;
 }
 
+/** «Davamı»: axtarış nəticəsinin bütün səhifə mətni (yalnız düymə ilə). */
+export async function libraryPageTextApi(getToken: () => Promise<string | null>, input: { slug: string; page: number; query: string }) {
+  const token = await getToken().catch(() => null);
+  const response = await fetch(`${siteBase}/api/library/page-text`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(input),
+    cache: 'no-store',
+  });
+  const data = await response.json().catch(() => null) as { text?: string; parts?: Array<{ text: string; hit?: boolean }>; truncated?: boolean; error?: string } | null;
+  if (!response.ok || !data || typeof data.text !== 'string') throw new Error(data?.error || 'Səhifə mətnini açmaq olmadı.');
+  return { text: data.text, parts: Array.isArray(data.parts) ? data.parts.filter((part) => part && typeof part.text === 'string').slice(0, 4000) : undefined, truncated: data.truncated === true };
+}
+
 /** Nəticələri kitablara görə qruplaşdırır (sıra saxlanılır). */
 export function groupLibraryItems<T extends { slug: string }>(items: T[]) {
   const groups: Array<{ slug: string; items: T[] }> = [];

@@ -66,7 +66,8 @@ import {
 } from "./lms.js";
 import { answerLibrary, resolveLibraryMessage } from "../lib/library/search.js";
 import { searchableLibraryBooks } from "../lib/library/uploadedBooks.js";
-import { answerCourseBooks, detectCourseBooksQuestion, type StudentCourseRef } from "../lib/library/courseBooks.js";
+import { answerCourseBooks, detectCourseBooksQuestion, termLabel, type StudentCourseRef } from "../lib/library/courseBooks.js";
+import { blockReply, ensureBlocks } from "../lib/ai/blocks.js";
 import { fullLibraryCatalog, loadCourseBooksRows } from "../lib/library/courseBooksRepo.js";
 import { parse as parseMessage } from "../lib/ai/text.js";
 import { titleMatches } from "../lib/ai/format.js";
@@ -93,7 +94,7 @@ import {
   updateStudentExternalSetting,
   type StudentExternalSetting,
 } from "../lib/ai/studentExternal.js";
-import { answerResearch, openShamelaPage, type UpstreamStatusEvent, ResearchUpstreamError, shamelaPageUrl } from "../lib/ai/research.js";
+import { answerResearch, fetchHadithFull, openShamelaPage, searchShamelaPage, type UpstreamStatusEvent, ResearchUpstreamError, shamelaPageUrl } from "../lib/ai/research.js";
 
 const router: IRouter = Router();
 
@@ -267,14 +268,30 @@ async function answerStudentCourseBooks(ctx: StudentAiContext, message: string) 
     fullLibraryCatalog(),
   ]);
   if (!available) {
-    return { reply: "Dərs kitabları bölməsi hələ aktiv deyil. Müəllimləriniz kitab təyin edəndən sonra burada görünəcək.", suggestions: ["Dərs cədvəlim", "Fənlərim"] };
+    return blockReply([{ type: "text", text: "Dərs kitabları bölməsi hələ hazırlanır. Müəllimləriniz kitab seçəndən sonra burada görəcəksiniz." }], ["Dərs cədvəlim", "Fənlərim"]);
   }
   const result = answerCourseBooks({ courses, matchedCourseIds: matched.size ? matched : null, currentTerm: overview.currentTermNumber, rows, catalog });
-  return {
-    reply: result.reply,
-    suggestions: ["Dərs cədvəlim", "Fənlərim", "Kitabxanada axtar: "],
-    ...(result.items.length ? { sources: { kind: "course-books" as const, query: "", items: result.items } } : {}),
-  };
+  if (!result.items.length) return blockReply([{ type: "text", text: result.reply }], ["Dərs cədvəlim", "Fənlərim"]);
+  return blockReply([
+    { type: "text", text: result.items.length === 1 ? "Bu dərsdə keçəcəyiniz kitab:" : "Dərslərinizdə keçəcəyiniz kitablar:" },
+    ...result.items.map((item) => ({
+      type: "card" as const,
+      title: item.courseTitle,
+      badge: { text: termLabel(item.termNumber) },
+      items: item.books.map((book) => {
+        const range = book.printedFrom !== null
+          ? book.printedTo !== null && book.printedTo !== book.printedFrom ? `səhifə ${book.printedFrom}–${book.printedTo}` : `səhifə ${book.printedFrom}-dən`
+          : null;
+        return {
+          title: book.bookShortTitle,
+          detail: book.chapterTitle ?? undefined,
+          meta: [range, book.note].filter((part): part is string => Boolean(part)),
+          action: { label: "Oxu", href: `/kitabxana/${encodeURIComponent(book.slug)}?page=${book.openPage}` },
+        };
+      }),
+    })),
+    { type: "text", text: "«Oxu» düyməsi kitabı seçilmiş fəsildə açır.", tone: "muted" },
+  ], ["Dərs cədvəlim", "Fənlərim", "Kitabxanada axtar: "]);
 }
 
 function buildStudentContext(profile: ProfileRow, application: ApplicationRow): StudentAiContext {
@@ -945,7 +962,7 @@ router.post("/ai/student/chat", noStore, requireApprovedStudent, rateLimit, asyn
     // «Kitabxanada axtar» yazılmasa da: ərəbcə mətn, kitab adı, «hansı səhifədə …» və ya tanınan mövzu sözü.
     const libraryIntent = resolveLibraryMessage(input.message);
     if (libraryIntent) {
-      res.json(answerLibrary(libraryIntent.query, { books: await searchableLibraryBooks() }));
+      res.json(ensureBlocks(answerLibrary(libraryIntent.query, { books: await searchableLibraryBooks() })));
       return;
     }
     const userId = getAuth(req).userId as string;
@@ -981,7 +998,7 @@ router.post("/ai/admin/chat", noStore, requireAiStaff, rateLimit, async (req, re
     if (selection.mode === "internal") {
       const libraryIntent = resolveLibraryMessage(input.message);
       if (libraryIntent) {
-        res.json(answerLibrary(libraryIntent.query, { books: await searchableLibraryBooks() }));
+        res.json(ensureBlocks(answerLibrary(libraryIntent.query, { books: await searchableLibraryBooks() })));
         return;
       }
     }
@@ -1037,6 +1054,78 @@ const requireStudentShamela: RequestHandler = async (_req, res, next) => {
 
 router.post("/ai/admin/shamela/page", noStore, requireAiStaff, rateLimit, shamelaPageHandler);
 router.post("/ai/student/shamela/page", noStore, requireApprovedStudent, rateLimit, requireStudentShamela, shamelaPageHandler);
+
+function shortString(value: unknown, max: number) {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
+}
+
+// «Daha çox göstər»: eyni Şamilə axtarışının növbəti 5 kitabı. Sorğu jurnala yazılmır və saxlanmır.
+const shamelaMoreHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const body = (req.body ?? {}) as { query?: unknown; seenBookIds?: unknown; cursor?: unknown };
+    const query = shortString(body.query, 200);
+    const seenBookIds = Array.isArray(body.seenBookIds)
+      ? body.seenBookIds.filter((id): id is number => typeof id === "number" && Number.isSafeInteger(id) && id > 0).slice(0, 200)
+      : [];
+    const cursor = typeof body.cursor === "string" && body.cursor.length <= 4096 ? body.cursor : null;
+    if (query.length < 2) {
+      res.status(400).json({ error: "Axtarış sözü çox qısadır." });
+      return;
+    }
+    try {
+      res.json(await searchShamelaPage(query, { onUpstreamStatus: logUpstreamStatus }, { seenBookIds, cursor }));
+    } catch (error) {
+      if (!(error instanceof ResearchUpstreamError)) throw error;
+      res.status(502).json({ error: "Şamilə hal-hazırda cavab vermir. Bir az sonra yenidən cəhd edin." });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+router.post("/ai/admin/shamela/more", noStore, requireAiStaff, rateLimit, shamelaMoreHandler);
+router.post("/ai/student/shamela/more", noStore, requireApprovedStudent, rateLimit, requireStudentShamela, shamelaMoreHandler);
+
+// «Davamı»: Dorar hədisinin tam mətni (yalnız düymə ilə; heç nə saxlanmır).
+function dorarFullHandler(allowShamela: (req: Parameters<RequestHandler>[0]) => Promise<boolean>): RequestHandler {
+  return async (req, res, next) => {
+    try {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const ref = {
+        query: shortString(body.query, 200),
+        text: shortString(body.text, 2000),
+        narrator: shortString(body.narrator, 200),
+        muhaddith: shortString(body.muhaddith, 200),
+        source: shortString(body.source, 300),
+        page: shortString(body.page, 60),
+      };
+      if (ref.text.length < 2) {
+        res.status(400).json({ error: "Hədis mətni boşdur." });
+        return;
+      }
+      if (!ref.query) ref.query = ref.text.slice(0, 120);
+      res.json({ full: await fetchHadithFull(ref, { onUpstreamStatus: logUpstreamStatus }, { shamela: await allowShamela(req) }) });
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+const requireStudentDorar: RequestHandler = async (_req, res, next) => {
+  try {
+    if (!(await getStudentExternalSetting()).dorar) {
+      res.status(403).json({ error: "Xarici axtarış tələbələr üçün hazırda söndürülüb." });
+      return;
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+router.post("/ai/admin/dorar/full", noStore, requireAiStaff, rateLimit, dorarFullHandler(async () => true));
+router.post("/ai/student/dorar/full", noStore, requireApprovedStudent, rateLimit, requireStudentDorar,
+  dorarFullHandler(async () => (await getStudentExternalSetting()).shamela));
 
 // Tələbə interfeysi üçün: «Xarici» rejim açıqdırmı və hansı mənbələr.
 router.get("/ai/student/config", noStore, requireApprovedStudent, async (_req, res, next) => {

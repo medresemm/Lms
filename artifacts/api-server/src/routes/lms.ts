@@ -661,8 +661,13 @@ export const requireTeacher: RequestHandler = async (req, res, next) => {
     const role = metadataRole(clerkUser?.publicMetadata);
     const permission = permissionForAdminRequest(req.path, req.method);
     const permissionRole = role === "admin" ? "teacher" : role;
+    // Teachers may READ the list of active terms (it only contains semester
+    // numbers and drives the term pickers / stats in the teacher panel), but
+    // changing it and managing users stays with the owner and the board.
+    const isCourseActivationPath = req.path.startsWith("/admin/course-activation");
+    const isReadOnlyRequest = req.method === "GET" || req.method === "HEAD";
     const teacherManagementRestricted = role === "teacher"
-      && (req.path.startsWith("/admin/users") || req.path.startsWith("/admin/course-activation"));
+      && (req.path.startsWith("/admin/users") || (isCourseActivationPath && !isReadOnlyRequest));
     if (teacherManagementRestricted) {
       res.status(403).json({ error: "Bu bölməyə yalnız sahib və idarə heyəti daxil ola bilər." });
       return;
@@ -683,7 +688,7 @@ export const requireTeacher: RequestHandler = async (req, res, next) => {
       next();
       return;
     }
-    if (req.path.startsWith("/admin/course-activation") && role !== "teacher" && permissionRole) {
+    if (isCourseActivationPath && permissionRole && (role !== "teacher" || isReadOnlyRequest)) {
       next();
       return;
     }

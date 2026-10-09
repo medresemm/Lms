@@ -3580,8 +3580,8 @@ function StudentDetail({ profileId, onClose }: { profileId: number; onClose: () 
   </div>;
 }
 
-function TeacherStats({ canEdit }: { canEdit: boolean }) {
-  const profilesQuery = useGetAdminAcademicProfiles();
+function TeacherStats({ canEdit, canReadProfiles }: { canEdit: boolean; canReadProfiles: boolean }) {
+  const profilesQuery = useGetAdminAcademicProfiles({ query: { enabled: canReadProfiles, queryKey: getGetAdminAcademicProfilesQueryKey() } });
   const profiles = profilesQuery.data ?? [];
   const [activeTerms, setActiveTerms] = useState<number[]>([1, 2, 3, 4]);
   const firstYearCount = profiles.filter((profile) => profile.courseYear === 1).length;
@@ -4316,19 +4316,12 @@ export function AdminPanel() {
     void loadUnansweredQuestionCount().then(setUnansweredQuestionCount);
   }, []);
   const [isAnnouncementListOpen, setIsAnnouncementListOpen] = useState(false);
-  const resourcesQuery = useGetAdminResources();
-  const articlesQuery = useGetAdminArticles();
-  const dailyBenefitsQuery = useGetAdminDailyBenefits();
-  const applicationsQuery = useGetAdminApplications();
-  const academicProfilesQuery = useGetAdminAcademicProfiles();
   const [decisionBusyId, setDecisionBusyId] = useState<number | null>(null);
   const [teacherBusyId, setTeacherBusyId] = useState<number | null>(null);
   const [decisionNotice, setDecisionNotice] = useState('');
   const [readExcuseIds, setReadExcuseIds] = useState<number[]>(() => {
     try { return JSON.parse(window.localStorage.getItem('medine-read-attendance-excuses') || '[]') as number[]; } catch { return []; }
   });
-  const articles = articlesQuery.data ?? [];
-  const dailyBenefits = dailyBenefitsQuery.data ?? [];
   const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: Boolean(user), queryKey: getGetOwnUserProfileQueryKey(), ...accountProfileQueryRetry } });
   const profileName = [accountProfileQuery.data?.firstName, accountProfileQuery.data?.lastName].filter(Boolean).join(' ').trim();
   const firstName = user?.firstName || accountProfileQuery.data?.firstName || user?.username || 'Hesab';
@@ -4336,8 +4329,25 @@ export function AdminPanel() {
   const metadataRole = typeof user?.publicMetadata === 'object' && user.publicMetadata !== null && 'role' in user.publicMetadata && typeof user.publicMetadata.role === 'string' ? user.publicMetadata.role : '';
   const activeRole = accountProfileQuery.data?.role ?? metadataRole;
   const ownerAssistant = activeRole === 'owner_assistant';
-  const excusesQuery = useGetAdminAttendanceExcuses({ query: { enabled: Boolean(user), queryKey: getGetAdminAttendanceExcusesQueryKey() } });
-  const subjectRequestsQuery = useGetAdminSubjectRemovalRequests({ query: { enabled: Boolean(user), queryKey: getGetAdminSubjectRemovalRequestsQueryKey() } });
+  const rolePermissions = new Set(accountProfileQuery.data?.rolePermissions ?? []);
+  // Only fire the admin list requests the server will actually allow for this
+  // account (mirrors permissionForAdminRequest/requireTeacher on the API; note
+  // /admin/attendance-excuses resolves to the 'attendance' permission there), so a
+  // teacher whose permissions were narrowed does not trigger 403 responses.
+  // If the profile itself could not be loaded, fall back to the previous behaviour
+  // (let the server decide) instead of leaving the panel empty.
+  const permissionsUnknown = accountProfileQuery.isError;
+  const canRead = (permission: string) => Boolean(user) && (owner || permissionsUnknown || rolePermissions.has(permission));
+  const canReadResources = canRead('schedule') || (Boolean(user) && ownerAssistant && rolePermissions.has('assignments'));
+  const resourcesQuery = useGetAdminResources({ query: { enabled: canReadResources, queryKey: getGetAdminResourcesQueryKey() } });
+  const articlesQuery = useGetAdminArticles({ query: { enabled: canRead('articles'), queryKey: getGetAdminArticlesQueryKey() } });
+  const dailyBenefitsQuery = useGetAdminDailyBenefits({ query: { enabled: canRead('dailyBenefits'), queryKey: getGetAdminDailyBenefitsQueryKey() } });
+  const applicationsQuery = useGetAdminApplications({ query: { enabled: canRead('applications'), queryKey: getGetAdminApplicationsQueryKey() } });
+  const academicProfilesQuery = useGetAdminAcademicProfiles({ query: { enabled: canRead('students'), queryKey: getGetAdminAcademicProfilesQueryKey() } });
+  const articles = articlesQuery.data ?? [];
+  const dailyBenefits = dailyBenefitsQuery.data ?? [];
+  const excusesQuery = useGetAdminAttendanceExcuses({ query: { enabled: canRead('attendance'), queryKey: getGetAdminAttendanceExcusesQueryKey() } });
+  const subjectRequestsQuery = useGetAdminSubjectRemovalRequests({ query: { enabled: canRead('applications'), queryKey: getGetAdminSubjectRemovalRequestsQueryKey() } });
   const pendingSubjectRequestCount = subjectRequestsQuery.data?.filter((item) => item.status === 'pending').length ?? 0;
   const pendingExcuseCount = excusesQuery.data?.filter((item) => item.status === 'pending' && !readExcuseIds.includes(item.id)).length ?? 0;
   const pendingApplicationCount = applicationsQuery.data?.filter((item) => item.status === 'pending').length ?? 0;
@@ -4356,7 +4366,6 @@ export function AdminPanel() {
   const fullName = owner
     ? (ownerName || profileName || clerkFullName || firstName)
     : (profileName || clerkFullName || firstName);
-  const rolePermissions = new Set(accountProfileQuery.data?.rolePermissions ?? []);
   const canManageAssignments = owner || rolePermissions.has('assignments') && (activeRole === 'teacher' || activeRole === 'admin' || activeRole === 'owner_assistant');
   const canEditCourseContent = owner || rolePermissions.has('schedule') || activeRole === 'teacher' || activeRole === 'admin';
   const accountCode = owner ? 'N1' : (typeof user?.publicMetadata === 'object' && user.publicMetadata !== null && 'staffNumber' in user.publicMetadata && typeof user.publicMetadata.staffNumber === 'string' ? user.publicMetadata.staffNumber : metadataRole === 'owner_assistant' ? 'NK1' : metadataRole === 'supervisor' ? 'B001' : 'M01');
@@ -4441,7 +4450,7 @@ export function AdminPanel() {
           <p className="flex items-center gap-2 text-xl font-bold tracking-wide text-[hsl(var(--primary))]"><ShieldCheck size={20} /> İDARƏETMƏ SAHƏSİ</p>
           {!owner && <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Tələbələr və ziyarətçilər üçün dərsləri, elanları, məqalələri, günün faydasını və dərs resurslarını buradan əlavə edin.</p>}
         </div>
-        <TeacherStats canEdit={owner || ownerAssistant} />
+        <TeacherStats canEdit={owner || ownerAssistant} canReadProfiles={canRead('students')} />
         <section className="mt-5 min-w-0 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 shadow-[var(--shadow-sm)] sm:p-4">
            <h2 className="mb-3 flex items-center gap-2 font-serif text-2xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]"><ShieldCheck size={18} /> İdarə paneli</h2>
             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">

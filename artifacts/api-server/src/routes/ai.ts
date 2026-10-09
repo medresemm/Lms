@@ -11,7 +11,7 @@
 // Server heç nə saxlamır: söhbət üçün cədvəl yoxdur, mesaj mətni log edilmir, bazaya yazılmır.
 // Söhbət tarixçəsi yalnız brauzerin localStorage-ində qalır.
 import { Router, type IRouter, type RequestHandler } from "express";
-import { getAuth } from "@clerk/express";
+import { clerkClient, getAuth } from "@clerk/express";
 import { and, asc, desc, eq, inArray, isNull, lte } from "drizzle-orm";
 import {
   announcementsTable,
@@ -80,9 +80,40 @@ import {
 } from "../lib/ai/aiProvider.js";
 import { logger } from "../lib/logger.js";
 import { parseSourceSelection, routeAdminMessage } from "../lib/ai/adminRouting.js";
+import {
+  readStudentExternalSetting,
+  routeStudentExternal,
+  studentExternalEnabled,
+  updateStudentExternalSetting,
+  type StudentExternalSetting,
+} from "../lib/ai/studentExternal.js";
 import { answerResearch, openShamelaPage, type UpstreamStatusEvent, ResearchUpstreamError, shamelaPageUrl } from "../lib/ai/research.js";
 
 const router: IRouter = Router();
+
+// Tələbələr üçün «Xarici» axtarış ayarı sistem sahibinin Clerk publicMetadata-sındadır (bax lib/ai/studentExternal.ts).
+// Qısa müddətli yaddaş (30 s) Clerk-ə hər sorğuda müraciət etməmək üçündür; xəta olarsa ayar «söndürülüb» sayılır.
+const STUDENT_EXTERNAL_CACHE_MS = 30_000;
+let studentExternalCache: { expiresAt: number; value: StudentExternalSetting } | null = null;
+
+async function findSystemOwnerUser() {
+  const ownerEmail = process.env.SYSTEM_OWNER_EMAIL?.trim().toLowerCase();
+  if (!ownerEmail) return null;
+  const page = await clerkClient.users.getUserList({ emailAddress: [ownerEmail], limit: 1 });
+  return page.data[0] ?? null;
+}
+
+async function getStudentExternalSetting(): Promise<StudentExternalSetting> {
+  if (studentExternalCache && studentExternalCache.expiresAt > Date.now()) return studentExternalCache.value;
+  let value: StudentExternalSetting;
+  try {
+    value = readStudentExternalSetting((await findSystemOwnerUser())?.publicMetadata);
+  } catch {
+    value = { shamela: false, dorar: false };
+  }
+  studentExternalCache = { expiresAt: Date.now() + STUDENT_EXTERNAL_CACHE_MS, value };
+  return value;
+}
 
 // Xarici mənbə nəticəsini yalnız status kodu ilə qeyd edir — sorğu mətni heç vaxt log edilmir.
 function logUpstreamStatus(event: UpstreamStatusEvent) {
@@ -848,6 +879,21 @@ router.post("/ai/student/chat", noStore, requireApprovedStudent, rateLimit, asyn
       res.status(400).json({ error: `Mesaj boş olmamalı və ${MAX_MESSAGE_LENGTH} simvoldan uzun olmamalıdır.` });
       return;
     }
+    const selection = parseSourceSelection(req.body);
+    if (!selection) {
+      res.status(400).json({ error: "Mənbə rejimi düzgün deyil." });
+      return;
+    }
+    if (selection.mode === "external") {
+      // Akademiya məlumatlarına bu yolda baxılmır; ayar söndürülübsə xarici sayta da müraciət edilmir.
+      const result = await routeStudentExternal(
+        { message: input.message, target: selection.target },
+        await getStudentExternalSetting(),
+        (intent) => answerResearch(intent, { onUpstreamStatus: logUpstreamStatus }),
+      );
+      res.status(result.status).json(result.body);
+      return;
+    }
     const userId = getAuth(req).userId as string;
     const profile = await getApprovedStudentProfile(userId);
     if (!profile) {
@@ -893,7 +939,7 @@ router.post("/ai/admin/chat", noStore, requireAiStaff, rateLimit, async (req, re
   }
 });
 
-router.post("/ai/admin/shamela/page", noStore, requireAiStaff, rateLimit, async (req, res, next) => {
+const shamelaPageHandler: RequestHandler = async (req, res, next) => {
   try {
     const body = (req.body ?? {}) as { bookId?: unknown; pageId?: unknown };
     const bookId = typeof body.bookId === "number" ? body.bookId : Number(body.bookId);
@@ -911,6 +957,84 @@ router.post("/ai/admin/shamela/page", noStore, requireAiStaff, rateLimit, async 
         sourceUrl: shamelaPageUrl(bookId, pageId),
       });
     }
+  } catch (error) {
+    next(error);
+  }
+};
+
+const requireStudentShamela: RequestHandler = async (_req, res, next) => {
+  try {
+    if (!(await getStudentExternalSetting()).shamela) {
+      res.status(403).json({ error: "Xarici axtarış tələbələr üçün hazırda söndürülüb." });
+      return;
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+router.post("/ai/admin/shamela/page", noStore, requireAiStaff, rateLimit, shamelaPageHandler);
+router.post("/ai/student/shamela/page", noStore, requireApprovedStudent, rateLimit, requireStudentShamela, shamelaPageHandler);
+
+// Tələbə interfeysi üçün: «Xarici» rejim açıqdırmı və hansı mənbələr.
+router.get("/ai/student/config", noStore, requireApprovedStudent, async (_req, res, next) => {
+  try {
+    const setting = await getStudentExternalSetting();
+    res.json({ external: { enabled: studentExternalEnabled(setting), shamela: setting.shamela, dorar: setting.dorar } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Sistem sahibi: tələbələr üçün «Xarici» axtarış ayarı.
+const requireOwnerForSetting: RequestHandler = async (req, res, next) => {
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) {
+      res.status(401).json({ error: "Bu səhifəyə daxil olmaq üçün hesabınıza giriş edin." });
+      return;
+    }
+    if (!(await userIsSystemOwner(userId))) {
+      res.status(403).json({ error: "Bu ayarı yalnız sistem sahibi dəyişə bilər." });
+      return;
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+router.get("/ai/admin/student-external", noStore, requireOwnerForSetting, async (_req, res, next) => {
+  try {
+    const owner = await findSystemOwnerUser();
+    res.json(readStudentExternalSetting(owner?.publicMetadata));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/ai/admin/student-external", noStore, async (req, res, next) => {
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) {
+      res.status(401).json({ error: "Bu səhifəyə daxil olmaq üçün hesabınıza giriş edin." });
+      return;
+    }
+    const actorIsOwner = await userIsSystemOwner(userId);
+    const owner = actorIsOwner ? await findSystemOwnerUser() : null;
+    if (actorIsOwner && !owner) {
+      res.status(404).json({ error: "Sistem sahibi tapılmadı." });
+      return;
+    }
+    const result = await updateStudentExternalSetting(
+      { actorIsOwner, body: req.body, ownerMetadata: owner?.publicMetadata },
+      async (publicMetadata) => {
+        await clerkClient.users.updateUserMetadata(owner!.id, { publicMetadata });
+        studentExternalCache = null;
+      },
+    );
+    res.status(result.status).json(result.body);
   } catch (error) {
     next(error);
   }

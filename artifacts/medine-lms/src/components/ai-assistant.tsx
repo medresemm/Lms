@@ -207,7 +207,7 @@ function SourceLink({ href, label }: { href: string; label: string }) {
 
 type GetToken = () => Promise<string | null>;
 
-function ShamelaCard({ item, getToken }: { item: ShamelaItem; getToken: GetToken }) {
+function ShamelaCard({ item, getToken, pageEndpoint }: { item: ShamelaItem; getToken: GetToken; pageEndpoint: string }) {
   const [page, setPage] = useState<ShamelaItem>(item);
   const [full, setFull] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -219,7 +219,7 @@ function ShamelaCard({ item, getToken }: { item: ShamelaItem; getToken: GetToken
     setError(null);
     try {
       const token = await getToken().catch(() => null);
-      const response = await fetch('/api/ai/admin/shamela/page', {
+      const response = await fetch(pageEndpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ bookId: item.bookId, pageId }),
@@ -297,7 +297,7 @@ function DorarCard({ item, sourceUrl }: { item: DorarItem; sourceUrl: string }) 
   );
 }
 
-function ResearchResults({ sources, getToken, heading }: { sources: ResearchSources; getToken: GetToken; heading?: boolean }) {
+function ResearchResults({ sources, getToken, heading, pageEndpoint }: { sources: ResearchSources; getToken: GetToken; heading?: boolean; pageEndpoint: string }) {
   if (!sources.items.length) return null;
   if (heading) {
     return (
@@ -306,14 +306,14 @@ function ResearchResults({ sources, getToken, heading }: { sources: ResearchSour
           {sources.kind === 'shamela' ? <BookText size={13} /> : <ScrollText size={13} />}
           {sources.kind === 'shamela' ? 'Şamilə' : 'Hədis (Dorar)'} · {sources.items.length}
         </h3>
-        <ResearchResults sources={sources} getToken={getToken} />
+        <ResearchResults sources={sources} getToken={getToken} pageEndpoint={pageEndpoint} />
       </section>
     );
   }
   if (sources.kind === 'shamela') {
     return (
       <div className="mt-3 space-y-3">
-        {sources.items.map((item) => <ShamelaCard key={`${item.bookId}-${item.pageId}`} item={item} getToken={getToken} />)}
+        {sources.items.map((item) => <ShamelaCard key={`${item.bookId}-${item.pageId}`} item={item} getToken={getToken} pageEndpoint={pageEndpoint} />)}
         <p className="text-[11px] text-[#f4ead5]/45">Mətnlər canlı olaraq <SourceLink href="https://shamela.ws" label="المكتبة الشاملة (shamela.ws)" /> saytından götürülür; saytımızda saxlanmır.</p>
       </div>
     );
@@ -348,14 +348,35 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isStaff = mode === 'admin';
-  const external = isStaff && source.mode === 'external';
-  const tiles = !isStaff ? studentTiles : external ? externalTiles : adminTiles;
+  // Tələbələr: «Xarici» rejim yalnız sistem sahibi açdıqda görünür (server də yoxlayır).
+  const [studentExternal, setStudentExternal] = useState<{ shamela: boolean; dorar: boolean } | null>(null);
+  const allowedTargets: ExternalTarget[] = isStaff
+    ? ['shamela', 'dorar', 'all']
+    : studentExternal?.shamela && studentExternal.dorar ? ['shamela', 'dorar', 'all'] : studentExternal?.shamela ? ['shamela'] : studentExternal?.dorar ? ['dorar'] : [];
+  const showSwitch = isStaff || allowedTargets.length > 0;
+  const external = showSwitch && source.mode === 'external';
+  const target: ExternalTarget = allowedTargets.includes(source.target) ? source.target : allowedTargets[0] ?? 'shamela';
+  const tiles = external ? externalTiles : isStaff ? adminTiles : studentTiles;
   const endpoint = isStaff ? '/api/ai/admin/chat' : '/api/ai/student/chat';
+  const pageEndpoint = isStaff ? '/api/ai/admin/shamela/page' : '/api/ai/student/shamela/page';
+
+  async function loadStudentConfig() {
+    if (isStaff) return;
+    try {
+      const token = await getToken().catch(() => null);
+      const response = await fetch('/api/ai/student/config', { headers: token ? { authorization: `Bearer ${token}` } : {}, cache: 'no-store' });
+      const data = await response.json().catch(() => null) as { external?: { shamela?: unknown; dorar?: unknown } } | null;
+      setStudentExternal(response.ok && data?.external ? { shamela: data.external.shamela === true, dorar: data.external.dorar === true } : null);
+    } catch {
+      setStudentExternal(null);
+    }
+  }
 
   // İstifadəçi dəyişəndə (və ya Clerk gec yüklənəndə) həmin istifadəçinin tarixçəsini və rejimini yüklə.
   useEffect(() => { setMessages(loadMessages(key)); }, [key]);
   useEffect(() => { saveMessages(key, messages); }, [key, messages]);
   useEffect(() => { setSource(loadSourcePreference(user?.id, defaultSource)); }, [user?.id, defaultSource]);
+  useEffect(() => { void loadStudentConfig(); }, [isStaff, user?.id]);
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
@@ -386,11 +407,12 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify(isStaff ? { message, history, source: source.mode, target: source.target } : { message, history }),
+        body: JSON.stringify(showSwitch ? { message, history, source: external ? 'external' : 'internal', target } : { message, history }),
         cache: 'no-store',
       });
       const data = await response.json().catch(() => null) as { reply?: string; suggestions?: string[]; sources?: unknown; error?: string } | null;
       if (!response.ok || !data?.reply) {
+        if (response.status === 403 && external && !isStaff) void loadStudentConfig();
         throw new Error(data?.error || 'Cavab almaq mümkün olmadı. Bir az sonra yenidən cəhd edin.');
       }
       const groups = sourceGroups(data.sources);
@@ -434,15 +456,13 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
   }
 
   const hasChat = messages.length > 0;
-  const placeholder = !isStaff
-    ? 'Nə ilə kömək edim?'
-    : external
-      ? source.target === 'dorar' ? 'Hədis mətnindən bir hissə yazın (ərəbcə)…' : source.target === 'all' ? 'Şamilə və Dorar-da axtarış (ərəbcə)…' : 'Şamilədə axtarış (ərəbcə açar söz)…'
-      : 'Akademiya üzrə sual verin…';
-  const intro = !isStaff
-    ? 'Yalnız sizin dərsləriniz, cədvəliniz, tapşırıqlarınız və nəticələriniz əsasında cavab verirəm.'
-    : external
-      ? 'Xarici rejim: yazdığınızı yalnız Şamilə kitabxanasında və/və ya Dorar hədis bazasında axtarıram. Akademiya məlumatlarına baxılmır. Mətnlər burada göstərilir, saytda saxlanmır.'
+  const placeholder = external
+    ? target === 'dorar' ? 'Hədis mətnindən bir hissə yazın (ərəbcə)…' : target === 'all' ? 'Şamilə və Dorar-da axtarış (ərəbcə)…' : 'Şamilədə axtarış (ərəbcə açar söz)…'
+    : isStaff ? 'Akademiya üzrə sual verin…' : 'Nə ilə kömək edim?';
+  const intro = external
+    ? `Xarici rejim: yazdığınızı yalnız ${allowedTargets.includes('all') ? 'Şamilə kitabxanasında və/və ya Dorar hədis bazasında' : target === 'dorar' ? 'Dorar hədis bazasında' : 'Şamilə kitabxanasında'} axtarıram. Akademiya ${isStaff ? 'məlumatlarına' : 'məlumatlarınıza'} baxılmır. Mətnlər burada göstərilir, saytda saxlanmır.`
+    : !isStaff
+      ? 'Yalnız sizin dərsləriniz, cədvəliniz, tapşırıqlarınız və nəticələriniz əsasında cavab verirəm.'
       : 'Daxili rejim: tələbələr, müəllimlər, dərslər, müraciətlər, tapşırıqlar, testlər və elanlar üzrə yalnız Akademiya bazasından cavab verirəm — hərf səhvlərini də başa düşürəm.';
   // Telefon və planşetdə (≤1024px) kartlar bir sətirlik, üfüqi sürüşən kiçik düymələrdir; yalnız böyük ekranda iri kartlar.
   const chipRow = 'flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
@@ -467,10 +487,10 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
             <Trash2 size={13} /> <span className="hidden sm:inline">Tarixçəni təmizlə</span>
           </button>
         </div>
-        {isStaff && (
+        {showSwitch && (
           <div className="mt-2.5 flex flex-wrap items-center gap-2 sm:mt-3">
             <div role="radiogroup" aria-label="Mənbə rejimi" className="inline-flex rounded-full border border-[#e3c27a]/40 bg-black/30 p-0.5" data-testid="ai-source-switch">
-              {([['internal', 'Daxili', 'Yalnız Akademiya məlumatları'], ['external', 'Xarici', 'Yalnız xarici mənbələr: Şamilə, Dorar']] as const).map(([value, label, title]) => (
+              {([['internal', 'Daxili', isStaff ? 'Yalnız Akademiya məlumatları' : 'Yalnız sizin Akademiya məlumatlarınız'], ['external', 'Xarici', 'Yalnız xarici mənbələr: Şamilə, Dorar']] as const).map(([value, label, title]) => (
                 <button key={value} type="button" role="radio" aria-checked={source.mode === value} title={title} onClick={() => changeSource({ mode: value })} disabled={sending}
                   className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition sm:px-4 ${source.mode === value ? 'bg-gradient-to-br from-[#f3dca6] to-[#c49a4c] text-[#17130c] shadow-[0_0_14px_rgba(227,194,122,.3)]' : 'text-[#f4ead5]/70 hover:text-[#f3dca6]'}`}
                   data-testid={`button-ai-source-${value}`}>
@@ -478,18 +498,19 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
                 </button>
               ))}
             </div>
-            {external && (
+            {external && allowedTargets.length > 1 && (
               <div role="radiogroup" aria-label="Xarici mənbə" className="inline-flex flex-wrap gap-1" data-testid="ai-external-target">
-                {(['shamela', 'dorar', 'all'] as const).map((value) => (
-                  <button key={value} type="button" role="radio" aria-checked={source.target === value} onClick={() => changeSource({ target: value })} disabled={sending}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${source.target === value ? 'border-[#e3c27a] bg-[#e3c27a]/15 text-[#f3dca6]' : 'border-[#e3c27a]/25 text-[#f4ead5]/65 hover:border-[#e3c27a]/60'}`}
+                {allowedTargets.map((value) => (
+                  <button key={value} type="button" role="radio" aria-checked={target === value} onClick={() => changeSource({ target: value })} disabled={sending}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${target === value ? 'border-[#e3c27a] bg-[#e3c27a]/15 text-[#f3dca6]' : 'border-[#e3c27a]/25 text-[#f4ead5]/65 hover:border-[#e3c27a]/60'}`}
                     data-testid={`button-ai-target-${value}`}>
                     {TARGET_LABELS[value]}
                   </button>
                 ))}
               </div>
             )}
-            {!external && !canReadLms && <span className="text-[10px] text-[#f4ead5]/50">Akademiya məlumatları üçün «Tələbələr» icazəsi lazımdır.</span>}
+            {external && allowedTargets.length === 1 && <span className="text-[11px] font-semibold text-[#f3dca6]">{TARGET_LABELS[allowedTargets[0]]}</span>}
+            {isStaff && !external && !canReadLms && <span className="text-[10px] text-[#f4ead5]/50">Akademiya məlumatları üçün «Tələbələr» icazəsi lazımdır.</span>}
           </div>
         )}
       </header>
@@ -511,7 +532,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
         ) : (
           <ol className="space-y-4" aria-live="polite">
             {messages.map((message) => {
-              const groups = message.role === 'assistant' && isStaff ? sourceGroups(message.sources) : [];
+              const groups = message.role === 'assistant' ? sourceGroups(message.sources) : [];
               return (
                 <li key={message.id} className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
                   <div className={`max-w-[92%] whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-6 sm:max-w-[88%] ${message.role === 'user'
@@ -523,7 +544,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
                   </div>
                   {groups.length > 0 && (
                     <div className="w-full">
-                      {groups.map((group, index) => <ResearchResults key={`${group.kind}-${index}`} sources={group} getToken={getToken} heading={groups.length > 1} />)}
+                      {groups.map((group, index) => <ResearchResults key={`${group.kind}-${index}`} sources={group} getToken={getToken} heading={groups.length > 1} pageEndpoint={pageEndpoint} />)}
                     </div>
                   )}
                 </li>

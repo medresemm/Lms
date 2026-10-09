@@ -653,6 +653,70 @@ function SystemStatisticsSettings() {
   </section>;
 }
 
+type StudentAiExternalSetting = { shamela: boolean; dorar: boolean };
+
+// Sistem sahibi: tələbələr üçün Mədinə AI «Xarici» axtarışı (Şamilə / Hədis). Standart: söndürülüb.
+function StudentAiExternalSettings() {
+  const [setting, setSetting] = useState<StudentAiExternalSetting | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await fetch(apiUrl('/ai/admin/student-external'), { cache: 'no-store' });
+        const result = await response.json() as StudentAiExternalSetting & { error?: string };
+        if (!response.ok) throw new Error(result.error || 'Ayar yüklənə bilmədi.');
+        setSetting({ shamela: result.shamela === true, dorar: result.dorar === true });
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : 'Ayar yüklənə bilmədi.');
+      }
+    })();
+  }, []);
+
+  const save = async (next: StudentAiExternalSetting) => {
+    setSaving(true);
+    setNotice('');
+    try {
+      const response = await fetch(apiUrl('/ai/admin/student-external'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+      });
+      const result = await response.json() as StudentAiExternalSetting & { error?: string };
+      if (!response.ok) throw new Error(result.error || 'Ayar dəyişdirilə bilmədi.');
+      setSetting({ shamela: result.shamela === true, dorar: result.dorar === true });
+      setNotice(result.shamela || result.dorar ? 'Tələbələr Mədinə AI-da «Xarici» axtarışdan istifadə edə bilər.' : 'Tələbələr üçün «Xarici» axtarış söndürüldü.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Ayar dəyişdirilə bilmədi.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const enabled = Boolean(setting && (setting.shamela || setting.dorar));
+  const toggleClass = (on: boolean) => `focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50 ${on ? 'bg-emerald-700' : 'bg-slate-600'}`;
+  return <section className="mb-6 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.22)] p-5" data-testid="section-student-ai-external">
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="max-w-xl">
+        <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">Tələbələr üçün Mədinə AI — Xarici axtarış (Şamilə / Hədis)</p>
+        <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Açıq olduqda tələbələr Mədinə AI-da «Daxili / Xarici» keçidini görür və Şamilə kitabxanasında və ya Dorar hədis bazasında axtarış edə bilir; mətnlər AI-ın içində göstərilir. «Daxili» rejim yenə yalnız tələbənin öz məlumatları ilə işləyir. Axtarışlar saxlanmır.</p>
+      </div>
+      {setting && <button type="button" disabled={saving} onClick={() => void save(enabled ? { shamela: false, dorar: false } : { shamela: true, dorar: true })} className={toggleClass(enabled)} data-testid="button-toggle-student-ai-external">{saving ? 'Yadda saxlanır...' : enabled ? 'Tələbələr üçün açıqdır' : 'Tələbələr üçün bağlıdır'}</button>}
+    </div>
+    {setting && enabled && <div className="mt-4 flex flex-wrap gap-2">
+      {([['shamela', 'Şamilə'], ['dorar', 'Hədis (Dorar)']] as const).map(([key, label]) => (
+        <label key={key} className="inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-semibold text-[hsl(var(--primary))]">
+          <input type="checkbox" checked={setting[key]} disabled={saving} onChange={(event) => void save({ ...setting, [key]: event.target.checked })} data-testid={`checkbox-student-ai-external-${key}`} />
+          {label}
+        </label>
+      ))}
+    </div>}
+    {!setting && !notice && <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">Ayar yüklənir...</p>}
+    {notice && <p className="mt-4 text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}
+  </section>;
+}
+
 type AuditHistoryEvent = {
   id: number;
   eventType: string;
@@ -4371,7 +4435,7 @@ export function AdminPanel() {
             {tab === 'application' && <>{(owner || ownerAssistant) && <ApplicationWindowSettings />}<ApplicationList applications={applicationsQuery.data ?? []} isLoading={applicationsQuery.isLoading} busyId={decisionBusyId} onDecision={decideApplication} canDecide={!ownerAssistant} canAssignTeacher={owner || ownerAssistant} onAssignTeacher={assignApplicationTeacher} teacherBusyId={teacherBusyId} />{decisionNotice && <p className="mt-4 rounded-xl bg-[hsl(var(--secondary)/.35)] p-3 text-sm font-semibold text-[hsl(var(--secondary-foreground))]">{decisionNotice}</p>}</>}
              {tab === 'student-management' && <StudentManagementSection pendingSubjectRequestCount={pendingSubjectRequestCount} pendingExcuseCount={pendingExcuseCount} onReadExcuses={() => setReadExcuseIds(excusesQuery.data?.map((item) => item.id) ?? [])} canViewDeletedStudents={owner} canGraduate={owner} resources={resourcesQuery.data ?? []} canManageAssignments={canManageAssignments} assignmentTeacherClerkUserId={activeRole === 'teacher' || activeRole === 'admin' ? user?.id : undefined} focusStudentId={focusStudentId} />}
             {tab === 'users' && (owner || ownerAssistant) && <RoleManagement canConfigurePermissions={owner} />}
-            {tab === 'statistics' && owner && <><AnalyticsDashboard applications={applicationsQuery.data ?? []} profiles={academicProfilesQuery.data ?? []} resources={resourcesQuery.data ?? []} onRefresh={() => { void Promise.all([applicationsQuery.refetch(), academicProfilesQuery.refetch(), resourcesQuery.refetch()]); }} /><SystemStatisticsSettings /></>}
+            {tab === 'statistics' && owner && <><AnalyticsDashboard applications={applicationsQuery.data ?? []} profiles={academicProfilesQuery.data ?? []} resources={resourcesQuery.data ?? []} onRefresh={() => { void Promise.all([applicationsQuery.refetch(), academicProfilesQuery.refetch(), resourcesQuery.refetch()]); }} /><SystemStatisticsSettings /><StudentAiExternalSettings /></>}
             {tab === 'audit-history' && owner && <AuditHistory />}
             {tab === 'graduation-certificates' && (owner || ownerAssistant) && <GraduateCertificateSection canRevoke={owner} />}
             {tab === 'schedule-prep' && (owner || ownerAssistant || activeRole === 'admin') && <SchedulePrepSection />}

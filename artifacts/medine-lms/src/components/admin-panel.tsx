@@ -33,7 +33,6 @@ import {
   ClipboardCheck,
   ClipboardList,
   Paperclip,
-  Sparkles,
 } from 'lucide-react';
 import {
   Application,
@@ -134,6 +133,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useClerk, useUser } from '@clerk/react';
 import { Link, useLocation } from 'wouter';
+import { AiAssistantLauncher } from '@/components/ai-assistant';
 import { ArticlesLink, HomeLink } from '@/components/home-link';
 import { MessageCenter } from '@/components/message-center';
 import { loadUnansweredQuestionCount, QaCenter } from '@/components/qa-center';
@@ -4426,7 +4426,6 @@ export function AdminPanel() {
                   <button type="button" onClick={() => toggleTab('teachers-schedule')} className={adminTabButtonClass('teachers-schedule', tab === 'teachers-schedule')} data-testid="tab-admin-teachers-schedule"><CalendarRange size={18} /> Müəllimlər cədvəli</button>
                    <button type="button" onClick={() => toggleTab('messages')} className={adminTabButtonClass('messages', tab === 'messages')} data-testid="tab-admin-messages"><Mail size={18} /> Məsləhətləşmə / Əlaqə {unreadMessageCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unreadMessageCount}</span>}</button>
                    <button type="button" onClick={() => toggleTab('questions')} className={adminTabButtonClass('questions', tab === 'questions')} data-testid="tab-admin-questions"><HelpCircle size={18} /> Sual-cavab {unansweredQuestionCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unansweredQuestionCount}</span>}</button>
-                   {(owner || rolePermissions.has('students')) && <Link href="/ai" className={adminTabButtonClass('ai', false)} data-testid="link-admin-ai"><Sparkles size={18} /> Mədinə AI</Link>}
               </div>
              {tab === 'schedule' && <TeacherSchedule ownerName={fullName} />}
               {tab === 'teachers-schedule' && <TeachersSchedule ownerName={fullName} />}
@@ -4444,6 +4443,7 @@ export function AdminPanel() {
           </aside>
         </div>
       </main>
+      {(owner || rolePermissions.has('students')) && <AiAssistantLauncher href="/ai" />}
     </div>
   );
 }

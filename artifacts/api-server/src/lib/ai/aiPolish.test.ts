@@ -222,3 +222,17 @@ test("library page text: whole page with highlighted query words", () => {
   assert.equal(libraryPageText(book.slug, 9, "x", { books: [book], loader }), null);
   assert.equal(libraryPageText("yoxdur", 1, "x", { books: [book], loader }), null);
 });
+
+test("fetchHadithFull respects its time budget when sources hang", async () => {
+  const hanging = ((_input: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+  })) as FetchLike;
+  const started = Date.now();
+  const result = await fetchHadithFull(
+    { query: "من حسن إسلام المرء", text: "من حُسْنِ إِسْلامِ المَرْءِ …", muhaddith: "x", source: "y", page: "1" },
+    { fetchImpl: hanging, dorarBaseUrl: "https://dorar.test", shamelaUrl: "https://shamela.test/" },
+    { budgetMs: 900 },
+  );
+  assert.equal(result.status, "fragment");
+  assert.ok(Date.now() - started < 2500, `took ${Date.now() - started}ms`);
+});

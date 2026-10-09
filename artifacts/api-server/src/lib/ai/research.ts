@@ -411,15 +411,21 @@ export async function searchShamela(query: string, options: ResearchOptions = {}
 }
 
 /** Bir Şamilə səhifəsini tam açır: mətn uzundursa `next_cursor` ilə davam edir (ən çox ~40 000 simvol). */
-export async function openShamelaPage(bookId: number, pageId: number, options: ResearchOptions = {}): Promise<ShamelaItem> {
+/** Səhifənin davamı üçün ən çox bu qədər vaxt (ilk sorğudan sonra); Vercel 30 saniyə həddinə sığmaq üçün. */
+const OPEN_CONTINUATION_BUDGET_MS = 12_000;
+
+export async function openShamelaPage(bookId: number, pageId: number, options: ResearchOptions & { continuationBudgetMs?: number } = {}): Promise<ShamelaItem> {
   let result = await callShamelaTool("shamela_open", { book_id: bookId, page_id: pageId, max_chars: OPEN_PAGE_MAX_CHARS }, options);
   const [source] = readSources([result]);
   if (!source || source.bookId !== bookId) throw new ResearchUpstreamError("page not found");
   let fullText = source.text;
   let more = typeof result.next_cursor === "string" && result.next_cursor ? result.next_cursor : null;
+  const continueUntil = Date.now() + Math.min(options.continuationBudgetMs ?? OPEN_CONTINUATION_BUDGET_MS, OPEN_CONTINUATION_BUDGET_MS);
   for (let round = 0; more && fullText.length < SHAMELA_FULL_MAX_CHARS && round < 6; round += 1) {
+    const left = continueUntil - Date.now();
+    if (left < 500) break;
     try {
-      result = await callShamelaTool("shamela_open", { book_id: bookId, page_id: source.pageId, max_chars: OPEN_PAGE_MAX_CHARS, cursor: more }, options);
+      result = await callShamelaTool("shamela_open", { book_id: bookId, page_id: source.pageId, max_chars: OPEN_PAGE_MAX_CHARS, cursor: more }, { ...options, timeoutMs: Math.min(options.timeoutMs ?? DEFAULT_TIMEOUT_MS, left) });
     } catch {
       break;
     }
@@ -736,13 +742,25 @@ function excerptAround(text: string, fragmentKey: string, max = FULL_TEXT_MAX_CH
   return `${start > 0 ? "… " : ""}${text.slice(start, start + max).trim()} …`;
 }
 
-export async function fetchHadithFull(ref: DorarHadithRef, options: ResearchOptions = {}, fallback: { shamela?: boolean } = {}): Promise<HadithFullResult> {
+/** Bütün «Davamı» axtarışı üçün ümumi vaxt həddi (Vercel funksiyası 30 saniyədə kəsilir). */
+const HADITH_FULL_BUDGET_MS = 22_000;
+
+export async function fetchHadithFull(ref: DorarHadithRef, options: ResearchOptions = {}, fallback: { shamela?: boolean; budgetMs?: number } = {}): Promise<HadithFullResult> {
   const base = (options.dorarBaseUrl ?? "https://dorar.net").replace(/\/$/, "");
   const fragment = hadithFragment(ref.text);
+  const deadline = Date.now() + (fallback.budgetMs ?? HADITH_FULL_BUDGET_MS);
+  // Hər addım qalan vaxta sığmalıdır; vaxt bitibsə növbəti mənbəyə müraciət edilmir.
+  const within = (share = 1, cap = 8000): ResearchOptions | null => {
+    const left = deadline - Date.now();
+    if (left < 300) return null;
+    return { ...options, timeoutMs: Math.max(250, Math.min(options.timeoutMs ?? cap, Math.floor(left / share))) };
+  };
   let match: DorarPageHadith | null = null;
   for (const query of Array.from(new Set([ref.query, fragment].filter((value) => value && value.length >= 2)))) {
+    const stepOptions = within(1);
+    if (!stepOptions) break;
     try {
-      const html = await dorarGet(`${base}/hadith/search?q=${encodeURIComponent(query.slice(0, 200))}`, options);
+      const html = await dorarGet(`${base}/hadith/search?q=${encodeURIComponent(query.slice(0, 200))}`, stepOptions);
       match = findDorarMatch(ref, parseDorarSearchPage(html));
     } catch {
       match = null;
@@ -753,9 +771,10 @@ export async function fetchHadithFull(ref: DorarHadithRef, options: ResearchOpti
   if (match && !match.abridged) {
     return { status: "full", text: match.text.slice(0, FULL_TEXT_MAX_CHARS), sourceTitle: match.source || null, takhrij: match.takhrij || null, url: permalink };
   }
-  if (match?.id) {
+  const osoulOptions = match?.id ? within(1) : null;
+  if (match?.id && osoulOptions) {
     try {
-      const origins = parseDorarOrigins(await dorarGet(`${base}/h/${match.id}?osoul=1`, options));
+      const origins = parseDorarOrigins(await dorarGet(`${base}/h/${match.id}?osoul=1`, osoulOptions));
       if (origins.length) {
         return { status: "origin", text: origins[0].text, sourceTitle: origins[0].book || null, takhrij: match.takhrij || null, url: `${permalink}?osoul=1` };
       }
@@ -764,15 +783,17 @@ export async function fetchHadithFull(ref: DorarHadithRef, options: ResearchOpti
     }
   }
   const fragmentKey = arabicKey(fragment);
-  if (fallback.shamela !== false && fragmentKey.split(" ").length >= 2) {
+  const shamelaOptions = fallback.shamela !== false && fragmentKey.split(" ").length >= 2 ? within(2, 6000) : null;
+  if (shamelaOptions) {
     try {
-      const items = await searchShamela(fragment, options);
+      const items = await searchShamela(fragment, shamelaOptions);
       const hit = items.find((item) => arabicKey(item.text).includes(fragmentKey));
       if (hit) {
         let pageText = hit.text;
-        if (hit.truncated) {
+        const openOptions = hit.truncated ? within(1, 6000) : null;
+        if (openOptions) {
           try {
-            pageText = (await openShamelaPage(hit.bookId, hit.pageId, options)).text;
+            pageText = (await openShamelaPage(hit.bookId, hit.pageId, { ...openOptions, continuationBudgetMs: Math.max(0, deadline - Date.now() - 500) })).text;
           } catch {
             // axtarış parçası kifayət edir
           }

@@ -783,9 +783,10 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
       <div ref={scrollRef} className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3 pt-3 [overflow-anchor:none] sm:px-5 sm:pb-4 sm:pt-4 md:px-7" data-testid="ai-chat-scroll" data-ai-scroll="">
         {!hasChat ? (
           <div className="relative mx-auto mt-1 flex max-w-md flex-col items-center rounded-t-[999px] border border-b-0 border-[#e3c27a]/45 bg-[linear-gradient(180deg,rgba(227,194,122,.08),rgba(0,0,0,0)_70%)] px-5 pb-5 pt-8 text-center shadow-[inset_0_0_60px_rgba(227,194,122,.06)] sm:mt-2 sm:px-6 sm:pb-8 sm:pt-14">
-            <p className="absolute right-4 top-6 hidden max-w-[9rem] text-right font-serif text-xs italic text-[#f4ead5]/70 sm:block">“Rəbbim, elmimi artır.”<span className="mt-1 block text-[10px] not-italic text-[#f4ead5]/45">— Taha, 114</span></p>
+            {isStaff && <p className="absolute right-4 top-6 hidden max-w-[9rem] text-right font-serif text-xs italic text-[#f4ead5]/70 sm:block">“Rəbbim, elmimi artır.”<span className="mt-1 block text-[10px] not-italic text-[#f4ead5]/45">— Taha, 114</span></p>}
             <BrandTile />
             <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight text-[#f4ead5] sm:mt-6 sm:text-4xl">Mədinə <span style={{ color: gold }}>AI</span></h2>
+            {!isStaff && <p dir="rtl" className="mt-3 max-w-xs text-[15px] font-semibold leading-8 sm:text-base" style={{ color: gold, fontFamily: arabicFont }} data-testid="text-student-hadith">مَنْ يُرِدِ اللَّهُ بِهِ خَيْرًا يُفَقِّهْهُ فِي الدِّينِ</p>}
             <div className="mt-4 hidden w-full items-center gap-3 text-xs text-[#f4ead5]/80 sm:mt-5 sm:flex">
               <span className="h-px flex-1 bg-gradient-to-r from-transparent to-[#e3c27a]/50" />
               <span>Sual edin · Öyrənin · Dərinləşin</span>

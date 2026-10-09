@@ -866,22 +866,22 @@ function TermsPage() {
     <main className="grain min-h-[100dvh] bg-[hsl(var(--background))] px-5 py-7 md:px-10">
       <div className="mx-auto max-w-3xl">
         <div className="flex items-center justify-between gap-4"><BrandMark /><HomeLink /></div>
-        <article className="mt-10" data-testid="page-terms">
+        <article className="mt-8 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)] md:p-6" data-testid="page-terms">
           <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Mədinə Tədris Akademiyası</p>
-          <h1 className="mt-3 font-serif text-4xl leading-tight text-[hsl(var(--primary))] md:text-5xl">Məxfilik siyasəti və istifadə şərtləri</h1>
-          <div className="mt-8 space-y-6 text-sm leading-7 text-[hsl(var(--foreground)/.86)]">
-            <p>Akademiyaya müraciət edən və dərsə qəbul olunan hər kəs bu şərtlərlə razılaşır.</p>
+          <h1 className="mt-2 font-serif text-3xl leading-tight text-[hsl(var(--primary))]">Məxfilik siyasəti və istifadə şərtləri</h1>
+          <div className="mt-5 space-y-4 text-sm leading-6 text-[hsl(var(--foreground)/.86)]">
+            <p>Müraciət edən və dərsə qəbul olunan hər kəs bu şərtlərlə razılaşır.</p>
             <section>
-              <h2 className="font-serif text-2xl text-[hsl(var(--primary))]">Dərslərə ciddi yanaşın</h2>
-              <p className="mt-2">Dərslərə vaxtında qoşulun. Tapşırıq və testləri özünüz, vaxtında yerinə yetirin. Müəllimə və dərsə hörmətlə yanaşın. Dərs linkini başqası ilə paylaşmayın.</p>
+              <h2 className="text-sm font-bold text-[hsl(var(--primary))]">Dərslərə ciddi yanaşın</h2>
+              <p className="mt-1 text-[hsl(var(--muted-foreground))]">Dərslərə vaxtında qoşulun. Tapşırıq və testləri özünüz, vaxtında yerinə yetirin. Müəllimə və dərsə hörmətlə yanaşın. Dərs linkini başqası ilə paylaşmayın.</p>
             </section>
             <section>
-              <h2 className="font-serif text-2xl text-[hsl(var(--primary))]">Məlumatları düzgün doldurun</h2>
-              <p className="mt-2">Ad, soyad, telefon, e-poçt və doğum tarixini düzgün yazın. Tövsiyə məktublarını özünüzə aid fayl kimi yükləyin. Yanlış və ya başqasına məxsus məlumat yazmayın. Məlumat dəyişəndə akademiyaya bildirin.</p>
+              <h2 className="text-sm font-bold text-[hsl(var(--primary))]">Məlumatları düzgün doldurun</h2>
+              <p className="mt-1 text-[hsl(var(--muted-foreground))]">Ad, soyad, telefon, e-poçt və doğum tarixini düzgün yazın. Tövsiyə məktubunu özünüzə aid fayl kimi yükləyin. Yanlış və ya başqasına məxsus məlumat yazmayın.</p>
             </section>
             <section>
-              <h2 className="font-serif text-2xl text-[hsl(var(--primary))]">Məxfilik</h2>
-              <p className="mt-2">Yazdığınız məlumatlar yalnız qəbul, tədris və sizinlə əlaqə üçün istifadə olunur. Şifrəniz akademiya işçilərinə göstərilmir. Məlumatlar reklam üçün paylaşılmır. Hesabınız yalnız sizə məxsusdur, şifrəni başqasına verməyin.</p>
+              <h2 className="text-sm font-bold text-[hsl(var(--primary))]">Məxfilik</h2>
+              <p className="mt-1 text-[hsl(var(--muted-foreground))]">Məlumatlar yalnız qəbul, tədris və əlaqə üçün istifadə olunur. Şifrə işçilərə göstərilmir və reklam üçün paylaşılmır. Hesab yalnız sizə məxsusdur.</p>
             </section>
           </div>
         </article>

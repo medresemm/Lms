@@ -4360,7 +4360,7 @@ export function AdminPanel() {
       <main className="mx-auto min-w-0 max-w-6xl px-4 py-6 md:px-8">
         <div className="max-w-2xl">
           <p className="flex items-center gap-2 text-xl font-bold tracking-wide text-[hsl(var(--primary))]"><ShieldCheck size={20} /> İDARƏETMƏ SAHƏSİ</p>
-          <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{owner ? 'Akademiyanın məzmununu idarə edin və qeydiyyatdan keçmiş istifadəçilərə işçi rolları verin.' : 'Tələbələr və ziyarətçilər üçün dərsləri, elanları, məqalələri, günün faydasını və dərs resurslarını buradan əlavə edin.'}</p>
+          {!owner && <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Tələbələr və ziyarətçilər üçün dərsləri, elanları, məqalələri, günün faydasını və dərs resurslarını buradan əlavə edin.</p>}
         </div>
         <TeacherStats canEdit={owner || ownerAssistant} />
         <section className="mt-8 min-w-0 rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-[var(--shadow-sm)] sm:p-6">

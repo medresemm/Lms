@@ -165,12 +165,6 @@ const emptyCourse: CourseInput = {
   credits: 3,
   hours: 45,
 };
-const emptyCourseEdit = {
-  title: '', category: '', instructor: '', totalLessons: 0, color: 'teal',
-  description: '', curriculum: '', lessonDescription: '', nextLesson: '',
-  pdfUrl: '', telegramUrl: '', zoomUrl: '', googleMeetUrl: '', lessonUrl: '',
-  lessonDays: [] as string[], lessonTime: '', credits: 3, hours: 45,
-};
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
@@ -1870,270 +1864,6 @@ function CourseLessonCountForm() {
   );
 }
 
-function CourseContentEditor({ initialCourseId, teacherOnly = false }: { initialCourseId?: string; teacherOnly?: boolean }) {
-  const coursesQuery = useGetCourses();
-  const resourcesQuery = useGetAdminResources();
-  const teachersQuery = useGetAdminTeachers();
-  const [termNumber, setTermNumber] = useState(1);
-  const [courseId, setCourseId] = useState('');
-  const [form, setForm] = useState(emptyCourseEdit);
-  const [notice, setNotice] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isAddingTeacher, setIsAddingTeacher] = useState(false);
-  const [newTeacherId, setNewTeacherId] = useState('');
-  const [teacherCourseIds, setTeacherCourseIds] = useState<number[] | null>(teacherOnly ? null : []);
-  const [teacherCoursesError, setTeacherCoursesError] = useState('');
-  const queryClient = useQueryClient();
-  const teacherCoursesLoading = teacherOnly && teacherCourseIds === null;
-
-  useEffect(() => {
-    if (!teacherOnly) return;
-    setTeacherCoursesError('');
-    setTeacherCourseIds(null);
-    void fetch(apiUrl(`/admin/teacher-courses?termNumber=${termNumber}`))
-      .then((response) => response.ok ? response.json() as Promise<Array<{ id: number }>> : response.json().then((result: { error?: string }) => Promise.reject(new Error(result.error || 'Müəllim dərsləri yüklənə bilmədi.'))))
-      .then((courses) => setTeacherCourseIds(courses.map((course) => course.id)))
-      .catch((error) => {
-        setTeacherCourseIds([]);
-        setTeacherCoursesError(error instanceof Error ? error.message : 'Müəllim dərsləri yüklənə bilmədi.');
-      });
-  }, [teacherOnly, termNumber]);
-
-  const termCourseIds = new Set((resourcesQuery.data ?? []).filter((resource) => resource.termNumber === termNumber).map((resource) => resource.courseId));
-  const availableCourses = (coursesQuery.data ?? [])
-    .filter((course) => termCourseIds.has(course.id))
-    .filter((course) => !teacherOnly || teacherCourseIds?.includes(course.id));
-  const selectedCourseTeacherIds = new Set(
-    (resourcesQuery.data ?? [])
-      .filter((resource) => resource.termNumber === termNumber && String(resource.courseId) === courseId && resource.teacherClerkUserId)
-      .map((resource) => resource.teacherClerkUserId),
-  );
-  const availableCourseTeachers = (teachersQuery.data ?? []).filter((teacher) => selectedCourseTeacherIds.has(teacher.clerkUserId));
-  const availableAdditionalTeachers = (teachersQuery.data ?? []).filter((teacher) => !selectedCourseTeacherIds.has(teacher.clerkUserId));
-
-  const changeTerm = (value: string) => {
-    setTermNumber(Number(value));
-    setCourseId('');
-    setForm(emptyCourseEdit);
-    setNotice('');
-  };
-
-  const loadCourse = async (value: string) => {
-    setCourseId(value);
-    setNotice('');
-    if (!value) {
-      setForm(emptyCourseEdit);
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const response = await fetch(apiUrl(`/admin/courses/${value}`));
-      const course = await response.json() as {
-        title?: string; category?: string; instructor?: string; totalLessons?: number; color?: string; credits?: number; hours?: number;
-        description?: string; curriculum?: string[]; lessonDescription?: string; nextLesson?: string | null;
-        pdfUrl?: string | null; telegramUrl?: string | null; zoomUrl?: string | null; googleMeetUrl?: string | null; lessonUrl?: string | null; lessonDays?: string[]; lessonTime?: string | null; error?: string;
-      };
-      if (!response.ok) throw new Error(course.error || 'Dərs məlumatları yüklənə bilmədi.');
-      setForm({
-        title: course.title ?? '',
-        category: course.category ?? '',
-        instructor: course.instructor ?? '',
-        totalLessons: course.totalLessons ?? 0,
-        credits: course.credits ?? 3,
-        hours: course.hours ?? 45,
-        color: course.color ?? 'teal',
-        description: course.description ?? '',
-        curriculum: course.curriculum?.join('\n') ?? '',
-        lessonDescription: course.lessonDescription ?? '',
-         lessonDays: course.lessonDays ?? [],
-         lessonTime: course.lessonTime ?? '',
-        nextLesson: course.nextLesson ?? '',
-        pdfUrl: course.pdfUrl ?? '',
-        telegramUrl: course.telegramUrl ?? '',
-        zoomUrl: course.zoomUrl ?? '',
-        googleMeetUrl: course.googleMeetUrl ?? '',
-        lessonUrl: course.lessonUrl ?? '',
-      });
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Dərs məlumatları yüklənə bilmədi.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (initialCourseId) void loadCourse(initialCourseId);
-  }, [initialCourseId]);
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setNotice('');
-    setIsSaving(true);
-    try {
-      const response = await fetch(apiUrl(`/admin/courses/${courseId}`), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: form.title,
-          category: form.title,
-          instructor: form.instructor,
-          totalLessons: form.totalLessons,
-          credits: form.credits,
-          hours: form.hours,
-          color: form.color,
-          description: form.description,
-          curriculum: form.curriculum.split('\n'),
-          lessonDescription: form.lessonDescription,
-          nextLesson: form.nextLesson || null,
-          pdfUrl: form.pdfUrl || null,
-          telegramUrl: form.telegramUrl || null,
-          zoomUrl: form.zoomUrl || null,
-          googleMeetUrl: form.googleMeetUrl || null,
-          lessonUrl: form.lessonUrl || null,
-           lessonDays: form.lessonDays,
-           lessonTime: form.lessonTime || null,
-        }),
-      });
-      const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Dərs mətnləri yadda saxlanıla bilmədi.');
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getGetCoursesQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() }),
-      ]);
-      setNotice('Dərs mətnləri uğurla yeniləndi.');
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Dərs mətnləri yadda saxlanıla bilmədi.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const addTeacherToCourse = async () => {
-    if (!courseId || !newTeacherId) return;
-    const teacher = teachersQuery.data?.find((item) => item.clerkUserId === newTeacherId);
-    if (!teacher) return;
-    setIsAddingTeacher(true);
-    setNotice('');
-    try {
-      const response = await fetch(apiUrl('/admin/resources'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          courseId: Number(courseId),
-          termNumber,
-          kind: ResourceInputKind.material,
-          title: form.title,
-          body: form.description,
-          url: form.pdfUrl || null,
-          lessonDays: form.lessonDays,
-          lessonTime: form.lessonTime || null,
-          isMandatory: true,
-          teacherClerkUserId: teacher.clerkUserId,
-          studentCapacity: 0,
-        }),
-      });
-      const result = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Müəllim bu dərsə əlavə edilə bilmədi.');
-      setNewTeacherId('');
-      setNotice(`${teacher.displayName} müəllimi ${termNumber}-ci semestr üzrə dərsə əlavə edildi.`);
-      await queryClient.invalidateQueries({ queryKey: getGetAdminResourcesQueryKey() });
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Müəllim dərsə əlavə edilə bilmədi.');
-    } finally {
-      setIsAddingTeacher(false);
-    }
-  };
-
-  return (
-    <form onSubmit={submit} className="mt-8 border-t border-[hsl(var(--border))] pt-6" data-testid="form-edit-course-content">
-      <div className="mb-4">
-        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Dərs məzmununu redaktə et</p>
-        <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Mövcud dərsi redaktə et</h3>
-      </div>
-      <Field label="Semestr">
-        <select required className={inputClass} value={termNumber} onChange={(event) => changeTerm(event.target.value)} disabled={resourcesQuery.isLoading} data-testid="select-edit-course-term">
-          {Array.from({ length: 8 }, (_, index) => index + 1).map((term) => <option key={term} value={term}>{term}-ci semestr</option>)}
-        </select>
-      </Field>
-      {!initialCourseId && <Field label="Dərs seçin">
-        {teacherCoursesLoading || resourcesQuery.isLoading ? <p className="rounded-xl border border-dashed border-[hsl(var(--border))] px-3.5 py-3 text-sm text-[hsl(var(--muted-foreground))]">Dərslər yüklənir...</p> : teacherCoursesError ? <p className="rounded-xl border border-[hsl(var(--destructive)/.25)] bg-[hsl(var(--destructive)/.05)] px-3.5 py-3 text-sm text-[hsl(var(--destructive))]">{teacherCoursesError}</p> : <select required className={inputClass} value={courseId} onChange={(event) => void loadCourse(event.target.value)} data-testid="select-edit-course-content">
-          <option value="">Dərs seçin</option>
-          {availableCourses.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
-        </select>}
-      </Field>}
-      {!teacherCoursesLoading && !resourcesQuery.isLoading && !teacherCoursesError && availableCourses.length === 0 && <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{termNumber}-ci semestr üçün dərs tapılmadı.</p>}
-      {courseId && (
-        <div className="mt-4 space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-             <Field label="Dərsin adı"><input required className={inputClass} value={form.title} disabled={isLoading} onChange={(event) => setForm({ ...form, title: event.target.value })} data-testid="input-edit-course-title" /></Field>
-            <Field label="Müəllimlər"><select className={inputClass} value={form.instructor} disabled={isLoading || teachersQuery.isLoading || resourcesQuery.isLoading} onChange={(event) => setForm({ ...form, instructor: event.target.value })} data-testid="select-edit-course-instructor"><option value="">Müəllim seçin</option>{availableCourseTeachers.map((teacher) => <option key={teacher.clerkUserId} value={teacher.displayName}>{teacher.displayName}</option>)}</select>
-              <div className="mt-2 flex gap-2">
-                <select className={`${inputClass} min-w-0 flex-1`} value={newTeacherId} disabled={isLoading || isAddingTeacher || teachersQuery.isLoading || resourcesQuery.isLoading} onChange={(event) => setNewTeacherId(event.target.value)} data-testid="select-add-course-teacher">
-                  <option value="">Bu semestrə başqa müəllim əlavə et</option>
-                  {availableAdditionalTeachers.map((teacher) => <option key={teacher.clerkUserId} value={teacher.clerkUserId}>{teacher.displayName}</option>)}
-                </select>
-                <button type="button" className={`${buttonClass} shrink-0 px-3`} disabled={!newTeacherId || isAddingTeacher} onClick={() => void addTeacherToCourse()} data-testid="button-add-course-teacher">{isAddingTeacher ? 'Əlavə olunur...' : 'Əlavə et'}</button>
-              </div>
-            </Field>
-            <Field label="Ümumi dərs sayı"><input required min="0" type="number" className={inputClass} value={form.totalLessons} disabled={isLoading} onChange={(event) => setForm({ ...form, totalLessons: Number(event.target.value) })} data-testid="input-edit-course-total-lessons" /></Field>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="PDF linki"><input type="url" className={inputClass} value={form.pdfUrl} disabled={isLoading} onChange={(event) => setForm({ ...form, pdfUrl: event.target.value })} /></Field>
-            <Field label="Telegram linki"><input type="url" className={inputClass} value={form.telegramUrl} disabled={isLoading} onChange={(event) => setForm({ ...form, telegramUrl: event.target.value })} /></Field>
-            <Field label="Zoom linki"><input type="url" className={inputClass} value={form.zoomUrl} disabled={isLoading} onChange={(event) => setForm({ ...form, zoomUrl: event.target.value })} /></Field>
-            <Field label="Google Meet linki"><input type="url" className={inputClass} value={form.googleMeetUrl} disabled={isLoading} onChange={(event) => setForm({ ...form, googleMeetUrl: event.target.value })} /></Field>
-          </div>
-          <div className="flex justify-end"><button type="submit" className={buttonClass} disabled={isLoading || isSaving} data-testid="button-save-course-content">{isSaving ? 'Yadda saxlanılır...' : 'Bütün dərs məlumatlarını yadda saxla'}</button></div>
-        </div>
-      )}
-      <FormNotice text={notice} error={notice.includes('bil') || notice.includes('saxlanıla')} />
-    </form>
-  );
-}
-
-function CourseCatalog({ onEdit }: { onEdit: (courseId: string) => void }) {
-  const coursesQuery = useGetCourses();
-  const queryClient = useQueryClient();
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const deleteCourse = async (courseId: number, title: string) => {
-    if (!window.confirm(`“${title}” dərsini və ona bağlı material, qiymət və davamiyyət məlumatlarını silmək istəyirsiniz?`)) return;
-    setDeletingId(courseId);
-    const response = await fetch(apiUrl(`/admin/courses/${courseId}`), { method: 'DELETE' });
-    if (response.ok) await queryClient.invalidateQueries({ queryKey: getGetCoursesQueryKey() });
-    setDeletingId(null);
-  };
-  return (
-    <div className="mb-8 border-b border-[hsl(var(--border))] pb-7" data-testid="section-admin-course-catalog">
-      <div className="mb-4 flex items-end justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Akademiyanın dərsləri</p>
-          <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Mövcud dərslər</h3>
-        </div>
-        <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">{coursesQuery.data?.length ?? 0} dərs</span>
-      </div>
-      {coursesQuery.isLoading ? (
-        <p className="rounded-xl bg-[hsl(var(--muted)/.45)] p-4 text-xs text-[hsl(var(--muted-foreground))]">Dərslər yüklənir...</p>
-      ) : coursesQuery.data?.length ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {coursesQuery.data.map((course) => (
-            <article key={course.id} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.3)] p-4 transition hover:-translate-y-0.5 hover:border-[hsl(var(--secondary-foreground)/.45)] hover:shadow-[var(--shadow-sm)]" data-testid={`admin-course-${course.id}`}>
-              <button type="button" onClick={() => onEdit(String(course.id))} className="w-full text-left"><p className="font-serif text-lg text-[hsl(var(--primary))]">{course.title}</p>
-              <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{course.instructor || 'Müəllim təyin edilməyib'}</p>
-              <p className="mt-3 text-[11px] font-semibold text-[hsl(var(--secondary-foreground))]">0 / {course.totalLessons} dərs · tələbə irəliləyişi başlanmayıb</p>
-              <p className="mt-3 text-[11px] font-bold text-[hsl(var(--primary))]">Redaktə etmək üçün kliklə</p>
-              </button>
-              <button type="button" onClick={() => void deleteCourse(course.id, course.title)} disabled={deletingId === course.id} className="mt-3 rounded-lg border border-[hsl(var(--destructive)/.3)] px-3 py-2 text-xs font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.08)] disabled:opacity-50" data-testid={`button-delete-course-${course.id}`}>{deletingId === course.id ? 'Silinir...' : 'Dərsi sil'}</button>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-4 text-xs text-[hsl(var(--muted-foreground))]">Hələ dərs əlavə edilməyib.</p>
-      )}
-    </div>
-  );
-}
-
 function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: () => void; teacherOnly?: boolean; teacherName?: string }) {
   type ResourceStudent = { profileId: number; studentNumber: number; firstName: string; lastName: string };
   const coursesQuery = useGetCourses();
@@ -2411,7 +2141,7 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
           const courseUpdateResult = await courseUpdateResponse.json().catch(() => ({})) as { error?: string };
           if (!courseUpdateResponse.ok) throw new Error(courseUpdateResult.error || 'Dərs linkləri yadda saxlanıla bilmədi.');
         }
-        const data = { courseId, termNumber: form.termNumber, kind: form.kind, title: form.title, body: form.body, url: resourceUrl, lessonDays: form.lessonDays, lessonTime: form.lessonTime, isMandatory: form.isMandatory, teacherClerkUserId, studentCapacity: form.studentCapacity };
+        const data = { courseId, termNumber: form.termNumber, kind: form.kind, title: form.title.trim() || 'Dərs', body: form.body.trim() || 'Cədvəl dərsi', url: resourceUrl, lessonDays: form.lessonDays, lessonTime: form.lessonTime, isMandatory: form.isMandatory, teacherClerkUserId, studentCapacity: form.studentCapacity };
        let savedResourceId = editingId;
        if (editingId === null) {
          const createdResource = await mutation.mutateAsync({ data });
@@ -2546,9 +2276,9 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
         </Field>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-       <Field label="Dərsin kitab adı"><input required className={inputClass} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Məsələn, Təcvid qaydaları" data-testid="input-resource-title" /></Field>
+       <Field label="Kitab adı" hint="İstəyə bağlıdır."><input className={inputClass} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Məsələn, Təcvid qaydaları" data-testid="input-resource-title" /></Field>
       </div>
-      <Field label="Müəllif və kitab məlumatı"><textarea required rows={6} className={`${inputClass} resize-y`} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="Müəllif, nəşriyyat, nəşr ili və digər məlumatlar." data-testid="textarea-resource-body" /></Field>
+      <Field label="Müəllif və kitab məlumatı" hint="İstəyə bağlıdır. Boş saxlasanız cədvəl yenə də yaranır."><textarea rows={4} className={`${inputClass} resize-y`} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="Müəllif, nəşriyyat, nəşr ili və digər məlumatlar." data-testid="textarea-resource-body" /></Field>
        <Field label="PDF faylı yüklə" hint="PDF seçin; maksimum 25 MB. Link yazmaq əvəzinə birbaşa fayl yükləyə bilərsiniz."><input ref={pdfInput} type="file" accept="application/pdf,.pdf" className="block w-full cursor-pointer text-sm file:mr-4 file:rounded-xl file:border-0 file:bg-[hsl(var(--primary))] file:px-4 file:py-2.5 file:text-xs file:font-black file:text-[hsl(var(--primary-foreground))] file:transition hover:file:bg-[hsl(var(--primary)/.85)]" onChange={(e) => { const file = e.target.files?.[0] ?? null; if (file && (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf'))) { setNotice('Yalnız PDF faylı seçə bilərsiniz.'); e.target.value = ''; return; } if (file && file.size > 25 * 1024 * 1024) { setNotice('PDF faylı 25 MB-dan böyük ola bilməz.'); e.target.value = ''; return; } setPdfFile(file); }} data-testid="input-resource-pdf-file" />{pdfFile && <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{pdfFile.name}</p>}</Field>
        <div className="grid gap-4 sm:grid-cols-2">
          <Field label="PDF linki"><input type="url" className={inputClass} value={courseLinks.pdfUrl} onChange={(e) => setCourseLinks((current) => ({ ...current, pdfUrl: e.target.value }))} placeholder="https://" data-testid="input-resource-pdf-url" /></Field>
@@ -3666,7 +3396,7 @@ const individualPermissionRole = (user: AdminUser): IndividualPermissionRole | n
   user.role === 'teacher' || user.role === 'supervisor' || user.role === 'owner_assistant' ? user.role : null;
 
 const adminTabButtonClass = (value: string, active: boolean) =>
-  `focus-ring inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition ${active ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`;
+  `focus-ring inline-flex max-w-full items-center gap-2 whitespace-normal rounded-xl px-3 py-2.5 text-left text-xs font-bold transition ${active ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`;
 
 function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: boolean }) {
   const usersQuery = useGetAdminUsers({ query: { queryKey: getGetAdminUsersQueryKey() } });
@@ -4246,20 +3976,20 @@ function AdminGlobalSearch({ onSelectStudent }: { onSelectStudent: (profileId: n
     <button type="button" onClick={() => setOpen(true)} className="focus-ring inline-flex shrink-0 items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-2.5 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] sm:px-3" data-testid="button-open-admin-search" aria-label="Qlobal axtarış">
       <Search size={15} /><span className="hidden sm:inline">Axtar</span><kbd className="hidden rounded bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[10px] font-semibold text-[hsl(var(--muted-foreground))] sm:inline">Ctrl K</kbd>
     </button>
-    {open && <div className="fixed inset-0 z-[70] bg-[hsl(var(--primary)/.45)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Qlobal axtarış" data-testid="admin-global-search">
-      <div className="mx-auto mt-[10vh] max-w-2xl overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-[var(--shadow-lg)]">
-        <div className="flex items-center gap-3 border-b border-[hsl(var(--border))] px-4">
+    {open && <div className="fixed inset-0 z-[70] overflow-y-auto bg-[hsl(var(--primary)/.45)] p-3 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-label="Qlobal axtarış" data-testid="admin-global-search">
+      <div className="mx-auto mt-4 w-full max-w-2xl overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-[var(--shadow-lg)] sm:mt-[10vh]">
+        <div className="flex items-center gap-2 border-b border-[hsl(var(--border))] px-3 sm:gap-3 sm:px-4">
           <Search size={18} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
           <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent py-4 text-sm font-semibold outline-none" placeholder="Tələbə, müraciət və ya dərs axtar..." data-testid="input-admin-global-search" />
-          <button type="button" onClick={() => setOpen(false)} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Axtarışı bağla"><X size={18} /></button>
+          <button type="button" onClick={() => setOpen(false)} className="focus-ring shrink-0 rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Axtarışı bağla"><X size={18} /></button>
         </div>
         <div className="max-h-[55vh] overflow-y-auto p-3">
           {!query.trim() && <p className="p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">Axtarış üçün ən azı iki simvol yazın.</p>}
           {query.trim().length >= 2 && loading && <p className="p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">Axtarılır...</p>}
           {query.trim().length >= 2 && !loading && !results.length && <p className="p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">Uyğun nəticə tapılmadı.</p>}
-          {results.map((result) => <button key={result.id} type="button" onClick={() => { if (result.kind === 'student' && result.profileId) onSelectStudent(result.profileId); setOpen(false); }} className="focus-ring flex w-full items-start gap-3 rounded-xl p-3 text-left hover:bg-[hsl(var(--muted)/.55)]" data-testid={`admin-search-result-${result.kind}`}>
-            <span className="mt-0.5 rounded-lg bg-[hsl(var(--secondary)/.65)] px-2 py-1 text-[10px] font-black uppercase text-[hsl(var(--secondary-foreground))]">{result.kind === 'student' ? 'Tələbə' : result.kind === 'application' ? 'Müraciət' : 'Dərs'}</span>
-            <span className="min-w-0"><span className="block truncate text-sm font-bold text-[hsl(var(--primary))]">{result.title}</span><span className="mt-1 block truncate text-xs text-[hsl(var(--muted-foreground))]">{result.subtitle}</span></span>
+          {results.map((result) => <button key={result.id} type="button" onClick={() => { if (result.kind === 'student' && result.profileId) onSelectStudent(result.profileId); setOpen(false); }} className="focus-ring flex w-full min-w-0 items-start gap-3 rounded-xl p-3 text-left hover:bg-[hsl(var(--muted)/.55)]" data-testid={`admin-search-result-${result.kind}`}>
+            <span className="mt-0.5 shrink-0 rounded-lg bg-[hsl(var(--secondary)/.65)] px-2 py-1 text-[10px] font-black uppercase text-[hsl(var(--secondary-foreground))]">{result.kind === 'student' ? 'Tələbə' : result.kind === 'application' ? 'Müraciət' : 'Dərs'}</span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-[hsl(var(--primary))]">{result.title}</span><span className="mt-1 block truncate text-xs text-[hsl(var(--muted-foreground))]">{result.subtitle}</span></span>
           </button>)}
         </div>
       </div>
@@ -4362,23 +4092,23 @@ export function AdminPanel() {
   };
 
   return (
-    <div className="grain min-h-[100dvh] bg-[hsl(var(--background))]">
-      <header className="border-b border-[hsl(var(--border))] bg-[hsl(var(--card)/.9)] px-5 py-5 md:px-10">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-          <Link href="/user-portal" className="focus-ring flex items-center gap-3 rounded-xl" data-testid="link-admin-back">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[13px] bg-[hsl(var(--accent))] font-serif text-xl font-bold text-[hsl(var(--primary))] shadow-[0_7px_0_hsl(37_83%_52%)]">M</div>
-             <div><p className="text-[11px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Mədinə</p><p className="font-serif text-[17px] leading-none text-[hsl(var(--primary))]">{owner ? 'Sahib paneli' : ownerAssistant ? 'Sahib köməkçisi paneli' : activeRole === 'supervisor' ? 'Nəzarətçi paneli' : 'Müəllim paneli'}</p></div>
+    <div className="grain min-h-[100dvh] overflow-x-hidden bg-[hsl(var(--background))]">
+      <header className="border-b border-[hsl(var(--border))] bg-[hsl(var(--card)/.9)] px-4 py-4 md:px-10">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
+          <Link href="/user-portal" className="focus-ring flex min-w-0 max-w-full items-center gap-3 rounded-xl" data-testid="link-admin-back">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] bg-[hsl(var(--accent))] font-serif text-xl font-bold text-[hsl(var(--primary))] shadow-[0_7px_0_hsl(37_83%_52%)]">M</div>
+             <div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Mədinə</p><p className="truncate font-serif text-base leading-none text-[hsl(var(--primary))] sm:text-[17px]">{owner ? 'Sahib paneli' : ownerAssistant ? 'Sahib köməkçisi paneli' : activeRole === 'supervisor' ? 'Nəzarətçi paneli' : 'Müəllim paneli'}</p></div>
           </Link>
-          <div className="flex shrink-0 flex-nowrap items-center gap-1 sm:gap-2">
-            <HomeLink />
-            <ArticlesLink />
+          <div className="flex max-w-full flex-wrap items-center justify-end gap-1 sm:gap-2">
+            <HomeLink compact />
+            <ArticlesLink compact />
              <AdminGlobalSearch onSelectStudent={(profileId) => { setFocusStudentId(profileId); setTab('student-management'); }} />
-             <span className="hidden text-xs font-semibold text-[hsl(var(--muted-foreground))] sm:block">{owner ? 'N1 · ' : ownerAssistant ? 'NK1 · ' : ''}{displayName}</span>
-             <button type="button" onClick={onLogout} className="focus-ring inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-2.5 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--muted))] sm:px-3" data-testid="button-admin-logout"><LogOut size={15} /> Çıxış</button>
+             <span className="hidden max-w-40 truncate text-xs font-semibold text-[hsl(var(--muted-foreground))] sm:block">{owner ? 'N1 · ' : ownerAssistant ? 'NK1 · ' : ''}{displayName}</span>
+             <button type="button" onClick={onLogout} className="focus-ring inline-flex items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--muted))] sm:px-3" aria-label="Çıxış" data-testid="button-admin-logout"><LogOut size={15} /> <span className="hidden sm:inline">Çıxış</span></button>
           </div>
         </div>
       </header>
-       <div className="mx-auto max-w-6xl px-5 pt-6 md:px-10">
+       <div className="mx-auto min-w-0 max-w-6xl px-4 pt-6 md:px-10">
          <section className="flex flex-wrap items-center gap-x-8 gap-y-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)]" data-testid="section-admin-account">
            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[hsl(var(--accent)/.45)] font-serif text-xl font-bold text-[hsl(var(--primary))]">{accountCode}</div>
            <div>
@@ -4395,14 +4125,14 @@ export function AdminPanel() {
            </div>
          </section>
        </div>
-      <main className="mx-auto max-w-6xl px-5 py-8 md:px-10 md:py-12">
+      <main className="mx-auto min-w-0 max-w-6xl px-4 py-8 md:px-10 md:py-12">
         <div className="max-w-2xl">
           <p className="flex items-center gap-2 text-2xl font-bold text-[hsl(var(--primary))]"><ShieldCheck size={22} /> İDARƏETMƏ SAHƏSİ</p>
           <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{owner ? 'Akademiyanın məzmununu idarə edin və qeydiyyatdan keçmiş istifadəçilərə işçi rolları verin.' : 'Tələbələr və ziyarətçilər üçün dərsləri, elanları, məqalələri, günün faydasını və dərs resurslarını buradan əlavə edin.'}</p>
         </div>
         <TeacherStats canEdit={owner || ownerAssistant} />
-        <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <section className="rounded-[26px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-sm)] md:p-7">
+        <div className="mt-10 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="min-w-0 rounded-[26px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-[var(--shadow-sm)] sm:p-5 md:p-7">
            <h2 className="mb-5 font-serif text-3xl leading-none tracking-[-.03em] text-[hsl(var(--primary))] md:text-4xl">İdarə paneli</h2>
             <div className="mb-7 flex flex-wrap gap-2 border-b border-[hsl(var(--border))] pb-4">
                   {([['announcement', 'Yeni elan', Megaphone, 'announcements'], ['student-notifications', 'Tələbələrə bildiriş', Send, 'announcements'], ['article', 'Məqalə', BookOpenText, 'articles'], ['benefit', 'Günün faydası', Quote, 'dailyBenefits'], ['student-management', 'Tələbələri idarə et', UsersRound, 'students'], ['application', 'Müraciətlər', UsersRound, 'applications'], ['exams', 'İmtahan və testlər', ClipboardList, 'assignments'], ['course-content', 'Tədris proqramı', BookOpenText, 'schedule'], ['users', 'İstifadəçi rolları', UserCog, 'userRoleManagement'], ['course-activation', 'Dərsləri idarə et', BookOpen, 'schedule'], ['statistics', 'Statistika', UsersRound, null], ['audit-history', 'Audit tarixçəsi', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <button key={value} type="button" onClick={() => toggleTab(value)} className={adminTabButtonClass(value, tab === value)} data-testid={`tab-admin-${value}`}><Icon size={15} /> {label} {value === 'application' && pendingApplicationCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</button>)}
@@ -4411,7 +4141,7 @@ export function AdminPanel() {
               {tab === 'student-notifications' && rolePermissions.has('announcements') && <StudentNotificationForm />}
               {tab === 'exams' && canManageAssignments && <AdminExamsSection resources={resourcesQuery.data ?? []} teacherClerkUserId={activeRole === 'teacher' || activeRole === 'admin' ? user?.id : undefined} owner={owner} />}
             {tab === 'course-activation' && (owner || ownerAssistant) && <CourseActivationSettings />}
-               {tab === 'course-content' && canEditCourseContent && <div className="space-y-8" data-testid="section-course-content-management"><section><div className="mb-4"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Dərs idarəetməsi</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Semestr cədvəli</h3><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hər semestr üçün fənni, günü və saatı yazın. Eyni fənnə bir neçə müəllim əlavə etmək olar. Bu cədvəl tələbənin «Dərs Cədvəlim» bölməsində görünür.</p></div><ResourceForm teacherOnly={activeRole === 'teacher' || activeRole === 'admin'} teacherName={fullName} onSaved={() => setLocation('/admin')} /></section>{activeRole !== 'teacher' && <CourseContentEditor teacherOnly={!owner && !ownerAssistant} />}</div>}
+               {tab === 'course-content' && canEditCourseContent && <div className="space-y-8" data-testid="section-course-content-management"><section><div className="mb-4"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Dərs idarəetməsi</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Semestr cədvəli</h3><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hər semestr üçün fənni, günü və saatı yazın. Eyni fənnə bir neçə müəllim əlavə edin və tələbələri qrupa seçin. Tələbə yalnız öz qrupunu görür.</p></div><ResourceForm teacherOnly={activeRole === 'teacher'} teacherName={fullName} onSaved={() => setLocation('/admin')} /></section></div>}
               {tab === 'announcement' && <><button type="button" onClick={() => setIsAnnouncementListOpen((current) => !current)} aria-expanded={isAnnouncementListOpen} className="focus-ring mb-5 inline-flex items-center gap-2.5 rounded-xl border border-[hsl(var(--border))] px-5 py-3.5 text-sm font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-existing-announcements"><Megaphone size={18} /> Mövcud elanlar</button>{isAnnouncementListOpen && <AnnouncementList />}<AnnouncementForm onSaved={() => setLocation('/admin')} /></>}
             {tab === 'article' && <ArticleForm />}
             {tab === 'benefit' && <DailyBenefitForm />}

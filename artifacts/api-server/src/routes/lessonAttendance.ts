@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Response } from "express";
 import { getAuth } from "@clerk/express";
-import { and, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import {
   applicationsTable,
   coursesTable,
@@ -27,6 +27,8 @@ import {
   parsePlatform,
   recentSessionDates,
   resolveConfirmation,
+  resolveRollCallMarks,
+  rollCallDefaultStatus,
   resolveMeetingUrl,
   rosterForResource,
   sessionSummary,
@@ -366,6 +368,174 @@ router.post("/admin/attendance/lesson-sessions/:resourceId/:date/confirm", requi
       notifyOwner: false,
     });
     res.json({ ...(await sessionDetail(loaded.resource, loaded.date)), written: writes.length });
+  } catch (error) { next(error); }
+});
+
+// ---------------------------------------------------------------------------
+// Yoxlama (roll-call): yuxarıda dərs + tarix seçilir, dərsin tələbələri sətir-sətir işarələnir və
+// hamısı bir dəfəyə yazılır. İlkin işarələr onlayn qoşulma məlumatından gəlir (girib → iştirak,
+// girməyib → qayıb); mövcud yekun qeyd üstündür. Müəllim yalnız özünə təyin olunmuş dərsləri,
+// sahib / admin / nəzarətçi / idarə heyəti (davamiyyət icazəsi ilə) bütün dərsləri görür.
+// Yol "/attendance" ehtiva edir, ona görə requireTeacher "attendance" icazəsini yoxlayır.
+// ---------------------------------------------------------------------------
+
+async function rollCallAccess(userId: string) {
+  const clerkUser = await getClerkUser(userId);
+  const owner = await userIsSystemOwner(userId, clerkUser);
+  const role = metadataRole(clerkUser?.publicMetadata);
+  return { clerkUser, all: owner || (role !== null && role !== "teacher") };
+}
+
+async function loadRollCallResource(req: { params: Record<string, unknown> }, res: Response, userId: string) {
+  const resourceId = Number(req.params.resourceId);
+  const date = typeof req.params.date === "string" ? req.params.date : "";
+  if (!Number.isInteger(resourceId) || resourceId <= 0 || !isIsoDate(date)) {
+    res.status(400).json({ error: "Dərs və tarix düzgün seçilməyib." });
+    return null;
+  }
+  if (date > academyToday().date) {
+    res.status(400).json({ error: "Gələcək tarix üçün davamiyyət yazmaq olmaz." });
+    return null;
+  }
+  const [resource] = await db.select().from(resourcesTable).where(eq(resourcesTable.id, resourceId)).limit(1);
+  if (!resource) { res.status(404).json({ error: "Dərs tapılmadı." }); return null; }
+  const access = await rollCallAccess(userId);
+  if (!access.all && resource.teacherClerkUserId !== userId) {
+    res.status(403).json({ error: "Bu dərsin davamiyyətini yalnız məsul müəllim və ya rəhbərlik idarə edə bilər." });
+    return null;
+  }
+  return { resource, date, access };
+}
+
+async function rollCallDetail(resource: ResourceRow, date: string) {
+  const detail = await sessionDetail(resource, date);
+  const profileIds = detail.rows.map((row) => row.profileId);
+  const history = profileIds.length
+    ? await db.select({ profileId: studentAttendanceRecordsTable.profileId, attendanceDate: studentAttendanceRecordsTable.attendanceDate, status: studentAttendanceRecordsTable.status })
+      .from(studentAttendanceRecordsTable)
+      .where(and(eq(studentAttendanceRecordsTable.courseId, resource.courseId), inArray(studentAttendanceRecordsTable.profileId, profileIds)))
+      .orderBy(desc(studentAttendanceRecordsTable.attendanceDate))
+    : [];
+  const weekday = weekdayOf(date);
+  return {
+    ...detail,
+    lessonDays: resource.lessonDays,
+    scheduled: resource.lessonDays.includes(weekday) && Boolean(lessonTimeForDay(resource.lessonTime, weekday)),
+    rows: detail.rows
+      .map((row) => {
+        const own = history.filter((item) => item.profileId === row.profileId);
+        return {
+          ...row,
+          defaultStatus: rollCallDefaultStatus(row),
+          absenceCount: own.filter((item) => item.status === "absent").length,
+          history: own.slice(0, 8).map(({ attendanceDate, status }) => ({ attendanceDate, status })),
+        };
+      })
+      .sort((a, b) => Number(b.joined) - Number(a.joined) || a.studentName.localeCompare(b.studentName, "az")),
+  };
+}
+
+router.get("/admin/attendance/roll-call/lessons", requireTeacher, async (req, res, next) => {
+  try {
+    const userId = getAuth(req).userId!;
+    const access = await rollCallAccess(userId);
+    const resources = (await db.select().from(resourcesTable)).filter((resource) => access.all || resource.teacherClerkUserId === userId);
+    if (!resources.length) { res.json([]); return; }
+    const since = (() => {
+      const [year, month, day] = academyToday().date.split("-").map(Number);
+      return new Date(Date.UTC(year, month - 1, day - SESSION_LOOKBACK_DAYS)).toISOString().slice(0, 10);
+    })();
+    const resourceIds = resources.map((resource) => resource.id);
+    const courseIds = Array.from(new Set(resources.map((resource) => resource.courseId)));
+    const [allResources, students, courses, joins, records] = await Promise.all([
+      db.select().from(resourcesTable).where(inArray(resourcesTable.courseId, courseIds)),
+      studentRosterData(),
+      db.select({ id: coursesTable.id, title: coursesTable.title }).from(coursesTable).where(inArray(coursesTable.id, courseIds)),
+      db.select().from(lessonJoinEventsTable).where(and(inArray(lessonJoinEventsTable.resourceId, resourceIds), gte(lessonJoinEventsTable.sessionDate, since))),
+      db.select().from(studentAttendanceRecordsTable).where(and(inArray(studentAttendanceRecordsTable.courseId, courseIds), gte(studentAttendanceRecordsTable.attendanceDate, since))),
+    ]);
+    const teacherIds = Array.from(new Set(resources.map((resource) => resource.teacherClerkUserId).filter((id): id is string => Boolean(id))));
+    const teacherNames = await teacherNameMap(teacherIds);
+    const lessons = resources
+      .filter((resource) => courses.some((course) => course.id === resource.courseId))
+      .map((resource) => {
+        const rosterIds = rosterForResource(resource, allResources, students);
+        const recentSessions = recentSessionDates(resource).map((date) => {
+          const sessionJoins = joins.filter((join) => join.resourceId === resource.id && join.sessionDate === date);
+          const ids = new Set(rosterIds);
+          for (const join of sessionJoins) ids.add(join.profileId);
+          const rows = buildSessionRows(
+            students.filter((student) => ids.has(student.profileId)).map(({ profileId, studentName, studentNumber }) => ({ profileId, studentName, studentNumber })),
+            sessionJoins,
+            records.filter((record) => record.courseId === resource.courseId && record.attendanceDate === date && ids.has(record.profileId)),
+          );
+          return { sessionDate: date, summary: sessionSummary(rows) };
+        });
+        return {
+          resourceId: resource.id,
+          courseId: resource.courseId,
+          courseTitle: courses.find((course) => course.id === resource.courseId)?.title ?? "Naməlum fənn",
+          title: resource.title,
+          teacherName: resource.teacherClerkUserId ? teacherNames.get(resource.teacherClerkUserId) ?? null : null,
+          termNumber: resource.termNumber,
+          lessonDays: resource.lessonDays,
+          lessonTime: resource.lessonTime,
+          studentCount: rosterIds.length,
+          recentSessions,
+        };
+      })
+      .sort((a, b) => a.termNumber - b.termNumber || a.courseTitle.localeCompare(b.courseTitle, "az") || a.resourceId - b.resourceId);
+    res.setHeader("Cache-Control", "no-store");
+    res.json(lessons);
+  } catch (error) { next(error); }
+});
+
+router.get("/admin/attendance/roll-call/:resourceId/:date", requireTeacher, async (req, res, next) => {
+  try {
+    const loaded = await loadRollCallResource(req, res, getAuth(req).userId!);
+    if (!loaded) return;
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await rollCallDetail(loaded.resource, loaded.date));
+  } catch (error) { next(error); }
+});
+
+router.post("/admin/attendance/roll-call/:resourceId/:date", requireTeacher, async (req, res, next) => {
+  try {
+    const userId = getAuth(req).userId!;
+    const loaded = await loadRollCallResource(req, res, userId);
+    if (!loaded) return;
+    const before = await sessionDetail(loaded.resource, loaded.date);
+    const resolved = resolveRollCallMarks(before.rows.map((row) => row.profileId), req.body?.marks);
+    if ("error" in resolved) { res.status(400).json({ error: resolved.error }); return; }
+    const clerkUser = loaded.access.clerkUser;
+    const nameParts = clerkUser ? ownerDisplayNameParts(clerkUser) : null;
+    const teacherName = nameParts ? [nameParts.firstName, nameParts.lastName].filter(Boolean).join(" ") || "Akademiya müəllimi" : "Akademiya müəllimi";
+    const now = new Date().toISOString();
+    await db.transaction(async (tx) => {
+      for (const write of resolved.writes) {
+        await tx.insert(studentAttendanceRecordsTable).values({
+          profileId: write.profileId, courseId: loaded.resource.courseId, termNumber: loaded.resource.termNumber,
+          attendanceDate: loaded.date, status: write.status, teacherName, recordedAt: now,
+        }).onConflictDoUpdate({
+          target: [studentAttendanceRecordsTable.profileId, studentAttendanceRecordsTable.courseId, studentAttendanceRecordsTable.attendanceDate],
+          set: { status: write.status, teacherName, recordedAt: now, termNumber: loaded.resource.termNumber },
+        });
+      }
+    });
+    const count = (status: string) => resolved.writes.filter((write) => write.status === status).length;
+    await recordAuditEvent({
+      eventType: "attendance.roll_call.saved",
+      actorClerkUserId: userId,
+      targetType: "lesson_session",
+      targetId: `${loaded.resource.id}:${loaded.date}`,
+      details: {
+        resourceId: loaded.resource.id, courseId: loaded.resource.courseId, sessionDate: loaded.date,
+        present: count("present"), late: count("late"), absent: count("absent"), excused: count("excused"),
+      },
+      deduplicationKey: `attendance.roll_call.saved:${loaded.resource.id}:${loaded.date}:${now}`,
+      notifyOwner: false,
+    });
+    res.json({ ...(await rollCallDetail(loaded.resource, loaded.date)), written: resolved.writes.length });
   } catch (error) { next(error); }
 });
 

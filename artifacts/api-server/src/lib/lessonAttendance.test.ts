@@ -85,3 +85,22 @@ test("qoşulma linki: müəllimin aktiv qrup linki, sonra fənnin Zoom/Meet link
   assert.equal(resolveMeetingUrl(null, course, "meet"), "https://meet.google.com/abc");
   assert.equal(resolveMeetingUrl("javascript:alert(1)", { zoomUrl: null, googleMeetUrl: null, lessonUrl: null }, null), null);
 });
+
+test("yoxlama: ilkin işarə mövcud qeyd → girib (vaxtında/gec) → girməyib qayıb", async () => {
+  const { rollCallDefaultStatus } = await import("./lessonAttendance.js");
+  assert.equal(rollCallDefaultStatus({ finalStatus: "excused", joined: true, punctuality: "on_time" }), "excused");
+  assert.equal(rollCallDefaultStatus({ finalStatus: "present", joined: false, punctuality: null }), "present");
+  assert.equal(rollCallDefaultStatus({ finalStatus: null, joined: true, punctuality: "on_time" }), "present");
+  assert.equal(rollCallDefaultStatus({ finalStatus: null, joined: true, punctuality: "late" }), "late");
+  assert.equal(rollCallDefaultStatus({ finalStatus: null, joined: false, punctuality: null }), "absent");
+});
+
+test("yoxlama: işarələr yalnız siyahıdakı tələbələr və icazəli statuslar üçün qəbul olunur", async () => {
+  const { resolveRollCallMarks } = await import("./lessonAttendance.js");
+  assert.deepEqual(resolveRollCallMarks([1, 2], { 1: "present", 2: "excused" }), { writes: [{ profileId: 1, status: "present" }, { profileId: 2, status: "excused" }] });
+  assert.ok("error" in resolveRollCallMarks([1], { 3: "present" }));
+  assert.ok("error" in resolveRollCallMarks([1], { 1: "sick" }));
+  assert.ok("error" in resolveRollCallMarks([1], {}));
+  assert.ok("error" in resolveRollCallMarks([1], [1]));
+  assert.ok("error" in resolveRollCallMarks([1], null));
+});

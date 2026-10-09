@@ -426,78 +426,172 @@ function formatSessionDate(value: string) {
   return new Intl.DateTimeFormat('az-AZ', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`));
 }
 
-function LessonAttendance() {
-  const [sessions, setSessions] = useState<LessonSessionItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [openKey, setOpenKey] = useState<string | null>(null);
-  const [detail, setDetail] = useState<LessonSessionDetail | null>(null);
-  const [overrides, setOverrides] = useState<Partial<Record<number, 'present' | 'late' | 'absent'>>>({});
-  const [editing, setEditing] = useState(false);
+type RollCallSession = { sessionDate: string; summary: LessonSessionSummary };
+type RollCallLesson = { resourceId: number; courseId: number; courseTitle: string; title: string; teacherName: string | null; termNumber: number; lessonDays: string[]; lessonTime: string | null; studentCount: number; recentSessions: RollCallSession[] };
+type RollCallRow = LessonSessionRow & { defaultStatus: LessonSessionStatus; absenceCount: number; history: Array<{ attendanceDate: string; status: string }> };
+type RollCallDetail = LessonSessionItem & { scheduled: boolean; lessonDays: string[]; rows: RollCallRow[]; written?: number };
+
+const rollCallStatusOptions: Array<{ value: LessonSessionStatus; label: string; short: string; active: string }> = [
+  { value: 'present', label: 'İştirak edib', short: 'İştirak', active: 'border-emerald-600 bg-emerald-600 text-white' },
+  { value: 'absent', label: 'İştirak etməyib', short: 'Qayıb', active: 'border-red-600 bg-red-600 text-white' },
+  { value: 'late', label: 'Gecikib', short: 'Gecikib', active: 'border-amber-500 bg-amber-500 text-white' },
+  { value: 'excused', label: 'Üzrlü', short: 'Üzrlü', active: 'border-sky-600 bg-sky-600 text-white' },
+];
+const rollCallHistoryLabels: Record<string, string> = { present: 'İştirak edib', absent: 'İştirak etməyib', late: 'Gecikib', excused: 'Üzrlü' };
+
+function academyTodayIso() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Baku', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+
+function lessonScheduleLabel(lesson: Pick<RollCallLesson, 'lessonDays' | 'lessonTime'>) {
+  const days = lessonDayOptions.filter(([key]) => lesson.lessonDays.includes(key)).map(([key, label]) => {
+    let time: string | null = null;
+    if (lesson.lessonTime?.startsWith('{')) {
+      try { const map = JSON.parse(lesson.lessonTime) as Record<string, string>; time = map[key] ?? null; } catch { time = null; }
+    } else time = lesson.lessonTime;
+    return time ? `${label} ${time}` : label;
+  });
+  return days.join(', ');
+}
+
+function RollCallAttendance() {
+  const [lessons, setLessons] = useState<RollCallLesson[]>([]);
+  const [lessonsLoading, setLessonsLoading] = useState(true);
+  const [lessonsError, setLessonsError] = useState('');
+  const [resourceId, setResourceId] = useState('');
+  const [date, setDate] = useState(academyTodayIso);
+  const [detail, setDetail] = useState<RollCallDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [marks, setMarks] = useState<Record<number, LessonSessionStatus>>({});
+  const [historyOpen, setHistoryOpen] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState('');
-  const load = () => { setLoading(true); void fetch(apiUrl('/admin/attendance/lesson-sessions'), { cache: 'no-store' }).then((r) => r.ok ? r.json() : Promise.reject()).then(setSessions).catch(() => setSessions([])).finally(() => setLoading(false)); };
-  useEffect(load, []);
-  const keyOf = (item: Pick<LessonSessionItem, 'resourceId' | 'sessionDate'>) => `${item.resourceId}:${item.sessionDate}`;
-  const open = async (item: LessonSessionItem) => {
-    const key = keyOf(item);
-    if (openKey === key) { setOpenKey(null); setDetail(null); return; }
-    setOpenKey(key); setDetail(null); setOverrides({}); setEditing(false); setNotice('');
-    const response = await fetch(apiUrl(`/admin/attendance/lesson-sessions/${item.resourceId}/${item.sessionDate}`), { cache: 'no-store' });
-    const data = await response.json().catch(() => ({})) as LessonSessionDetail & { error?: string };
-    if (!response.ok) { setNotice(data.error ?? 'Dərs siyahısını yükləmək alınmadı.'); return; }
-    setDetail(data);
+  const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
+  const today = academyTodayIso();
+
+  const loadLessons = (keepSelection = true) => {
+    setLessonsLoading(true); setLessonsError('');
+    void fetch(apiUrl('/admin/attendance/roll-call/lessons'), { cache: 'no-store' })
+      .then(async (response) => { const data = await response.json().catch(() => null); if (!response.ok) throw new Error((data as { error?: string } | null)?.error ?? 'Dərslər yüklənmədi.'); return data as RollCallLesson[]; })
+      .then((items) => {
+        setLessons(items);
+        if (keepSelection && resourceId && items.some((item) => String(item.resourceId) === resourceId)) return;
+        const weekday = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date(`${today}T00:00:00Z`).getUTCDay()];
+        const todayLesson = items.find((item) => item.lessonDays.includes(weekday));
+        const first = todayLesson ?? (items.length === 1 ? items[0] : undefined);
+        if (first) setResourceId(String(first.resourceId));
+      })
+      .catch((error: Error) => { setLessons([]); setLessonsError(error.message); })
+      .finally(() => setLessonsLoading(false));
   };
-  const confirm = async () => {
-    if (!detail) return;
-    setBusy(true); setNotice('');
+  useEffect(() => loadLessons(false), []);
+
+  useEffect(() => {
+    if (!resourceId || !date) { setDetail(null); return; }
+    let cancelled = false;
+    setDetailLoading(true); setNotice(null); setHistoryOpen(null);
+    void fetch(apiUrl(`/admin/attendance/roll-call/${resourceId}/${date}`), { cache: 'no-store' })
+      .then(async (response) => { const data = await response.json().catch(() => ({})) as RollCallDetail & { error?: string }; if (!response.ok) throw new Error(data.error ?? 'Tələbə siyahısı yüklənmədi.'); return data; })
+      .then((data) => { if (cancelled) return; setDetail(data); setMarks(Object.fromEntries(data.rows.map((row) => [row.profileId, row.defaultStatus]))); })
+      .catch((error: Error) => { if (cancelled) return; setDetail(null); setMarks({}); setNotice({ text: error.message, error: true }); })
+      .finally(() => { if (!cancelled) setDetailLoading(false); });
+    return () => { cancelled = true; };
+  }, [resourceId, date]);
+
+  const selectedLesson = lessons.find((item) => String(item.resourceId) === resourceId);
+  const pending = lessons.flatMap((lesson) => lesson.recentSessions.filter((session) => session.summary.total > 0 && session.summary.state !== 'confirmed').map((session) => ({ lesson, session }))).sort((a, b) => b.session.sessionDate.localeCompare(a.session.sessionDate)).slice(0, 8);
+  const rows = detail?.rows ?? [];
+  const counts = rollCallStatusOptions.map((option) => ({ ...option, count: rows.filter((row) => (marks[row.profileId] ?? row.defaultStatus) === option.value).length }));
+  const changed = rows.filter((row) => (marks[row.profileId] ?? row.defaultStatus) !== (row.finalStatus ?? null)).length;
+  const allSaved = rows.length > 0 && rows.every((row) => row.finalStatus !== null) && changed === 0;
+
+  const setAll = (status: LessonSessionStatus) => setMarks(Object.fromEntries(rows.map((row) => [row.profileId, status])));
+  const resetToJoins = () => setMarks(Object.fromEntries(rows.map((row) => [row.profileId, row.finalStatus ?? (row.joined ? (row.punctuality === 'late' ? 'late' : 'present') : 'absent')])));
+
+  const save = async () => {
+    if (!detail || !rows.length) return;
+    setBusy(true); setNotice(null);
     try {
-      const response = await fetch(apiUrl(`/admin/attendance/lesson-sessions/${detail.resourceId}/${detail.sessionDate}/confirm`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ overrides }) });
-      const data = await response.json().catch(() => ({})) as LessonSessionDetail & { error?: string; written?: number };
-      if (!response.ok) { setNotice(data.error ?? 'Davamiyyəti təsdiqləmək alınmadı.'); return; }
-      setDetail(data); setOverrides({}); setEditing(false);
-      setSessions((current) => current.map((item) => keyOf(item) === keyOf(data) ? { ...item, summary: data.summary } : item));
-      setNotice(`Davamiyyət təsdiqləndi: ${data.written ?? data.rows.length} tələbə üçün yazıldı.`);
+      const response = await fetch(apiUrl(`/admin/attendance/roll-call/${detail.resourceId}/${detail.sessionDate}`), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ marks: Object.fromEntries(rows.map((row) => [row.profileId, marks[row.profileId] ?? row.defaultStatus])) }),
+      });
+      const data = await response.json().catch(() => ({})) as RollCallDetail & { error?: string };
+      if (!response.ok) { setNotice({ text: data.error ?? 'Davamiyyəti yadda saxlamaq alınmadı.', error: true }); return; }
+      setDetail(data);
+      setMarks(Object.fromEntries(data.rows.map((row) => [row.profileId, row.defaultStatus])));
+      setNotice({ text: `Davamiyyət təsdiqləndi: ${data.written ?? data.rows.length} tələbə üçün yazıldı.`, error: false });
+      loadLessons(true);
+    } catch {
+      setNotice({ text: 'Davamiyyəti yadda saxlamaq alınmadı. İnternet bağlantısını yoxlayın.', error: true });
     } finally { setBusy(false); }
   };
-  const stateBadge = (summary: LessonSessionSummary) => summary.state === 'confirmed'
-    ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Təsdiqlənib</span>
-    : summary.state === 'partial'
-      ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">Qismən təsdiqlənib</span>
-      : <span className="rounded-full bg-[hsl(var(--muted))] px-2 py-0.5 text-[10px] font-bold text-[hsl(var(--primary))]">Təsdiq gözləyir</span>;
-  return <section className="mt-5 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid="section-lesson-attendance">
-    <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">Onlayn dərs davamiyyəti (avtomatik)</p>
-    <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Tələbə dərs vaxtı saytdakı Zoom / Google Meet düyməsi ilə qoşulduqda «girib» kimi qeyd olunur, qoşulmayanlar «girməyib» görünür. Tələbələri tək-tək seçmək lazım deyil — siyahını yoxlayıb «Təsdiq et» düyməsini basın. Qeyd: sistem yalnız sayt üzərindən linkə keçidi qeyd edir, Zoom/Meet-də faktiki qalma müddətini ölçmür.</p>
-    {loading ? <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Yüklənir...</p> : !sessions.length ? <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Son 14 gündə cədvəldə onlayn dərs yoxdur.</p> : <div className="mt-3 space-y-2">{sessions.map((item) => {
-      const key = keyOf(item);
-      const isOpen = openKey === key;
-      return <div key={key} className={`rounded-xl border ${isOpen ? 'border-[hsl(var(--accent))]' : 'border-transparent'} bg-[hsl(var(--muted)/.35)]`}>
-        <button type="button" onClick={() => void open(item)} className="focus-ring flex w-full flex-wrap items-center justify-between gap-3 p-3 text-left" aria-expanded={isOpen} data-testid={`button-lesson-session-${item.resourceId}-${item.sessionDate}`}>
-          <span><span className="block text-sm font-bold text-[hsl(var(--primary))]">{item.courseTitle}{item.teacherName ? ` · ${item.teacherName}` : ''}</span><span className="mt-0.5 block text-xs text-[hsl(var(--muted-foreground))]">{formatSessionDate(item.sessionDate)} · {item.lessonTime ?? '—'} · {item.termNumber}-ci semestr</span></span>
-          <span className="flex flex-wrap items-center gap-2 text-[11px] font-bold"><span className="text-emerald-700">Girib: {item.summary.joined}</span><span className="text-red-700">Girməyib: {item.summary.notJoined}</span>{stateBadge(item.summary)}</span>
-        </button>
-        {isOpen && <div className="border-t border-[hsl(var(--border))] p-3">
-          {!detail ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{notice || 'Siyahı yüklənir...'}</p> : <>
-            {!detail.rows.length ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Bu dərs qrupuna təyin olunmuş tələbə tapılmadı.</p> : <div className="space-y-1.5">{detail.rows.map((row) => {
-              const chosen: LessonSessionStatus = overrides[row.profileId] ?? row.suggestedStatus;
-              return <div key={row.profileId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[hsl(var(--card))] px-3 py-2" data-testid={`row-lesson-session-student-${row.profileId}`}>
-                <div className="min-w-0"><p className="text-sm font-bold text-[hsl(var(--primary))]">{row.studentName} <span className="text-[10px] font-semibold text-[hsl(var(--muted-foreground))]">T{String(row.studentNumber).padStart(4, '0')}</span></p>
-                  <p className="mt-0.5 text-xs">{row.joined && row.joinedAt ? <span className="font-semibold text-emerald-700">Girib · {formatBakuTime(row.joinedAt)}{row.punctuality === 'late' ? ' (20 dəqiqədən gec)' : ''}</span> : <span className="font-semibold text-red-700">Girməyib</span>}{row.finalStatus && <span className="ml-2 text-[hsl(var(--muted-foreground))]">· Yekun: {lessonStatusLabels[row.finalStatus]}</span>}</p></div>
-                {editing ? <select value={chosen === 'excused' ? '' : chosen} onChange={(event) => { const value = event.target.value as 'present' | 'late' | 'absent'; setOverrides((current) => ({ ...current, [row.profileId]: value })); }} className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-1 text-xs font-bold text-[hsl(var(--primary))]" aria-label={`${row.studentName} üçün status`}>
-                  {chosen === 'excused' && <option value="">Üzrlü (dəyişmə)</option>}
-                  <option value="present">İştirak</option><option value="late">Gecikib</option><option value="absent">Qayıb</option>
-                </select> : <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${chosen === 'absent' ? 'bg-red-100 text-red-800' : chosen === 'late' ? 'bg-amber-100 text-amber-800' : chosen === 'excused' ? 'bg-sky-100 text-sky-800' : 'bg-emerald-100 text-emerald-800'}`}>{lessonStatusLabels[chosen]}</span>}
-              </div>;
-            })}</div>}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button type="button" disabled={busy || !detail.rows.length} onClick={() => void confirm()} className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-xs font-black text-[hsl(var(--primary-foreground))] disabled:opacity-50" data-testid="button-confirm-lesson-session">{busy ? 'Yazılır...' : detail.summary.state === 'confirmed' ? 'Yenidən təsdiq et' : 'Təsdiq et'}</button>
-              {detail.rows.length > 0 && <button type="button" onClick={() => setEditing((current) => !current)} className="focus-ring rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))]" data-testid="button-edit-lesson-session">{editing ? 'Düzəlişi gizlət' : 'Ayrı-ayrı düzəliş et (istəyə bağlı)'}</button>}
-              {stateBadge(detail.summary)}
+
+  return <section className="space-y-4" data-testid="section-roll-call">
+    <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 sm:p-4">
+      <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">Davamiyyət yoxlaması</p>
+      <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Dərsi və tarixi seçin. Saytdakı Zoom / Google Meet düyməsi ilə dərsə qoşulan tələbələr avtomatik «İştirak edib», qoşulmayanlar «İştirak etməyib» kimi işarələnir. Lazım olsa işarəni dəyişin və «Təsdiq et» düyməsini basın.</p>
+      {pending.length > 0 && <div className="mt-3">
+        <p className="mb-1.5 text-[11px] font-bold text-[hsl(var(--secondary-foreground))]">Təsdiq gözləyən onlayn dərslər</p>
+        <div className="flex gap-2 overflow-x-auto pb-1">{pending.map(({ lesson, session }) => {
+          const active = String(lesson.resourceId) === resourceId && session.sessionDate === date;
+          return <button key={`${lesson.resourceId}:${session.sessionDate}`} type="button" onClick={() => { setResourceId(String(lesson.resourceId)); setDate(session.sessionDate); }} className={`focus-ring shrink-0 rounded-xl border px-3 py-2 text-left text-[11px] transition ${active ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent)/.14)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] hover:bg-[hsl(var(--muted))]'}`} data-testid={`button-roll-call-pending-${lesson.resourceId}-${session.sessionDate}`}>
+            <span className="block max-w-[180px] truncate font-bold text-[hsl(var(--primary))]">{lesson.courseTitle}</span>
+            <span className="block text-[hsl(var(--muted-foreground))]">{formatSessionDate(session.sessionDate)} · <span className="font-semibold text-emerald-700">Girib {session.summary.joined}/{session.summary.total}</span></span>
+          </button>;
+        })}</div>
+      </div>}
+      <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+        <Field label="Dərs">
+          <select className={inputClass} value={resourceId} onChange={(event) => setResourceId(event.target.value)} disabled={lessonsLoading} data-testid="select-roll-call-lesson">
+            <option value="">{lessonsLoading ? 'Dərslər yüklənir...' : lessons.length ? 'Dərs seçin' : 'Dərs tapılmadı'}</option>
+            {lessons.map((lesson) => <option key={lesson.resourceId} value={lesson.resourceId}>{lesson.courseTitle}{lesson.teacherName ? ` · ${lesson.teacherName}` : ''} · {lesson.termNumber}-{termSuffixes[lesson.termNumber] ?? 'ci'} semestr{lessonScheduleLabel(lesson) ? ` · ${lessonScheduleLabel(lesson)}` : ''} ({lesson.studentCount} tələbə)</option>)}
+          </select>
+        </Field>
+        <Field label="Tarix">
+          <input type="date" value={date} max={today} onChange={(event) => setDate(event.target.value)} className={inputClass} data-testid="input-roll-call-date" />
+        </Field>
+      </div>
+      {lessonsError && <p className="mt-2 text-xs font-semibold text-[hsl(var(--destructive))]">{lessonsError}</p>}
+      {!lessonsLoading && !lessonsError && !lessons.length && <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Sizə təyin olunmuş dərs yoxdur. Dərslər «Cədvəl» bölməsində yaradılır.</p>}
+      {selectedLesson && detail && !detail.scheduled && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Bu tarix cədvəldə həmin dərsin günü deyil{lessonScheduleLabel(selectedLesson) ? ` (dərs günləri: ${lessonScheduleLabel(selectedLesson)})` : ''}. Yenə də qeyd etmək olar.</p>}
+    </div>
+
+    {resourceId && <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" data-testid="roll-call-list">
+      {detailLoading ? <p className="p-4 text-sm text-[hsl(var(--muted-foreground))]">Tələbə siyahısı yüklənir...</p> : !detail ? null : !rows.length ? <p className="p-4 text-sm text-[hsl(var(--muted-foreground))]">Bu dərsə təyin olunmuş tələbə tapılmadı.</p> : <>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--border))] p-3">
+          <p className="text-xs font-bold text-[hsl(var(--primary))]">{detail.courseTitle} · {formatSessionDate(detail.sessionDate)} · {rows.length} tələbə · <span className="text-emerald-700">Girib: {detail.summary.joined}</span></p>
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button" onClick={() => setAll('present')} className="focus-ring rounded-lg border border-emerald-600/40 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 hover:bg-emerald-50" data-testid="button-roll-call-all-present">Hamısı iştirak edib</button>
+            <button type="button" onClick={resetToJoins} className="focus-ring rounded-lg border border-[hsl(var(--border))] px-2.5 py-1.5 text-[11px] font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-roll-call-reset">Girişə görə doldur</button>
+          </div>
+        </div>
+        <ul className="divide-y divide-[hsl(var(--border))]">{rows.map((row) => {
+          const chosen = marks[row.profileId] ?? row.defaultStatus;
+          return <li key={row.profileId} className="px-3 py-2.5" data-testid={`row-roll-call-${row.profileId}`}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-[hsl(var(--primary))]">{row.studentName} <span className="text-[10px] font-semibold text-[hsl(var(--muted-foreground))]">T{String(row.studentNumber).padStart(4, '0')}</span></p>
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px]">
+                  {row.joined && row.joinedAt ? <span className="font-semibold text-emerald-700">Girib {formatBakuTime(row.joinedAt)}{row.punctuality === 'late' ? ' (gec)' : ''}</span> : <span className="font-semibold text-red-700">Girməyib</span>}
+                  {row.finalStatus && <span className="text-[hsl(var(--muted-foreground))]">· Yadda saxlanıb: {rollCallHistoryLabels[row.finalStatus]}</span>}
+                  <button type="button" onClick={() => setHistoryOpen((current) => current === row.profileId ? null : row.profileId)} className="font-semibold text-[hsl(var(--secondary-foreground))] underline-offset-2 hover:underline" aria-expanded={historyOpen === row.profileId} data-testid={`button-roll-call-history-${row.profileId}`}>Tarixçə{row.absenceCount ? ` · qayıb ${row.absenceCount}` : ''}</button>
+                </p>
+              </div>
+              <div className="grid shrink-0 grid-cols-4 gap-1 sm:flex" role="radiogroup" aria-label={`${row.studentName} davamiyyəti`}>
+                {rollCallStatusOptions.map((option) => <button key={option.value} type="button" role="radio" aria-checked={chosen === option.value} title={option.label} onClick={() => setMarks((current) => ({ ...current, [row.profileId]: option.value }))} className={`focus-ring rounded-lg border px-2 py-1.5 text-[11px] font-bold leading-tight transition ${chosen === option.value ? option.active : 'border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`} data-testid={`button-roll-call-${option.value}-${row.profileId}`}>{chosen === option.value ? '✓ ' : ''}{option.short}</button>)}
+              </div>
             </div>
-            {notice && <p className="mt-2 text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}
-          </>}
-        </div>}
-      </div>;
-    })}</div>}
+            {historyOpen === row.profileId && <div className="mt-2 rounded-lg bg-[hsl(var(--muted)/.4)] p-2 text-[11px]">{row.history.length ? <ul className="space-y-0.5">{row.history.map((item) => <li key={item.attendanceDate} className="flex justify-between gap-2"><span>{formatSessionDate(item.attendanceDate)}</span><span className={`font-semibold ${item.status === 'absent' ? 'text-red-700' : item.status === 'late' ? 'text-amber-700' : item.status === 'excused' ? 'text-sky-700' : 'text-emerald-700'}`}>{rollCallHistoryLabels[item.status] ?? item.status}</span></li>)}</ul> : <p className="text-[hsl(var(--muted-foreground))]">Bu dərs üzrə əvvəlki qeyd yoxdur.</p>}</div>}
+          </li>;
+        })}</ul>
+        <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-b-2xl border-t border-[hsl(var(--border))] bg-[hsl(var(--card)/.97)] p-3 backdrop-blur">
+          <p className="flex flex-wrap gap-x-3 text-[11px] font-semibold">{counts.map((item) => <span key={item.value} className="text-[hsl(var(--muted-foreground))]">{item.label}: <b className="text-[hsl(var(--primary))]">{item.count}</b></span>)}</p>
+          <button type="button" disabled={busy} onClick={() => void save()} className="focus-ring w-full rounded-xl bg-[hsl(var(--primary))] px-5 py-2.5 text-sm font-black text-[hsl(var(--primary-foreground))] disabled:opacity-50 sm:w-auto" data-testid="button-roll-call-save">{busy ? 'Yazılır...' : allSaved ? 'Təsdiqlənib · yenidən təsdiq et' : `Təsdiq et (${rows.length} tələbə)`}</button>
+        </div>
+      </>}
+      {notice && <p className={`px-3 pb-3 text-xs font-semibold ${notice.error ? 'text-[hsl(var(--destructive))]' : 'text-emerald-700'}`} role="status">{notice.text}</p>}
+    </div>}
+    {!resourceId && notice && <p className="text-xs font-semibold text-[hsl(var(--destructive))]">{notice.text}</p>}
   </section>;
 }
 
@@ -754,6 +848,8 @@ const auditEventLabels: Record<string, string> = {
   'message.reply.created': 'Mesaja cavab göndərildi',
   'question.created': 'Yeni sual göndərildi',
   'attendance.updated': 'Davamiyyət yeniləndi',
+  'attendance.roll_call.saved': 'Davamiyyət yoxlaması təsdiqləndi',
+  'attendance.lesson_session.confirmed': 'Onlayn dərs davamiyyəti təsdiqləndi',
   'grades.updated': 'Tələbə qiymətləri yeniləndi',
   'grade.updated': 'Qiymət yeniləndi',
   'student.deleted': 'Tələbə hesabı silindi',
@@ -1120,7 +1216,7 @@ function StudentManagementSection({
   const sections: Array<{ value: StudentManagementTab; label: string; description: string; Icon: typeof Send }> = [
     { value: 'subject-requests', label: 'Dərs silinməsi', description: 'Tələbələrin dərs dəyişiklik müraciətləri', Icon: Send },
     { value: 'grading', label: 'Qiymətləndirmə', description: 'Qiymətləri tələbə və semestr üzrə idarə et', Icon: GraduationCap },
-    { value: 'attendance', label: 'Davamiyyət', description: 'Davamiyyət qeydlərini əlavə et və yenilə', Icon: CalendarDays },
+    { value: 'attendance', label: 'Davamiyyət', description: 'Dərs seçin, tələbələri işarələyin və təsdiq edin', Icon: CalendarDays },
     { value: 'excuses', label: 'Üzr müraciətləri', description: 'Tələbələrin üzr və izahat müraciətləri', Icon: FileText },
     { value: 'teacher-choices', label: 'Müəllim seçimləri', description: 'Tələbələrin müəllim seçimi müraciətləri', Icon: UsersRound },
     { value: 'promotion', label: 'Semestr keçidini təsdiqlə', description: 'Tələbəni seç və növbəti semestrə keçidini təsdiqlə', Icon: GraduationCap },
@@ -1167,7 +1263,7 @@ function StudentManagementSection({
       <div aria-live="polite">
         {activeSection === 'subject-requests' && <SubjectRemovalRequests />}
         {activeSection === 'grading' && <AcademicManagement mode="grades" />}
-        {activeSection === 'attendance' && <><AcademicManagement mode="attendance" /><LessonAttendance /></>}
+        {activeSection === 'attendance' && <RollCallAttendance />}
         {activeSection === 'excuses' && <AttendanceExcuses onRead={onReadExcuses} />}
         {activeSection === 'teacher-choices' && <TeacherChoiceRequests />}
         {activeSection === 'promotion' && <div className="rounded-2xl border border-[hsl(var(--accent)/.55)] bg-[hsl(var(--accent)/.12)] p-5" data-testid="section-semester-promotion-entry"><p className="text-sm font-bold text-[hsl(var(--primary))]">Tələbənin növbəti semestrə keçidini təsdiqləyin</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Tələbəni seçdikdən sonra cari semestri və əsas nəticələri görünəcək. Təsdiq düyməsi tələbə məlumatlarında yerləşir.</p><button type="button" onClick={() => setIsPromotionDirectoryOpen(true)} className={`${buttonClass} mt-4`} data-testid="button-open-semester-promotion"><GraduationCap size={16} /> Tələbə seç və keçidi təsdiqlə</button>{isPromotionDirectoryOpen && <StudentDirectory filter="all" onClose={() => setIsPromotionDirectoryOpen(false)} canEdit={canGraduate} focusStudentId={focusStudentId} />}</div>}

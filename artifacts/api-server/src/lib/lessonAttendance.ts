@@ -211,3 +211,42 @@ export function resolveMeetingUrl(
 export function parsePlatform(value: unknown): MeetingPlatform | null {
   return value === "zoom" || value === "meet" || value === "lesson" ? value : null;
 }
+
+// ---------------------------------------------------------------------------
+// Yoxlama (roll-call): müəllim dərsi və tarixi seçir, bütün tələbələri bir dəfəyə işarələyir.
+// ---------------------------------------------------------------------------
+
+export const ROLL_CALL_STATUSES = ["present", "absent", "late", "excused"] as const;
+
+export function isRollCallStatus(value: unknown): value is AttendanceStatus {
+  return typeof value === "string" && (ROLL_CALL_STATUSES as readonly string[]).includes(value);
+}
+
+/**
+ * Yoxlama siyahısında ilkin işarə: mövcud yekun qeyd üstündür; yoxdursa saytdan dərsə qoşulma
+ * («Girib») → iştirak (20 dəqiqədən gec girib → gecikib), qoşulmayıb → iştirak etməyib (qayıb).
+ */
+export function rollCallDefaultStatus(row: { finalStatus: AttendanceStatus | null; joined: boolean; punctuality: Punctuality | null }): AttendanceStatus {
+  if (row.finalStatus) return row.finalStatus;
+  if (!row.joined) return "absent";
+  return row.punctuality === "late" ? "late" : "present";
+}
+
+/**
+ * Göndərilən işarələri yoxlayır: yalnız siyahıdakı tələbələr və icazəli statuslar qəbul olunur.
+ * Siyahıda olub, işarəsi göndərilməyən tələbələr yazılmır.
+ */
+export function resolveRollCallMarks(rosterIds: readonly number[], marks: unknown) {
+  if (!marks || typeof marks !== "object" || Array.isArray(marks)) return { error: "Davamiyyət işarələri düzgün göndərilməyib." } as const;
+  const allowed = new Set(rosterIds);
+  const writes: Array<{ profileId: number; status: AttendanceStatus }> = [];
+  for (const [key, value] of Object.entries(marks as Record<string, unknown>)) {
+    const profileId = Number(key);
+    if (!Number.isInteger(profileId) || profileId <= 0) return { error: "Tələbə düzgün seçilməyib." } as const;
+    if (!allowed.has(profileId)) return { error: "Bu tələbə seçilmiş dərsin siyahısında deyil." } as const;
+    if (!isRollCallStatus(value)) return { error: "Davamiyyət statusu yalnız iştirak, qayıb, gecikmə və ya üzrlü ola bilər." } as const;
+    writes.push({ profileId, status: value });
+  }
+  if (!writes.length) return { error: "Yadda saxlamaq üçün ən azı bir tələbə işarələnməlidir." } as const;
+  return { writes } as const;
+}

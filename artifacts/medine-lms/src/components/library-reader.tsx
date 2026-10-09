@@ -1,16 +1,94 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowLeft, ArrowRight, ChevronLeft, ListTree, Loader2, RotateCcw, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ChevronLeft, ListTree, Loader2, RotateCcw, Search, X } from 'lucide-react';
 import { Link, useSearch } from 'wouter';
-import { useUser } from '@clerk/react';
+import { useAuth, useUser } from '@clerk/react';
+import { DidYouMean, LibraryHitList } from '@/components/library-search-results';
 import {
   arabicBookFont,
   chapterForPage,
   libraryPageUrl,
   loadReadingPage,
   saveReadingPage,
+  searchLibraryApi,
   useLibraryCatalog,
   type LibraryBook,
+  type LibrarySearchResponse,
 } from '@/lib/library';
+
+/** Açıq kitab daxilində axtarış paneli (nəticəyə klik → həmin səhifə). */
+function ReaderSearchPanel({ book, onClose, onOpenPage }: { book: LibraryBook; onClose: () => void; onOpenPage: (page: number) => void }) {
+  const { getToken } = useAuth();
+  const [query, setQuery] = useState('');
+  const [result, setResult] = useState<LibrarySearchResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  async function run(offset: number) {
+    const text = query.trim();
+    if (text.length < 2) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await searchLibraryApi(getToken, { query: text, offset, book: book.slug });
+      setResult((current) => (offset && current ? { ...data, items: [...current.items, ...data.items] } : data));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Axtarış alınmadı.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Kitabda axtarış">
+      <button type="button" className="absolute inset-0 bg-black/50" onClick={onClose} aria-label="Bağla" />
+      <aside className="relative flex h-full w-full max-w-md flex-col bg-[#f7eedb] text-[#3a2a17] shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#3a2a17]/15 px-4 py-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#3a2a17]/60">Kitabda axtarış</p>
+            <p className="text-sm font-semibold">{book.shortTitle}</p>
+          </div>
+          <button type="button" onClick={onClose} className="focus-ring rounded-full p-2 hover:bg-black/5" aria-label="Bağla"><X size={18} /></button>
+        </div>
+        <form onSubmit={(event) => { event.preventDefault(); void run(0); }} className="flex gap-2 border-b border-[#3a2a17]/10 px-4 py-3">
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(event) => setQuery(event.target.value.slice(0, 200))}
+            dir="auto"
+            placeholder="Ərəbcə söz və ya mövzu (məs. الوضوء, fail)"
+            className="min-w-0 flex-1 rounded-lg border border-[#3a2a17]/20 bg-white/70 px-3 py-2 text-sm outline-none focus:border-[#b98d3e]"
+            data-testid="input-reader-search"
+          />
+          <button type="submit" disabled={loading || query.trim().length < 2} className="inline-flex items-center gap-1.5 rounded-lg bg-[#3a2a17] px-3 py-2 text-xs font-bold text-[#f7eedb] disabled:opacity-40" data-testid="button-reader-search">
+            {loading && !result ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Axtar
+          </button>
+        </form>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+          {error && <p className="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800">{error}</p>}
+          {result && (
+            <>
+              <p className="text-xs text-[#3a2a17]/70">
+                {result.total ? `${result.total} nəticə` : 'Nəticə tapılmadı.'}
+                {result.expanded.length > 0 && <> · axtarılan: <span dir="rtl" lang="ar" style={{ fontFamily: arabicBookFont }}>{result.expanded.join('، ')}</span></>}
+              </p>
+              <LibraryHitList items={result.items} tone="paper" groupHeadings={false} onOpen={(item) => onOpenPage(item.page)} />
+              <DidYouMean suggestions={result.didYouMean} tone="paper" onOpen={(item) => onOpenPage(item.page)} />
+              {result.items.length < result.total && (
+                <button type="button" onClick={() => void run(result.items.length)} disabled={loading} className="w-full rounded-lg border border-[#3a2a17]/20 py-2 text-xs font-semibold hover:bg-black/5 disabled:opacity-50" data-testid="button-reader-search-more">
+                  {loading ? 'Yüklənir…' : `Daha çox (${result.items.length}/${result.total})`}
+                </button>
+              )}
+            </>
+          )}
+          {!result && !error && <p className="text-xs leading-5 text-[#3a2a17]/60">Ərəbcə söz/ifadə yazın (hərəkəsiz də olar) və ya mövzunu Azərbaycan/Türk dilində yazın: «dəstəmaz», «fail», «kana və bacıları».</p>}
+          <p className="text-[11px] text-[#3a2a17]/55">Axtarış skan mətninə (OCR) əsaslanır — kiçik xətalar ola bilər.</p>
+        </div>
+      </aside>
+    </div>
+  );
+}
 
 // Kitab sağdan sola oxunur: növbəti səhifə solda açılır.
 // Telefonda tək səhifə, planşet/kompüterdə iki səhifəlik açılış: [1], [2|3], [4|5] …
@@ -118,6 +196,7 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
   const [page, setPage] = useState<number | null>(null);
   const [flip, setFlip] = useState<Flip | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [jumpValue, setJumpValue] = useState('');
   const leafRef = useRef<HTMLDivElement | null>(null);
   const leafShadeRef = useRef<HTMLDivElement | null>(null);
@@ -199,8 +278,8 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-      if (event.key === 'Escape') { setDrawerOpen(false); return; }
-      if (drawerOpen) return;
+      if (event.key === 'Escape') { setDrawerOpen(false); setSearchOpen(false); return; }
+      if (drawerOpen || searchOpen) return;
       if (event.key === 'ArrowLeft' || event.key === 'PageDown' || event.key === ' ') { event.preventDefault(); go('next'); }
       else if (event.key === 'ArrowRight' || event.key === 'PageUp') { event.preventDefault(); go('prev'); }
       else if (event.key === 'Home') jumpTo(1);
@@ -208,7 +287,7 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [go, jumpTo, total, drawerOpen]);
+  }, [go, jumpTo, total, drawerOpen, searchOpen]);
 
   // Qonşu səhifələri əvvəlcədən yüklə.
   useEffect(() => {
@@ -357,6 +436,16 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
         </div>
         <button
           type="button"
+          onClick={() => setSearchOpen(true)}
+          disabled={!book}
+          className="focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10 disabled:opacity-40"
+          data-testid="button-library-search"
+          aria-label="Kitabda axtar"
+        >
+          <Search size={15} /> <span className="hidden sm:inline">Axtar</span>
+        </button>
+        <button
+          type="button"
           onClick={() => setDrawerOpen(true)}
           disabled={!book}
           className="focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10 disabled:opacity-40"
@@ -424,6 +513,8 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
           </button>
         </div>
       </footer>
+
+      {searchOpen && book && <ReaderSearchPanel book={book} onClose={() => setSearchOpen(false)} onOpenPage={(target) => { jumpTo(target); setSearchOpen(false); }} />}
 
       {drawerOpen && book && (
         <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Mündəricat">

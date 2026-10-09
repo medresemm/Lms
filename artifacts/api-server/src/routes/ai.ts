@@ -64,7 +64,7 @@ import {
   termDetails,
   userIsSystemOwner,
 } from "./lms.js";
-import { answerLibrary, detectLibraryIntent } from "../lib/library/search.js";
+import { answerLibrary, resolveLibraryMessage } from "../lib/library/search.js";
 import {
   getAiProvider,
   type AdminAiContext,
@@ -896,7 +896,8 @@ router.post("/ai/student/chat", noStore, requireApprovedStudent, rateLimit, asyn
       return;
     }
     // Mədrəsə Kitabxanası daxili məlumatdır: «Daxili» rejimdə tələbəyə də açıqdır.
-    const libraryIntent = detectLibraryIntent(input.message);
+    // «Kitabxanada axtar» yazılmasa da: ərəbcə mətn, kitab adı, «hansı səhifədə …» və ya tanınan mövzu sözü.
+    const libraryIntent = resolveLibraryMessage(input.message);
     if (libraryIntent) {
       res.json(answerLibrary(libraryIntent.query));
       return;
@@ -932,7 +933,7 @@ router.post("/ai/admin/chat", noStore, requireAiStaff, rateLimit, async (req, re
       return;
     }
     if (selection.mode === "internal") {
-      const libraryIntent = detectLibraryIntent(input.message);
+      const libraryIntent = resolveLibraryMessage(input.message);
       if (libraryIntent) {
         res.json(answerLibrary(libraryIntent.query));
         return;

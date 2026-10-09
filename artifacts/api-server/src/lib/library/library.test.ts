@@ -2,7 +2,21 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { findAssetPath } from "../assets.js";
 import { LIBRARY_BOOKS, chapterForPage, findLibraryBook, libraryPageAssetPath } from "./catalog.js";
-import { answerLibrary, detectLibraryIntent, normalizeArabic, searchLibrary } from "./search.js";
+import {
+  answerLibrary,
+  detectImplicitLibraryQuery,
+  detectLibraryIntent,
+  lightStem,
+  normalizeArabic,
+  parseLibraryQuery,
+  resolveLibraryMessage,
+  runLibraryQuery,
+  searchLibrary,
+  suggestChapters,
+  warmLibraryIndex,
+} from "./search.js";
+import { HELD_OUT_SET, RECALL_SET, type RecallCase } from "./recall-set.js";
+import { TOPIC_SYNONYMS } from "./synonyms.js";
 import { createLibraryToken, verifyLibraryToken } from "./token.js";
 
 test("ərəb normallaşdırması: hərəkə, həmzə, tə-mərbuta, əlif-məqsura", () => {
@@ -61,7 +75,7 @@ test("axtarış skan mətnində tapır: kitab, fəsil, səhifə, parça", () => 
 });
 
 test("axtarış hərəkəli və həmzəli sorğunu da tapır (saxta mətnlə)", () => {
-  const book = { ...findLibraryBook("at-tuhfa-as-saniyya")!, slug: "test" };
+  const book = { ...findLibraryBook("at-tuhfa-as-saniyya")!, slug: "test", chapters: [] };
   const loader = () => ["", "قال المصنف: الكلام هو اللفظ المركب المفيد بالوضع", "باب الإعراب"];
   const hits = searchLibrary("الكَلَامُ هُوَ اللَّفْظُ", { books: [book], loader });
   assert.equal(hits.length, 1);
@@ -77,6 +91,105 @@ test("cavab formatı: mənbə «library», boş sorğuya izah", () => {
   const found = answerLibrary("الطهارة");
   assert.ok(found.sources.items.length > 0);
   assert.ok(!("score" in found.sources.items[0]));
+  assert.ok(found.sources.total >= found.sources.items.length);
+});
+
+test("yüngül kök: artikl, bağlayıcı, sadə şəkilçilər", () => {
+  assert.equal(lightStem(normalizeArabic("الصلاة")), "صلا");
+  assert.equal(lightStem(normalizeArabic("والصلاة")), "صلا");
+  assert.equal(lightStem(normalizeArabic("بالوضوء")), "وضو");
+  assert.equal(lightStem(normalizeArabic("للجزم")), "جزم");
+  assert.equal(lightStem(normalizeArabic("المسلمون")), "مسلم");
+  assert.equal(lightStem(normalizeArabic("علامات")), "علام");
+  assert.equal(lightStem("باب"), "باب");
+});
+
+function inRange(c: RecallCase) {
+  return (hit: { slug: string; page: number }) => hit.slug === c.slug && c.ranges.some(([from, to]) => hit.page >= from && hit.page <= to);
+}
+
+test("recall: əsas dəst (≥95%) və əlavə dəst (≥90%) — ilk 10 nəticədə, söhbət yolu ilə", () => {
+  for (const [set, minimum] of [[RECALL_SET, 0.95], [HELD_OUT_SET, 0.9]] as const) {
+    let found = 0;
+    const missed: string[] = [];
+    for (const item of set) {
+      const intent = resolveLibraryMessage(item.message);
+      const hits = intent ? runLibraryQuery(intent.query).items : [];
+      if (hits.some(inRange(item))) found += 1;
+      else missed.push(item.message);
+    }
+    assert.ok(found / set.length >= minimum, `recall ${found}/${set.length}; tapılmadı: ${missed.join(" | ")}`);
+  }
+  assert.ok(RECALL_SET.length >= 30);
+});
+
+test("sinonimlər yalnız kitablarda həqiqətən olan ərəb ifadələrinə gedir", () => {
+  for (const entry of TOPIC_SYNONYMS) {
+    const words = normalizeArabic(entry.arabic).split(" ").map(lightStem);
+    const inChapter = LIBRARY_BOOKS.some((book) => book.chapters.some((chapter) => {
+      const title = normalizeArabic(chapter.title).split(" ").map(lightStem);
+      return words.every((word) => title.includes(word));
+    }));
+    const inText = runLibraryQuery(entry.arabic).items.some((hit) => !hit.partial);
+    assert.ok(inChapter || inText, entry.arabic);
+  }
+});
+
+test("açar söz yazmadan: ərəbcə mətn, mövzu sözü, kitab filtri, «hansı səhifədə»", () => {
+  assert.equal(detectImplicitLibraryQuery("نواقض الوضوء")?.reason, "arabic");
+  assert.equal(detectImplicitLibraryQuery("dəstəmazı pozan şeylər")?.reason, "topic");
+  assert.equal(detectImplicitLibraryQuery("Oruc")?.reason, "topic");
+  assert.equal(detectImplicitLibraryQuery("Tuhfədə fail")?.reason, "book");
+  assert.equal(detectImplicitLibraryQuery("hansı səhifədə cənazə namazı")?.reason, "phrase");
+  assert.equal(detectImplicitLibraryQuery("cuma namazı hangi sayfada")?.reason, "phrase");
+  assert.deepEqual(parseLibraryQuery("Tuhfədə fail").book, "at-tuhfa-as-saniyya");
+  assert.deepEqual(parseLibraryQuery("التحفة النعت").book, "at-tuhfa-as-saniyya");
+  assert.deepEqual(parseLibraryQuery("Mənhəcdə nikah").expanded, ["النكاح"]);
+  // Akademiya sorğuları və adlar kitabxanaya getmir.
+  for (const message of ["Dərs cədvəlim", "Tapşırıqlarım", "Qiymətlərim", "Qayıbı çox olanlar", "Neçə müraciət gözləyir?", "Əli Məmmədov",
+    "cümə dərsi", "cümə", "hal", "namaz vaxtı", "Fitrət", "Fitrət Həsənova", "Səlim", "Talıb", "Həcər", "Zəkiyyə", "fiqh dərsi", "Nəhv kursu",
+    "tuhfə dərsinin cədvəli", "salam", "T0012", "Admin paneldən necə istifadə edim?"]) {
+    assert.equal(resolveLibraryMessage(message), null, message);
+  }
+  // Şamilə/Dorar əmrləri kitabxanaya düşmür (daxili rejimdə «Xarici»yə keçin izahı qalır).
+  for (const message of ["الشاملة الصبر", "dorar الصبر", "Şamilədə axtar: الطهارة"]) assert.equal(resolveLibraryMessage(message), null, message);
+  assert.deepEqual(resolveLibraryMessage("kütüphanede ara: الطلاق"), { query: "الطلاق" });
+});
+
+test("nəticə: fəsil başlığı öndə, fəsil yolu, vurğulanmış sözlər, qismən uyğunluq, səhifələmə", () => {
+  const chapter = runLibraryQuery("نواقض الوضوء").items[0];
+  assert.equal(chapter.match, "chapter");
+  assert.equal(chapter.page, 56);
+  assert.deepEqual(chapter.chapterPath, ["كتاب الطهارة", "باب نواقض الوضوء"]);
+  const text = runLibraryQuery("صاعا من تمر").items.find((hit) => hit.match === "text")!;
+  assert.ok(text.parts.some((part) => part.hit && normalizeArabic(part.text).includes("صاعا")));
+  assert.equal(text.parts.map((part) => part.text).join(""), text.snippet);
+  const partial = runLibraryQuery("زكاة الفطر قخصثق").items;
+  assert.ok(partial.length > 0 && partial.some((hit) => hit.partial));
+  const first = runLibraryQuery("الصلاة", { limit: 10 });
+  const second = runLibraryQuery("الصلاة", { limit: 10, offset: 10 });
+  assert.equal(first.items.length, 10);
+  assert.ok(first.total > 20);
+  assert.ok(second.items.every((hit) => !first.items.some((other) => other.slug === hit.slug && other.page === hit.page)));
+  const filtered = runLibraryQuery("Tuhfədə fail");
+  assert.ok(filtered.items.every((hit) => hit.slug === "at-tuhfa-as-saniyya"));
+  assert.equal(runLibraryQuery("الطهارة", { book: "at-tuhfa-as-saniyya" }).book, "at-tuhfa-as-saniyya");
+});
+
+test("tapılmayanda: «Bunu nəzərdə tuturdunuz?» fəsil təklifləri", () => {
+  assert.equal(suggestChapters("الطهاره")[0]?.title, "كتاب الطهارة");
+  const none = answerLibrary("qwrtzx");
+  assert.equal(none.sources.total, 0);
+  const near = runLibraryQuery("zekatt verilmesi qaydasi xx");
+  assert.ok(near.total > 0 || near.didYouMean.length > 0);
+});
+
+test("indeks bir dəfə qurulur və axtarış sürətlidir", () => {
+  warmLibraryIndex();
+  const started = Date.now();
+  for (const item of RECALL_SET) runLibraryQuery(item.message);
+  const perQuery = (Date.now() - started) / RECALL_SET.length;
+  assert.ok(perQuery < 150, `${perQuery.toFixed(1)} ms/sorğu`);
 });
 
 test("şəkil açarı: imza, istifadəçi, vaxt", () => {

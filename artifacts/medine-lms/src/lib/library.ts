@@ -103,3 +103,58 @@ export function useLibraryCatalog() {
 
   return { books: state?.books ?? null, token: state?.token ?? null, error, loading, reload: load };
 }
+
+// ---------------------------------------------------------------------------
+// Axtarış (Mədinə AI nəticələri, «daha çox» və oxuyucudakı axtarış)
+
+export type LibrarySnippetPart = { text: string; hit?: boolean };
+export type LibrarySearchItem = {
+  slug: string;
+  bookTitle: string;
+  bookShortTitle?: string;
+  chapterTitle: string | null;
+  chapterPath?: string[];
+  page: number;
+  printedPage: number | null;
+  snippet: string;
+  parts?: LibrarySnippetPart[];
+  match?: 'chapter' | 'text';
+  partial?: boolean;
+};
+export type LibraryChapterSuggestion = { slug: string; bookShortTitle: string; title: string; page: number; printedPage: number };
+export type LibrarySearchResponse = {
+  query: string;
+  items: LibrarySearchItem[];
+  total: number;
+  offset: number;
+  limit: number;
+  book: string | null;
+  expanded: string[];
+  didYouMean: LibraryChapterSuggestion[];
+};
+
+export const LIBRARY_SLUG = /^[a-z0-9-]{1,80}$/;
+
+export async function searchLibraryApi(getToken: () => Promise<string | null>, input: { query: string; offset?: number; book?: string | null }) {
+  const token = await getToken().catch(() => null);
+  const response = await fetch(`${siteBase}/api/library/search`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ query: input.query, offset: input.offset ?? 0, book: input.book ?? null }),
+    cache: 'no-store',
+  });
+  const data = await response.json().catch(() => null) as (LibrarySearchResponse & { error?: string }) | null;
+  if (!response.ok || !data || !Array.isArray(data.items)) throw new Error(data?.error || 'Axtarış alınmadı. Bir az sonra yenidən cəhd edin.');
+  return data;
+}
+
+/** Nəticələri kitablara görə qruplaşdırır (sıra saxlanılır). */
+export function groupLibraryItems<T extends { slug: string }>(items: T[]) {
+  const groups: Array<{ slug: string; items: T[] }> = [];
+  for (const item of items) {
+    const group = groups.find((entry) => entry.slug === item.slug);
+    if (group) group.items.push(item);
+    else groups.push({ slug: item.slug, items: [item] });
+  }
+  return groups;
+}

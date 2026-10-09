@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEven
 import { ArrowLeft, BookOpen, BookText, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardList, Compass, Copy, ExternalLink, GraduationCap, LibraryBig, Loader2, ScrollText, Search, SendHorizontal, Trash2, UsersRound } from 'lucide-react';
 import { Link } from 'wouter';
 import { useAuth, useUser } from '@clerk/react';
+import { DidYouMean, LibraryHitList } from '@/components/library-search-results';
+import { searchLibraryApi, type LibraryChapterSuggestion, type LibrarySearchItem } from '@/lib/library';
 
 // Mədinə AI — saytın daxili köməkçisi.
 // Söhbət tarixçəsi YALNIZ bu brauzerin localStorage-ində saxlanılır (açar: medine-ai-chat:<clerkUserId>).
@@ -22,7 +24,6 @@ type ShamelaItem = {
   truncated?: boolean;
 };
 
-type LibraryItem = { slug: string; bookTitle: string; chapterTitle: string | null; page: number; printedPage: number | null; snippet: string };
 
 type DorarItem = { text: string; narrator: string; muhaddith: string; source: string; page: string; grading: string };
 
@@ -30,7 +31,15 @@ type DorarItem = { text: string; narrator: string; muhaddith: string; source: st
 type ResearchSources =
   | { kind: 'shamela'; query: string; sourceUrl: string; items: ShamelaItem[]; error?: string }
   | { kind: 'dorar'; query: string; sourceUrl: string; items: DorarItem[]; error?: string }
-  | { kind: 'library'; query: string; items: LibraryItem[] };
+  | {
+    kind: 'library';
+    query: string;
+    items: LibrarySearchItem[];
+    total?: number;
+    book?: string | null;
+    expanded?: string[];
+    didYouMean?: LibraryChapterSuggestion[];
+  };
 
 type ChatMessage = {
   id: string;
@@ -56,7 +65,7 @@ const studentTiles: Tile[] = [
   { label: 'Qiymətlərim', hint: 'Fənn qiymətləri və orta bal', prompt: 'Qiymətlərim', Icon: GraduationCap },
   { label: 'Resurslar', hint: 'Dərs materialları və linklər', prompt: 'Resurslar', Icon: LibraryBig },
   { label: 'Saytdan istifadə', hint: 'Hansı düymə harada, addım-addım', prompt: 'Saytdan necə istifadə edim?', Icon: Compass },
-  { label: 'Kitabxana', hint: 'Kitabların mətnində axtarış', prompt: 'Kitabxanada axtar: ', Icon: BookText, fill: true },
+  { label: 'Kitabxana', hint: 'Ərəbcə və ya mövzu: dəstəmaz, fail…', prompt: 'Kitabxanada axtar: ', Icon: BookText, fill: true },
 ];
 
 const adminTiles: Tile[] = [
@@ -65,7 +74,7 @@ const adminTiles: Tile[] = [
   { label: 'Müraciətlər', hint: 'Gözləyən müraciətlər və statuslar', prompt: 'Neçə müraciət gözləyir?', Icon: ClipboardList },
   { label: 'Ümumi statistika', hint: 'Tələbə, müəllim, tapşırıq, test sayları', prompt: 'Ümumi statistika', Icon: UsersRound },
   { label: 'Paneldən istifadə', hint: 'Bölmələr və düymələr üzrə bələdçi', prompt: 'Admin paneldən necə istifadə edim?', Icon: Compass },
-  { label: 'Kitabxana', hint: 'Kitabların mətnində axtarış', prompt: 'Kitabxanada axtar: ', Icon: BookText, fill: true },
+  { label: 'Kitabxana', hint: 'Ərəbcə və ya mövzu: dəstəmaz, fail…', prompt: 'Kitabxanada axtar: ', Icon: BookText, fill: true },
 ];
 
 // «Xarici» rejimdə nümunə sorğular (seçilmiş mənbədə axtarılır).
@@ -302,29 +311,47 @@ function DorarCard({ item, sourceUrl }: { item: DorarItem; sourceUrl: string }) 
   );
 }
 
-function LibraryCard({ item }: { item: LibraryItem }) {
-  const page = Number.isSafeInteger(item.page) && item.page > 0 ? item.page : 1;
-  const slug = /^[a-z0-9-]{1,80}$/.test(item.slug) ? item.slug : '';
+function LibraryResults({ sources, getToken }: { sources: Extract<ResearchSources, { kind: 'library' }>; getToken: GetToken }) {
+  const [items, setItems] = useState<LibrarySearchItem[]>(sources.items);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
+  const total = typeof sources.total === 'number' ? sources.total : sources.items.length;
+  const didYouMean = Array.isArray(sources.didYouMean) ? sources.didYouMean : [];
+  if (!items.length && !didYouMean.length) return null;
+
+  async function loadMore() {
+    setLoadingMore(true);
+    setMoreError(null);
+    try {
+      const data = await searchLibraryApi(getToken, { query: sources.query, offset: items.length, book: sources.book ?? null });
+      setItems((current) => {
+        const seen = new Set(current.map((item) => `${item.slug}-${item.page}-${item.match ?? 'text'}`));
+        return [...current, ...data.items.filter((item) => !seen.has(`${item.slug}-${item.page}-${item.match ?? 'text'}`))];
+      });
+    } catch (error) {
+      setMoreError(error instanceof Error ? error.message : 'Axtarış alınmadı.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
   return (
-    <article className="rounded-2xl border border-[#e3c27a]/20 bg-white/[.03] p-4" data-testid="ai-library-result">
-      <header className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 text-right" dir="rtl" lang="ar">
-          <p className="text-[15px] leading-7 text-[#f3dca6]" style={{ fontFamily: arabicFont }}>{item.bookTitle}</p>
-          {item.chapterTitle && <p className="text-sm leading-6 text-[#f4ead5]/70" style={{ fontFamily: arabicFont }}>{item.chapterTitle}</p>}
-        </div>
-        <span className="shrink-0 rounded-full border border-[#e3c27a]/30 px-2 py-0.5 text-[10px] font-semibold text-[#f4ead5]/75">s. {item.printedPage ?? page}</span>
-      </header>
-      <p dir="rtl" lang="ar" className="mt-2 text-right text-[16px] leading-8 text-[#f4ead5]/90" style={{ fontFamily: arabicFont }}>{item.snippet}</p>
-      {slug && (
-        <Link href={`/kitabxana/${slug}?page=${page}`} className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-[#f3dca6] to-[#c49a4c] px-3.5 py-1.5 text-xs font-bold text-[#17130c] transition hover:brightness-105" data-testid="link-ai-library-open">
-          <BookOpen size={13} /> Kitabda aç
-        </Link>
+    <div className="mt-3 space-y-3" data-testid="ai-library-results">
+      {items.length > 0 && <LibraryHitList items={items} tone="dark" />}
+      <DidYouMean suggestions={didYouMean} tone="dark" />
+      {items.length > 0 && items.length < total && (
+        <button type="button" onClick={() => void loadMore()} disabled={loadingMore} className="inline-flex items-center gap-2 rounded-full border border-[#e3c27a]/35 px-4 py-1.5 text-xs font-semibold text-[#f3dca6] transition hover:bg-[#e3c27a]/10 disabled:opacity-50" data-testid="button-ai-library-more">
+          {loadingMore ? <Loader2 size={13} className="animate-spin" /> : <ChevronRight size={13} className="rotate-90" />} Daha çox ({items.length}/{total})
+        </button>
       )}
-    </article>
+      {moreError && <p className="text-xs text-red-200">{moreError}</p>}
+      <p className="text-[11px] text-[#f4ead5]/45">Axtarış skan mətninə (OCR) əsaslanır — kiçik xətalar ola bilər; dəqiq mətni kitabın özündə yoxlayın.</p>
+    </div>
   );
 }
 
 function ResearchResults({ sources, getToken, heading, pageEndpoint }: { sources: ResearchSources; getToken: GetToken; heading?: boolean; pageEndpoint: string }) {
+  if (sources.kind === 'library' && !heading) return <LibraryResults sources={sources} getToken={getToken} />;
   if (!sources.items.length) return null;
   if (heading) {
     return (
@@ -337,14 +364,6 @@ function ResearchResults({ sources, getToken, heading, pageEndpoint }: { sources
       </section>
     );
   }
-  if (sources.kind === 'library') {
-    return (
-      <div className="mt-3 space-y-3">
-        {sources.items.map((item) => <LibraryCard key={`${item.slug}-${item.page}`} item={item} />)}
-        <p className="text-[11px] text-[#f4ead5]/45">Axtarış skan mətninə (OCR) əsaslanır — kiçik xətalar ola bilər; dəqiq mətni kitabın özündə yoxlayın.</p>
-      </div>
-    );
-  }
   if (sources.kind === 'shamela') {
     return (
       <div className="mt-3 space-y-3">
@@ -353,6 +372,7 @@ function ResearchResults({ sources, getToken, heading, pageEndpoint }: { sources
       </div>
     );
   }
+  if (sources.kind === 'library') return <LibraryResults sources={sources} getToken={getToken} />;
   const sourceUrl = safeSourceUrl(sources.sourceUrl, 'https://dorar.net');
   return (
     <div className="mt-3 space-y-3">
@@ -497,8 +517,8 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
   const intro = external
     ? `Xarici rejim: yazdığınızı yalnız ${allowedTargets.includes('all') ? 'Şamilə kitabxanasında və/və ya Dorar hədis bazasında' : target === 'dorar' ? 'Dorar hədis bazasında' : 'Şamilə kitabxanasında'} axtarıram. Akademiya ${isStaff ? 'məlumatlarına' : 'məlumatlarınıza'} baxılmır. Mətnlər burada göstərilir, saytda saxlanmır.`
     : !isStaff
-      ? 'Yalnız sizin dərsləriniz, cədvəliniz, tapşırıqlarınız və nəticələriniz əsasında cavab verirəm. Kitabxanadakı kitablarda axtarmaq üçün «Kitabxanada axtar: …» yazın.'
-      : 'Daxili rejim: tələbələr, müəllimlər, dərslər, müraciətlər, tapşırıqlar, testlər və elanlar üzrə yalnız Akademiya bazasından cavab verirəm — hərf səhvlərini də başa düşürəm. Kitabxanada axtarmaq üçün «Kitabxanada axtar: …» yazın.';
+      ? 'Yalnız sizin dərsləriniz, cədvəliniz, tapşırıqlarınız və nəticələriniz əsasında cavab verirəm. Kitabxanadakı kitablarda axtarmaq üçün ərəbcə yazın və ya mövzunu deyin: «dəstəmazı pozan şeylər», «Tuhfədə fail».'
+      : 'Daxili rejim: tələbələr, müəllimlər, dərslər, müraciətlər, tapşırıqlar, testlər və elanlar üzrə yalnız Akademiya bazasından cavab verirəm — hərf səhvlərini də başa düşürəm. Kitabxanada axtarmaq üçün ərəbcə yazın və ya mövzunu deyin: «dəstəmazı pozan şeylər», «Tuhfədə fail».';
   // Telefon və planşetdə (≤1024px) kartlar bir sətirlik, üfüqi sürüşən kiçik düymələrdir; yalnız böyük ekranda iri kartlar.
   const chipRow = 'flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 

@@ -1613,10 +1613,6 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
              {scheduleAccessLoaded && scheduleAccessApproved ? <CoursesSection courses={scheduledCourses} onContinue={setSelectedLesson} onOpen={(course) => setSelectedCourse({ id: course.id, teacherName: course.instructor })} onJoin={(courseId) => void recordLessonJoin(courseId)} /> : <div data-testid="student-schedule-access-placeholder" />}
             <AnnouncementsSection announcements={resolvedAnnouncements} />
           </div>
-          <div className="mt-10 flex items-center gap-2 border-t border-[hsl(var(--border))] pt-5 text-xs text-[hsl(var(--muted-foreground))]">
-            <Clock3 size={14} />
-            <span>Öyrənmə ritminə sadiq qal — bu günün kiçik addımı sabahın bacarığıdır.</span>
-          </div>
         </main>
          {showTranscript && academicProfile && (
            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[hsl(var(--primary)/.5)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="transcript-title" data-testid="modal-student-transcript">

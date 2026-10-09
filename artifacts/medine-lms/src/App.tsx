@@ -37,6 +37,7 @@ import NotFound from '@/pages/not-found';
 import { LibraryReader } from '@/components/library-reader';
 import { Link, Route, Redirect, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { formatPersonName } from '@/lib/utils';
+import { accountProfileQueryRetry } from '@/lib/account-profile-retry';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -67,7 +68,7 @@ function stripBase(path: string): string {
 function UserPortal() {
   const { user, isLoaded } = useUser();
   const signedIn = isLoaded && Boolean(user);
-  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: signedIn, queryKey: getGetOwnUserProfileQueryKey(), staleTime: 60_000 } });
+  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: signedIn, queryKey: getGetOwnUserProfileQueryKey(), ...accountProfileQueryRetry, staleTime: 60_000 } });
   const isStaff = isStaffRole(accountProfileQuery.data?.role) || (!accountProfileQuery.data && isTeacherAccount(user));
   const scheduleAccessQuery = useGetStudentScheduleAccess({
     query: {
@@ -745,7 +746,7 @@ function ApplicationRoute() {
 function SignedInLanding() {
   const { user, isLoaded } = useUser();
   const likelyStaff = isTeacherAccount(user);
-  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: isLoaded && Boolean(user) && !likelyStaff, queryKey: getGetOwnUserProfileQueryKey() } });
+  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: isLoaded && Boolean(user) && !likelyStaff, queryKey: getGetOwnUserProfileQueryKey(), ...accountProfileQueryRetry } });
   if (!isLoaded || accountProfileQuery.isLoading) return <AccountGateLoading />;
   if (likelyStaff) return <Redirect to="/admin" />;
   if (accountProfileQuery.isError) return <AccountGateError onRetry={() => void accountProfileQuery.refetch()} />;
@@ -756,7 +757,7 @@ function SignedInLanding() {
 function AdminRoute() {
   const { user, isLoaded } = useUser();
   const likelyStaff = isTeacherAccount(user);
-  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: isLoaded && Boolean(user) && !likelyStaff, queryKey: getGetOwnUserProfileQueryKey() } });
+  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: isLoaded && Boolean(user) && !likelyStaff, queryKey: getGetOwnUserProfileQueryKey(), ...accountProfileQueryRetry } });
   if (!isLoaded || accountProfileQuery.isLoading) return <AccountGateLoading />;
   if (likelyStaff) return <AdminPanel />;
   if (accountProfileQuery.isError) return <AccountGateError onRetry={() => void accountProfileQuery.refetch()} />;
@@ -771,7 +772,7 @@ function AdminRoute() {
 function MedineAiRoute() {
   const { user, isLoaded } = useUser();
   const signedIn = isLoaded && Boolean(user);
-  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: signedIn, queryKey: getGetOwnUserProfileQueryKey(), staleTime: 60_000 } });
+  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: signedIn, queryKey: getGetOwnUserProfileQueryKey(), ...accountProfileQueryRetry, staleTime: 60_000 } });
   const profile = accountProfileQuery.data;
   const isStaff = isStaffRole(profile?.role) || (!profile && isTeacherAccount(user));
   const scheduleAccessQuery = useGetStudentScheduleAccess({
@@ -804,7 +805,7 @@ function MedineAiRoute() {
 function LibraryReaderRoute({ slug }: { slug: string }) {
   const { user, isLoaded } = useUser();
   const signedIn = isLoaded && Boolean(user);
-  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: signedIn, queryKey: getGetOwnUserProfileQueryKey(), staleTime: 60_000 } });
+  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: signedIn, queryKey: getGetOwnUserProfileQueryKey(), ...accountProfileQueryRetry, staleTime: 60_000 } });
   const isStaff = isStaffRole(accountProfileQuery.data?.role) || (!accountProfileQuery.data && isTeacherAccount(user));
   if (!isLoaded) return <AccountGateLoading />;
   return <LibraryReader slug={slug} backHref={isStaff ? '/admin' : '/user-portal'} />;

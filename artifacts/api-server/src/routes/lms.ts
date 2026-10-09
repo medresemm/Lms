@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { getApplicationWindowStatus, type ApplicationWindow } from "../lib/applicationWindow.js";
 import { isMeetingUrl, lessonTimeForDay } from "../lib/lessonAttendance.js";
+import { buildAccountProfile } from "../lib/accountProfile.js";
 import {
   applicationUploadIntentsTable,
   applicationSettingsTable,
@@ -416,7 +417,8 @@ export async function getClerkUser(userId: string) {
   const request = clerkClient.users.getUser(userId)
     .catch(() => null)
     .then((user) => {
-      clerkUserCache.set(userId, { expiresAt: Date.now() + clerkCacheTtlMs, value: user });
+      // Uğursuz Clerk sorğusu (null) keşə yazılmır: yeni qeydiyyatdan sonra müvəqqəti xəta 15 saniyə 404 kimi qalmasın.
+      if (user) clerkUserCache.set(userId, { expiresAt: Date.now() + clerkCacheTtlMs, value: user });
       return user;
     })
     .finally(() => {
@@ -1980,18 +1982,14 @@ router.get("/account/profile", async (req, res, next) => {
       : role === "admin" || role === "teacher" || role === "supervisor" || role === "owner_assistant"
         ? await permissionsForClerkUser(clerkUser, role)
           : [];
-    res.json(GetAdminUserProfileResponse.parse({
-      id: userId,
-      firstName: clerkUser.firstName || application?.firstName || "",
-      lastName: clerkUser.lastName || application?.lastName || "",
-      username: clerkUser.username || application?.username || null,
-      email: clerkUser.primaryEmailAddress?.emailAddress || application?.email || "",
-      phone: application?.phone ?? "",
-      birthDate: application?.birthDate ?? "",
-      arabicLevel: application?.arabicLevel ?? "Orta",
-      role,
-      rolePermissions,
-    }));
+    // Yeni hesabda (müraciət sətri hələ yazılmayıb, Clerk-də ad yoxdur) boş sahələr sxemi pozmasın deyə
+    // profil təhlükəsiz qurucu ilə yığılır; uyğunsuzluq qalarsa 500 yox, ehtiyat cavab qaytarılır.
+    const profile = buildAccountProfile({ userId, clerkUser, application, role, rolePermissions });
+    const parsed = GetAdminUserProfileResponse.safeParse(profile);
+    if (!parsed.success) {
+      req.log.warn({ issues: parsed.error.issues.map((issue) => issue.path.join(".")) }, "account profile failed response schema");
+    }
+    res.json(parsed.success ? parsed.data : profile);
   } catch (error) { next(error); }
 });
 

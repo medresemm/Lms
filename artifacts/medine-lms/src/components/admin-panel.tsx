@@ -144,6 +144,7 @@ import { GraduateCertificateSection } from '@/components/graduate-certificate';
 import { MedreseLibrary } from '@/components/medrese-library';
 import { CourseBooksEditor } from '@/components/course-books';
 import { formatFullName, formatPersonName } from '@/lib/utils';
+import { accountProfileQueryRetry } from '@/lib/account-profile-retry';
 
 type Tab = 'course-content' | 'course-activation' | 'schedule-prep' | 'announcement' | 'student-notifications' | 'article' | 'benefit' | 'schedule' | 'teachers-schedule' | 'messages' | 'questions' | 'student-management' | 'application' | 'exams' | 'users' | 'statistics' | 'audit-history' | 'graduation-certificates' | 'library';
 
@@ -4328,7 +4329,7 @@ export function AdminPanel() {
   });
   const articles = articlesQuery.data ?? [];
   const dailyBenefits = dailyBenefitsQuery.data ?? [];
-  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: Boolean(user), queryKey: getGetOwnUserProfileQueryKey() } });
+  const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: Boolean(user), queryKey: getGetOwnUserProfileQueryKey(), ...accountProfileQueryRetry } });
   const profileName = [accountProfileQuery.data?.firstName, accountProfileQuery.data?.lastName].filter(Boolean).join(' ').trim();
   const firstName = user?.firstName || accountProfileQuery.data?.firstName || user?.username || 'Hesab';
   const owner = accountProfileQuery.data?.role === 'owner' || isSystemOwner(user);

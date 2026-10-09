@@ -57,6 +57,26 @@ function setFont(document: PDFKit.PDFDocument, font?: string) {
   if (font) document.font(font);
 }
 
+// Ərəb hərfləri: DejaVu Serif-də ərəb qlifləri yoxdur, DejaVu Sans-da isə var (fontkit hərfləri birləşdirir).
+// PDFKit bidi dəstəkləmir, ona görə ərəb söz qrupları bölünməz boşluqla birləşdirilir ki, sağdan-sola düzgün düzülsün.
+const arabicRange = "\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF";
+const arabicPattern = new RegExp(`[${arabicRange}]`);
+const arabicRunPattern = new RegExp(`[${arabicRange}]+(?:[ \\t]+[${arabicRange}]+)*([ \\t]+)?`, "g");
+
+export function prepareCertificateText(text: string) {
+  if (!arabicPattern.test(text)) return text;
+  return text.replace(arabicRunPattern, (run: string, trailing?: string) => {
+    // Çox uzun ərəb mətni sətirlərə bölünə bilsin deyə yalnız qısa qruplar birləşdirilir.
+    if (run.trimEnd().length > 60) return run;
+    const glued = run.trimEnd().replace(/[ \t]+/g, "\u00A0");
+    return trailing ? `\u00A0${glued} ` : glued;
+  });
+}
+
+function fontForText(text: string, font?: string) {
+  return arabicPattern.test(text) && sansFont ? sansFont : font;
+}
+
 function drawCenteredText(
   document: PDFKit.PDFDocument,
   text: string,
@@ -73,6 +93,12 @@ function drawCenteredText(
   });
 }
 
+function measureBlock(document: PDFKit.PDFDocument, text: string, fontSize: number, font: string | undefined, width = contentWidth, lineGap = 4) {
+  setFont(document, fontForText(text, font));
+  document.fontSize(fontSize);
+  return document.heightOfString(prepareCertificateText(text), { width, lineGap, align: "center" });
+}
+
 function drawCenteredBlock(
   document: PDFKit.PDFDocument,
   text: string,
@@ -81,14 +107,19 @@ function drawCenteredBlock(
   font: string | undefined,
   width = contentWidth,
   lineGap = 4,
+  maxHeight?: number,
 ) {
-  setFont(document, font);
-  document.fontSize(fontSize).text(text, contentX, y, {
+  const height = measureBlock(document, text, fontSize, font, width, lineGap);
+  const clipped = maxHeight !== undefined ? Math.min(height, maxHeight) : height;
+  // `height` + `ellipsis`: mətn heç vaxt ayrılmış sahədən çıxmır və PDFKit yeni səhifə açmır.
+  document.fontSize(fontSize).text(prepareCertificateText(text), contentX, y, {
     width,
     align: "center",
     lineGap,
+    height: clipped + 0.5,
+    ellipsis: true,
   });
-  return document.heightOfString(text, { width, lineGap });
+  return clipped;
 }
 
 function drawArcText(
@@ -147,6 +178,16 @@ function drawSeal(document: PDFKit.PDFDocument, centerX: number, centerY: number
   document.restore();
 }
 
+function detailsLayout(document: PDFKit.PDFDocument, details: Array<{ label: string; value: string }>) {
+  const gap = details.length === 3 ? 0 : details.length === 4 ? 9 : 13;
+  const columnWidth = (contentWidth - gap * (details.length - 1)) / details.length;
+  const valueSize = details.length === 5 ? 8.2 : 9;
+  setFont(document, sansFont);
+  document.fontSize(valueSize);
+  const valueHeight = Math.min(32, Math.max(...details.map(({ value }) => document.heightOfString(prepareCertificateText(value), { width: columnWidth, align: "center", lineGap: 2 }))));
+  return { height: 13 + 8 + 6 + valueHeight + 14, valueHeight };
+}
+
 function drawDetails(
   document: PDFKit.PDFDocument,
   y: number,
@@ -159,12 +200,8 @@ function drawDetails(
   const labelSize = 6.4;
   const valueSize = details.length === 5 ? 8.2 : 9;
   const valueLineGap = 2;
-  const valueHeights = details.map(({ value }) => {
-    setFont(document, sansFont);
-    document.fontSize(valueSize);
-    return document.heightOfString(value, { width: columnWidth, align: "center", lineGap: valueLineGap });
-  });
-  const height = topPadding + 8 + 6 + Math.max(...valueHeights) + bottomPadding;
+  const { valueHeight } = detailsLayout(document, details);
+  const height = topPadding + 8 + 6 + valueHeight + bottomPadding;
 
   document.lineWidth(0.8).strokeColor("rgba(23, 59, 81, 0.2)");
   document.moveTo(contentX, y).lineTo(contentX + contentWidth, y).stroke();
@@ -181,10 +218,13 @@ function drawDetails(
       characterSpacing: 0.65,
     });
     document.fillColor(navy);
-    document.fontSize(valueSize).text(value, x, y + topPadding + 14, {
+    setFont(document, fontForText(value, sansFont));
+    document.fontSize(valueSize).text(prepareCertificateText(value), x, y + topPadding + 14, {
       width: columnWidth,
       align: "center",
       lineGap: valueLineGap,
+      height: valueHeight + 0.5,
+      ellipsis: true,
     });
   });
   return height;
@@ -299,20 +339,6 @@ export async function buildGraduationCertificatePdf({
     });
     bodyY += 30;
 
-    document.fillColor(navy);
-    const nameSize = studentName.length > 30 ? 28 : 39;
-    const nameHeight = drawCenteredBlock(document, studentName, bodyY, nameSize, serifFont, contentWidth, 1);
-    bodyY += nameHeight + 16.5;
-
-    const resolvedBodyText = bodyText.replace(/\{term\}/g, `${graduationTerm}`);
-    document.fillColor(navy);
-    const bodyHeight = drawCenteredBlock(document, resolvedBodyText, bodyY, 11.25, serifFont, contentWidth, 3);
-    bodyY += bodyHeight + 10.5;
-
-    document.fillColor(muted);
-    const honorHeight = drawCenteredBlock(document, honorText, bodyY, 9, serifFont, contentWidth, 2.25);
-    bodyY += honorHeight;
-
     const details = [
       { label: "Tələbə №", value: `T${String(studentNumber).padStart(4, "0")}` },
       { label: "Verilmə tarixi", value: formatDate(issuedAt) },
@@ -320,8 +346,43 @@ export async function buildGraduationCertificatePdf({
       ...(showGpa ? [{ label: "GPA / 5.00", value: gpa.toFixed(2) }] : []),
       ...(showGraduationCategory ? [{ label: "Nəticə", value: graduationCategory }] : []),
     ];
-    const detailsY = bodyY + 64;
-    const detailsHeight = drawDetails(document, detailsY, details);
+    const resolvedBodyText = bodyText.replace(/\{term\}/g, `${graduationTerm}`);
+    const footerTop = innerY + innerHeight - 90 - 40;
+    const detailsHeightEstimate = detailsLayout(document, details).height;
+    // Bütün məzmun A4 vərəqinə sığana qədər şrift ölçüləri mərhələli kiçildilir (heç vaxt ikinci səhifə yaranmır).
+    const baseNameSize = studentName.length > 42 ? 24 : studentName.length > 30 ? 28 : 39;
+    let layout = { scale: 1, nameSize: baseNameSize, bodySize: 11.25, honorSize: 9, nameHeight: 0, bodyHeight: 0, honorHeight: 0, detailsGap: 64 };
+    for (const scale of [1, 0.94, 0.88, 0.82, 0.76, 0.7, 0.64, 0.58, 0.52]) {
+      const nameSize = Math.max(18, baseNameSize * scale);
+      const bodySize = Math.max(7, 11.25 * scale);
+      const honorSize = Math.max(6.5, 9 * scale);
+      const nameHeight = measureBlock(document, studentName, nameSize, serifFont, contentWidth, 1);
+      const bodyHeight = measureBlock(document, resolvedBodyText, bodySize, serifFont, contentWidth, 3 * scale);
+      const honorHeight = measureBlock(document, honorText, honorSize, serifFont, contentWidth, 2.25 * scale);
+      const detailsGap = Math.max(22, 64 * scale);
+      layout = { scale, nameSize, bodySize, honorSize, nameHeight, bodyHeight, honorHeight, detailsGap };
+      const total = bodyY + nameHeight + 16.5 + bodyHeight + 10.5 + honorHeight + detailsGap + detailsHeightEstimate;
+      if (total <= footerTop - 8) break;
+    }
+    // Ən kiçik ölçüdə də sığmırsa, əsas və nəticə mətni ayrılmış sahədə kəsilir (…).
+    const available = footerTop - 8 - layout.detailsGap - detailsHeightEstimate - bodyY - layout.nameHeight - 16.5 - 10.5;
+    const bodyMax = Math.max(20, Math.min(layout.bodyHeight, available - Math.min(layout.honorHeight, available * 0.3)));
+    const honorMax = Math.max(0, Math.min(layout.honorHeight, available - bodyMax));
+
+    document.fillColor(navy);
+    const nameHeight = drawCenteredBlock(document, studentName, bodyY, layout.nameSize, serifFont, contentWidth, 1, layout.nameHeight);
+    bodyY += nameHeight + 16.5;
+
+    document.fillColor(navy);
+    const bodyHeight = drawCenteredBlock(document, resolvedBodyText, bodyY, layout.bodySize, serifFont, contentWidth, 3 * layout.scale, bodyMax);
+    bodyY += bodyHeight + 10.5;
+
+    document.fillColor(muted);
+    const honorHeight = honorMax > 4 ? drawCenteredBlock(document, honorText, bodyY, layout.honorSize, serifFont, contentWidth, 2.25 * layout.scale, honorMax) : 0;
+    bodyY += honorHeight;
+
+    const detailsY = Math.min(bodyY + layout.detailsGap, footerTop - 8 - detailsHeightEstimate);
+    drawDetails(document, detailsY, details);
 
     const footerHeight = 90;
     const footerBottomPadding = 40;
@@ -339,14 +400,14 @@ export async function buildGraduationCertificatePdf({
       document.lineWidth(0.8).strokeColor(navy)
         .moveTo(footerColumns[0] + (sideColumnWidth - 112.5) / 2, footerY + 58.5)
         .lineTo(footerColumns[0] + (sideColumnWidth + 112.5) / 2, footerY + 58.5).stroke();
-      setFont(document, serifFont);
-      document.fontSize(9.75).text(directorTitle, footerColumns[0], footerY + 67.5, {
+      setFont(document, fontForText(directorTitle, serifFont));
+      document.fontSize(9.75).text(prepareCertificateText(directorTitle), footerColumns[0], footerY + 67.5, {
         width: sideColumnWidth,
         align: "center",
         lineBreak: false,
       });
       setFont(document, sansFont);
-      document.fontSize(9).text(directorName, footerColumns[0], footerY + 84, {
+      document.fontSize(9).text(prepareCertificateText(directorName), footerColumns[0], footerY + 84, {
         width: sideColumnWidth,
         align: "center",
         lineBreak: false,

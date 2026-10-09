@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import {
   CheckCircle2,
@@ -31,6 +32,7 @@ import {
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatFullName } from '@/lib/utils';
+import { CertificateSheet, ScaledCertificate } from '@/components/certificate-sheet';
 
 const academyName = 'Mədinə Tədris Akademiyası';
 
@@ -72,13 +74,18 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat('az-AZ', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(value));
 }
 
-function formatSealDate(value: string) {
-  return new Intl.DateTimeFormat('az-AZ', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value));
-}
-
 function certificateUrl(token: string) {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   return `${window.location.origin}${basePath}/verify/certificate/${encodeURIComponent(token)}`;
+}
+
+function certificateSheetProps(certificate: GraduationCertificate, student?: AdminGraduationCertificate) {
+  return {
+    certificate,
+    studentName: certificate.studentName || (student ? formatFullName(student.firstName, student.lastName) : 'Məzun tələbə'),
+    studentNumber: student ? `T${String(student.studentNumber).padStart(4, '0')}` : '—',
+    logoUrl: `${import.meta.env.BASE_URL}logo.svg`,
+  };
 }
 
 function CertificatePreview({
@@ -90,75 +97,60 @@ function CertificatePreview({
   certificate: GraduationCertificate;
   qrDataUrl: string;
 }) {
-  const name = certificate.studentName || (student ? formatFullName(student.firstName, student.lastName) : 'Məzun tələbə');
-  const studentNumber = student ? `T${String(student.studentNumber).padStart(4, '0')}` : '—';
-  const bodyText = certificate.bodyText.replace(/\{term\}/g, `${certificate.graduationTerm}`);
-  const categoryStyle = graduationCategoryStyle(certificate.graduationCategory);
-  const visibleDetailsCount = 3 + Number(certificate.showGpa) + Number(certificate.showGraduationCategory);
   return (
     <div className="certificate-preview-shell">
-      <article className={`certificate-print-area ${graduationCategoryStyle(certificate.graduationCategory).frameClassName}`} data-testid="certificate-preview">
-        <div className="certificate-inner-border">
-          <header className="certificate-header">
-            <img className="certificate-brand-logo" src={`${import.meta.env.BASE_URL}logo.svg`} alt={academyName} />
-            <div className="certificate-header-copy">
-              <p className="certificate-kicker">RƏSMİ AKADEMİK SƏNƏD</p>
-              <p className="certificate-subtitle">İslami elmlər və davamlı təhsil</p>
-            </div>
-          </header>
-          <div className="certificate-rule" aria-hidden="true" />
-          <main className="certificate-body">
-            <p className="certificate-eyebrow">{certificate.certificateTitle}</p>
-            <h1>{name}</h1>
-            <p className="certificate-copy">
-              {bodyText}
-            </p>
-            <p className="certificate-honor">{certificate.honorText}</p>
-          </main>
-          <div className={`certificate-details certificate-details-${visibleDetailsCount}`}>
-            <div><span>Tələbə №</span><strong>{studentNumber}</strong></div>
-            <div><span>Verilmə tarixi</span><strong>{formatDate(certificate.issuedAt)}</strong></div>
-            <div><span>Şəhadətnamə №</span><strong>{certificate.certificateNumber}</strong></div>
-            {certificate.showGpa && <div><span>GPA / 5.00</span><strong>{certificate.gpa.toFixed(2)}</strong></div>}
-            {certificate.showGraduationCategory && <div><span>Nəticə</span><strong>{certificate.graduationCategory}</strong></div>}
-          </div>
-          <footer className="certificate-footer">
-            {certificate.showDirector ? <div className="certificate-signature">
-              <div className="certificate-signature-line" />
-              <strong>{certificate.directorTitle}</strong>
-              <span>{certificate.directorName}</span>
-            </div> : <div className="certificate-signature certificate-signature-hidden" aria-hidden="true" />}
-            {certificate.showSeal ? <div className="certificate-seal-wrap">
-              <div className="certificate-seal" aria-label="Akademiyanın möhürü">
-                <svg viewBox="0 0 120 120" role="img" aria-hidden="true">
-                  <defs>
-                    <path id="certificate-seal-top-arc" d="M 14,60 A 46,46 0 0,1 106,60" />
-                    <path id="certificate-seal-bottom-arc" d="M 14,60 A 46,46 0 0,0 106,60" />
-                  </defs>
-                  <circle className="certificate-seal-outer-ring" cx="60" cy="60" r="56" />
-                  <circle className="certificate-seal-middle-ring" cx="60" cy="60" r="49" />
-                  <circle className="certificate-seal-inner-ring" cx="60" cy="60" r="39" />
-                  <text className="certificate-seal-ring-text certificate-seal-top-text"><textPath href="#certificate-seal-top-arc" startOffset="50%">MƏDİNƏ TƏDRİS AKADEMİYASI</textPath></text>
-                  <text className="certificate-seal-ring-text certificate-seal-bottom-text"><textPath href="#certificate-seal-bottom-arc" startOffset="50%">{formatSealDate(certificate.issuedAt)}</textPath></text>
-                  <circle className="certificate-seal-dot" cx="16" cy="60" r="2" />
-                  <circle className="certificate-seal-dot" cx="104" cy="60" r="2" />
-                  <rect className="certificate-seal-monogram-box" x="43" y="43" width="34" height="34" rx="5" />
-                  <text className="certificate-seal-monogram" x="60" y="68">M</text>
-                </svg>
-              </div>
-            </div> : <div className="certificate-seal-wrap certificate-seal-hidden" aria-hidden="true" />}
-            <div className="certificate-qr-block">
-              {qrDataUrl ? <img src={qrDataUrl} alt="Şəhadətnaməni yoxlamaq üçün QR kod" /> : <div className="certificate-qr-placeholder"><LoaderCircle size={18} className="animate-spin" /></div>}
-              <span>Onlayn yoxlama</span>
-            </div>
-          </footer>
-        </div>
-      </article>
+      <ScaledCertificate>
+        <CertificateSheet {...certificateSheetProps(certificate, student)} qrDataUrl={qrDataUrl} />
+      </ScaledCertificate>
       <div className="certificate-preview-caption">
         <ShieldCheck size={15} />
-        <span>QR kod sənədin ictimai doğrulama səhifəsinə aparır.</span>
+        <span>A4 (210 × 297 mm) · QR kod sənədin ictimai doğrulama səhifəsinə aparır.</span>
       </div>
     </div>
+  );
+}
+
+// Çap üçün: şəhadətnamə body-nin birbaşa övladı kimi, miqyaslanmadan dəqiq A4 ölçüsündə render olunur.
+// Çap zamanı səhifənin qalan hissəsi gizlədilir və @page { size: A4 portrait; margin: 0 } tətbiq edilir.
+const PRINT_PAGE_STYLE_ID = 'certificate-print-page-style';
+
+function CertificatePrintPortal({ student, certificate, qrDataUrl, onDone }: { student?: AdminGraduationCertificate; certificate: GraduationCertificate; qrDataUrl: string; onDone: () => void }) {
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.id = PRINT_PAGE_STYLE_ID;
+    style.textContent = '@page { size: 210mm 297mm; margin: 0; } @media print { html, body { width: 210mm !important; height: 297mm !important; margin: 0 !important; padding: 0 !important; background: #ffffff !important; } }';
+    document.head.appendChild(style);
+    document.body.classList.add('printing-certificate');
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      document.body.classList.remove('printing-certificate');
+      style.remove();
+      onDone();
+    };
+    window.addEventListener('afterprint', finish);
+    const images = Array.from(document.querySelectorAll<HTMLImageElement>('.certificate-print-root img'));
+    const ready = Promise.all(images.map((image) => (image.complete ? Promise.resolve() : new Promise<void>((resolve) => { image.onload = () => resolve(); image.onerror = () => resolve(); }))));
+    const fontsReady = document.fonts?.ready ?? Promise.resolve();
+    void Promise.all([ready, fontsReady]).then(() => {
+      window.requestAnimationFrame(() => {
+        window.print();
+        // Bəzi brauzerlər afterprint göndərmir; print() bloklayıcıdırsa burada təmizləyirik.
+        window.setTimeout(finish, 500);
+      });
+    });
+    return () => {
+      window.removeEventListener('afterprint', finish);
+      document.body.classList.remove('printing-certificate');
+      style.remove();
+    };
+  }, [onDone]);
+  return createPortal(
+    <div className="certificate-print-root" aria-hidden="true">
+      <CertificateSheet {...certificateSheetProps(certificate, student)} qrDataUrl={qrDataUrl} testId="certificate-print-sheet" />
+    </div>,
+    document.body,
   );
 }
 
@@ -275,11 +267,9 @@ export function GraduateCertificateSection({ canRevoke }: { canRevoke: boolean }
     );
   };
 
-  const print = () => {
-    document.body.classList.add('printing-certificate');
-    window.setTimeout(() => document.body.classList.remove('printing-certificate'), 1200);
-    window.print();
-  };
+  const [isPrinting, setIsPrinting] = useState(false);
+  const finishPrinting = useCallback(() => setIsPrinting(false), []);
+  const print = () => setIsPrinting(true);
 
   const downloadPdf = async () => {
     if (!selectedListItem || !selectedCertificate) return;
@@ -424,6 +414,7 @@ export function GraduateCertificateSection({ canRevoke }: { canRevoke: boolean }
            <button type="button" onClick={() => setDraft({ ...draft, verificationLocked: !draft.verificationLocked })} className={`inline-flex w-fit items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-bold ${draft.verificationLocked ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-emerald-300 bg-emerald-50 text-emerald-800'}`} data-testid="button-toggle-certificate-verification">{draft.verificationLocked ? <Unlock size={15} /> : <Lock size={15} />} {draft.verificationLocked ? 'Verification kilidini aç' : 'Verification-a bağla'}</button>
          </div>}
          <CertificatePreview student={selectedListItem} certificate={{ ...selectedCertificate, ...draft }} qrDataUrl={qrDataUrl} />
+         {isPrinting && <CertificatePrintPortal student={selectedListItem} certificate={{ ...selectedCertificate, ...draft }} qrDataUrl={qrDataUrl} onDone={finishPrinting} />}
       </div>}
     </section>
   );

@@ -288,13 +288,50 @@
   background: hsl(var(--muted) / .34);
 }
 
+/* Şəhadətnamə vərəqi həmişə dəqiq A4 portret ölçüsündədir (210 × 297 mm). */
 .certificate-print-area {
-  width: min(100%, 760px);
-  margin: 0 auto;
-  padding: 16px;
+  display: flex;
+  box-sizing: border-box;
+  width: 210mm;
+  height: 297mm;
+  min-width: 210mm;
+  max-width: 210mm;
+  min-height: 297mm;
+  max-height: 297mm;
+  margin: 0;
+  padding: 5mm;
+  overflow: hidden;
   background: #d6b467;
   box-shadow: 0 18px 45px rgba(23, 59, 81, .16);
   color: #173b51;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.certificate-print-area *,
+.certificate-print-area *::before,
+.certificate-print-area *::after {
+  box-sizing: border-box;
+}
+
+/* Ekran önizləməsi: vərəq yalnız transform ilə kiçildilir, ölçüsü dəyişmir. */
+.certificate-scale-frame {
+  position: relative;
+  width: 100%;
+  max-width: 210mm;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.certificate-scale-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+
+.certificate-print-root {
+  display: none;
 }
 
 .certificate-frame-weak {
@@ -315,9 +352,13 @@
 
 .certificate-inner-border {
   position: relative;
-  min-height: 920px;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
-  padding: 64px 70px 52px;
+  padding: 17mm 18mm 13mm;
   border: 1px solid rgba(23, 59, 81, .7);
   outline: 1px solid rgba(255, 255, 255, .78);
   outline-offset: -8px;
@@ -486,7 +527,11 @@
 }
 
 .certificate-body {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .certificate-eyebrow {
@@ -515,9 +560,27 @@
 .certificate-body h1 {
   margin: 20px 0 22px;
   font-family: Georgia, serif;
-  font-size: clamp(32px, 5vw, 52px);
+  font-size: 50px;
   line-height: 1.1;
   letter-spacing: -.02em;
+}
+
+.certificate-body h1.certificate-name-long {
+  font-size: 38px;
+}
+
+.certificate-body h1.certificate-name-xlong {
+  font-size: 30px;
+}
+
+.certificate-copy.certificate-copy-long {
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.certificate-copy.certificate-copy-xlong {
+  font-size: 11.5px;
+  line-height: 1.55;
 }
 
 .certificate-copy,
@@ -543,8 +606,9 @@
 .certificate-details {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
+  flex: 0 0 auto;
   gap: 20px;
-  margin-top: 52px;
+  margin-top: 12mm;
   padding: 16px 0;
   border-top: 1px solid rgba(23, 59, 81, .2);
   border-bottom: 1px solid rgba(23, 59, 81, .2);
@@ -574,9 +638,11 @@
 .certificate-footer {
   display: grid;
   grid-template-columns: 1fr 120px 1fr;
+  flex: 0 0 auto;
   align-items: end;
   gap: 18px;
-  margin-top: 50px;
+  margin-top: auto;
+  padding-top: 8mm;
 }
 
 .certificate-signature {
@@ -720,12 +786,6 @@
   font-size: 7px;
 }
 
-@media (max-width: 720px) {
-  .certificate-details {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
 .certificate-preview-caption {
   display: flex;
   align-items: center;
@@ -736,42 +796,44 @@
   font-size: .72rem;
 }
 
+/* Çap: yalnız body-yə portal edilmiş A4 vərəq çap olunur; kənar boşluq və miqyaslama yoxdur. */
+@page certificate {
+  size: 210mm 297mm;
+  margin: 0;
+}
+
 @media print {
-  body.printing-certificate * {
-    visibility: hidden !important;
+  body.printing-certificate > *:not(.certificate-print-root) {
+    display: none !important;
   }
 
-  body.printing-certificate .certificate-print-area,
-  body.printing-certificate .certificate-print-area * {
-    visibility: visible !important;
+  body.printing-certificate {
+    width: 210mm !important;
+    min-width: 0 !important;
+    height: 297mm !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
   }
 
-  body.printing-certificate .certificate-print-area {
-    position: absolute !important;
-    top: 0;
-    left: 0;
+  body.printing-certificate .certificate-print-root {
+    display: block !important;
+    page: certificate;
     width: 210mm;
-    min-height: 297mm;
-    box-sizing: border-box;
+    height: 297mm;
     margin: 0;
-    padding: 5mm;
-    box-shadow: none;
-  }
-
-  body.printing-certificate .certificate-inner-border {
-    min-height: 277mm;
-    padding: 18mm 18mm 14mm;
-  }
-
-  body.printing-certificate .certificate-preview-shell {
-    overflow: visible;
     padding: 0;
-    border: 0;
-    background: transparent;
+    overflow: hidden;
+    break-after: avoid;
+    break-inside: avoid;
   }
 
-  body.printing-certificate .certificate-preview-caption {
-    display: none;
+  body.printing-certificate .certificate-print-root .certificate-print-area {
+    box-shadow: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
 

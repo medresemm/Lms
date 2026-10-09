@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowLeft, BookOpen, BookText, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Compass, Copy, ExternalLink, GraduationCap, LibraryBig, Loader2, ScrollText, Search, SendHorizontal, Trash2, UsersRound } from 'lucide-react';
+import { ArrowLeft, BookOpen, BookText, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Compass, Copy, ExternalLink, GraduationCap, HelpCircle, LibraryBig, Loader2, ScrollText, Search, SendHorizontal, Trash2, UsersRound } from 'lucide-react';
 import { Link } from 'wouter';
 import { useAuth, useUser } from '@clerk/react';
 import { DidYouMean, LibraryHitList } from '@/components/library-search-results';
@@ -571,6 +571,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
   const [source, setSource] = useState<SourcePreference>(() => loadSourcePreference(user?.id, defaultSource));
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isStaff = mode === 'admin';
@@ -723,7 +724,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
 
   return (
     <section className="relative mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden text-[#f4ead5]" data-testid={`section-ai-assistant-${mode}`} aria-label="Mədinə AI">
-      <header className="relative z-10 shrink-0 px-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:px-5 sm:pt-5 md:px-7">
+      <header className="relative z-20 shrink-0 px-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:px-5 sm:pt-5 md:px-7">
         <div className="flex items-center justify-between gap-2 sm:gap-3">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <BrandTile size="sm" />
@@ -732,7 +733,15 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
               <p className="mt-1 truncate text-[10px] uppercase tracking-[.14em] text-[#f4ead5]/55 sm:tracking-[.18em]">{isStaff ? 'Admin köməkçisi' : 'Tələbə köməkçisi'} · {external ? 'xarici' : 'daxili'}</p>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="relative flex shrink-0 items-center gap-2">
+            <button type="button" onClick={() => setHelpOpen((open) => !open)} aria-expanded={helpOpen} aria-label="İzah" className="inline-flex shrink-0 items-center justify-center rounded-full border border-[#e3c27a]/30 p-2 text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6]" data-testid="button-ai-help">
+              <HelpCircle size={14} />
+            </button>
+            {helpOpen && (
+              <div className="absolute right-0 top-full z-30 mt-2 w-[min(18rem,calc(100vw-2.5rem))] rounded-2xl border border-[#e3c27a]/35 bg-[#1c1812] p-3 text-left text-xs leading-5 text-[#f4ead5]/80 shadow-lg" data-testid="panel-ai-help">
+                {intro}
+              </div>
+            )}
             <button type="button" onClick={clearHistory} disabled={!hasChat || sending} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#e3c27a]/30 px-2.5 py-2 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6] disabled:cursor-not-allowed disabled:opacity-40 sm:px-3" aria-label="Tarixçəni təmizlə" data-testid="button-ai-clear-history">
               <Trash2 size={13} /> <span className="hidden sm:inline">Tarixçəni təmizlə</span>
             </button>
@@ -782,7 +791,6 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
               <span>Sual edin · Öyrənin · Dərinləşin</span>
               <span className="h-px flex-1 bg-gradient-to-l from-transparent to-[#e3c27a]/50" />
             </div>
-            <p className="mt-3 text-xs leading-5 text-[#f4ead5]/55 sm:mt-5">{intro}</p>
           </div>
         ) : (
           <ol className="space-y-4" aria-live="polite">

@@ -1198,20 +1198,30 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
   const currentSemester = academicProfile?.semesters.find((item) => item.termNumber === academicProfile.currentTermNumber)?.label;
   const apiBase = import.meta.env.BASE_URL.replace(/\/$/, '');
   const hasNewNotification = Boolean(activeNotification) && !showNotifications;
+  const dismissedNotificationIds = useRef(new Set<number>());
   useEffect(() => {
     let active = true;
-    void fetch(`${apiBase}/api/student/notifications`, { cache: 'no-store' })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('Bildirişlər yüklənmədi.');
-        return await response.json() as StudentNotification[];
-      })
-      .then((notifications) => { if (active && notifications.length) setActiveNotification(notifications[0]); })
-      .catch(() => undefined);
-    return () => { active = false; };
+    const loadNotifications = () => {
+      void fetch(`${apiBase}/api/student/notifications`, { cache: 'no-store' })
+        .then(async (response) => {
+          if (!response.ok) throw new Error('Bildirişlər yüklənmədi.');
+          return await response.json() as StudentNotification[];
+        })
+        .then((notifications) => {
+          if (!active) return;
+          const next = notifications.find((notification) => !dismissedNotificationIds.current.has(notification.id));
+          if (next) setActiveNotification((current) => current?.id === next.id ? current : next);
+        })
+        .catch(() => undefined);
+    };
+    loadNotifications();
+    const interval = window.setInterval(loadNotifications, 20000);
+    return () => { active = false; window.clearInterval(interval); };
   }, [apiBase]);
   const dismissNotification = async () => {
     if (!activeNotification) return;
     const notification = activeNotification;
+    dismissedNotificationIds.current.add(notification.id);
     setActiveNotification(null);
     await fetch(`${apiBase}/api/student/notifications/${notification.id}/dismiss`, { method: 'POST' }).catch(() => undefined);
   };

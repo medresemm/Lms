@@ -868,46 +868,36 @@ const seedCourses = [
   },
 ] as const;
 
-const seedAnnouncements = [
-  {
-    title: "Yeni dərs materialları əlavə edildi",
-    body: "Quran fənnində növbəti mövzu üçün yeni çalışma vərəqləri artıq əlçatandır.",
-    date: "2026-08-22",
-    type: "info" as const,
-  },
-  {
-    title: "Sınaq imtahanı həftəsi",
-    body: "Yekun hazırlıq qrupları üçün sınaq imtahanları 26–29 avqust tarixlərində keçiriləcək.",
-    date: "2026-08-20",
-    type: "important" as const,
-  },
-  {
-    title: "Canlı görüş: Suallarınıza cavab",
-    body: "Müəllimlərlə açıq görüşə qoşulun və dərslərlə bağlı suallarınızı verin.",
-    date: "2026-08-18",
-    type: "event" as const,
-  },
-];
-
 const seedDailyBenefit = {
   body: "Allah kimə xeyir vermək istəyərsə, onu dində dərin anlayış sahibi (fəqih) edər.",
   source: "Səhih əl-Buxari və Səhih Müslim",
 };
 
-const seedArticles = [
+const demoAnnouncements = [
+  {
+    title: "Yeni dərs materialları əlavə edildi",
+    body: "Quran fənnində növbəti mövzu üçün yeni çalışma vərəqləri artıq əlçatandır.",
+  },
+  {
+    title: "Sınaq imtahanı həftəsi",
+    body: "Yekun hazırlıq qrupları üçün sınaq imtahanları 26–29 avqust tarixlərində keçiriləcək.",
+  },
+  {
+    title: "Canlı görüş: Suallarınıza cavab",
+    body: "Müəllimlərlə açıq görüşə qoşulun və dərslərlə bağlı suallarınızı verin.",
+  },
+] as const;
+
+const demoArticles = [
   {
     title: "Elm öyrənməyə necə davam etməli?",
     excerpt: "Davamlı öyrənmə üçün sadə və praktik addımlar.",
-    body: "Elm öyrənmək səbir, nizam və davamlılıq tələb edir. Hər gün az da olsa mütaliə etmək və öyrəndiklərini təkrar etmək möhkəm nəticə yaradır.",
-    author: "Mədinə Tədris Akademiyası",
   },
   {
     title: "Dərsə hazırlığın əhəmiyyəti",
     excerpt: "Dərsdən əvvəl hazırlıq öyrənməni necə asanlaşdırır?",
-    body: "Dərsdən əvvəl mövzuya qısa nəzər salmaq, sualları qeyd etmək və dərsdən sonra təkrar etmək öyrənilən məlumatın daha yaxşı yadda qalmasına kömək edir.",
-    author: "Mədinə Tədris Akademiyası",
   },
-];
+] as const;
 
 let seedPromise: Promise<void> | undefined;
 
@@ -923,13 +913,8 @@ async function ensureSeeded() {
           })),
         );
       }
-      const existingAnnouncements = await db.select({ id: announcementsTable.id }).from(announcementsTable).limit(1);
-      if (existingAnnouncements.length === 0) await db.insert(announcementsTable).values(seedAnnouncements);
-      const existingArticles = await db.select({ id: articlesTable.id }).from(articlesTable).limit(1);
-      if (existingArticles.length === 0) {
-        const createdAt = new Date().toISOString();
-        await db.insert(articlesTable).values(seedArticles.map((article) => ({ ...article, createdAt })));
-      }
+      await db.delete(announcementsTable).where(or(...demoAnnouncements.map((item) => and(eq(announcementsTable.title, item.title), eq(announcementsTable.body, item.body)))));
+      await db.delete(articlesTable).where(or(...demoArticles.map((item) => and(eq(articlesTable.title, item.title), eq(articlesTable.excerpt, item.excerpt), eq(articlesTable.author, "Mədinə Tədris Akademiyası")))));
       const existingResources = await db.select({ id: resourcesTable.id }).from(resourcesTable).limit(1);
       if (existingResources.length === 0) {
         const seededCourses = await db.select({ id: coursesTable.id, title: coursesTable.title }).from(coursesTable);

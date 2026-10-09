@@ -4,6 +4,7 @@ import { Link } from 'wouter';
 import { useAuth } from '@clerk/react';
 import { BookMarked, BookOpen, Loader2, Plus, Trash2 } from 'lucide-react';
 import { libraryReaderHref, useLibraryCatalog, type LibraryBook } from '@/lib/library';
+import { matchResourceBook, type ResourceBookMatch } from '@/lib/resource-books';
 import {
   courseBookRange,
   MAX_BOOKS_PER_LESSON,
@@ -46,6 +47,34 @@ export function CourseBooksList({ books, compact = false, testId }: { books: Cou
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * Dərs resursunda adı çəkilən Kitabxana kitabı (məs. «TEST kitab — شرح منهج السالكين», «باب نواقض الوضوء, səh. 55-56»).
+ * Kataloq yalnız resurs olduqda yüklənir. Qaytarır: resurs → kitab (fəsil/səhifə ilə) və ya null.
+ */
+export function useResourceBookMatcher(enabled: boolean) {
+  const catalog = useLibraryCatalog(enabled);
+  const books = enabled ? catalog.books ?? [] : [];
+  return useMemo(() => (resource: { title: string; body?: string | null }) => (books.length ? matchResourceBook(resource, books) : null), [books]);
+}
+
+/** Resurs kartındakı kitab sətri + «Oxu» (/kitabxana/<slug>?page=<n>, fəsildə açılır). */
+export function ResourceBookRead({ match }: { match: ResourceBookMatch }) {
+  const range = match.printedFrom !== null
+    ? match.printedTo !== null && match.printedTo !== match.printedFrom ? `s. ${match.printedFrom}–${match.printedTo}` : `s. ${match.printedFrom}`
+    : null;
+  return (
+    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2" data-testid={`resource-book-${match.slug}`}>
+      <div className="min-w-0">
+        <p className="flex items-center gap-1.5 text-xs font-bold text-[hsl(var(--primary))]"><BookMarked size={13} className="shrink-0 text-[hsl(var(--secondary-foreground))]" /><span className="truncate">{match.bookShortTitle}</span></p>
+        {(match.chapterTitle || range) && <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">{match.chapterTitle && <span dir="rtl" className="font-[Amiri,serif] text-[13px]">{match.chapterTitle}</span>}{match.chapterTitle && range && ' · '}{range}</p>}
+      </div>
+      <Link href={libraryReaderHref(match.slug, match.openPage)} className="focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[hsl(var(--primary))] px-3 py-1.5 text-xs font-bold text-[hsl(var(--primary-foreground))] hover:opacity-90" data-testid={`button-resource-book-read-${match.slug}`}>
+        <BookOpen size={13} /> Oxu
+      </Link>
+    </div>
   );
 }
 

@@ -1,6 +1,7 @@
 // Dərs kitabları: dərsə (fənn + semestr) Kitabxanadan kitab(lar) bağlamaq — istəyə görə fəsil və ya səhifə aralığı.
 // Bazadan asılı deyil (testlərdə birbaşa yoxlanılır).
 import type { LibraryBook } from "./catalog.js";
+import { matchResourceBook } from "./resourceBooks.js";
 
 export const MAX_BOOKS_PER_LESSON = 8;
 
@@ -159,4 +160,88 @@ export function answerCourseBooks(input: {
     reply: [items.length === 1 ? "Bu dərsdə keçəcəyiniz kitab:" : "Dərslərinizdə keçəcəyiniz kitablar:", ...lines.map((line) => `• ${line}`), "«Oxu» düyməsi kitabı seçilmiş fəsil/səhifədə açır."].join("\n"),
     items,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Ehtiyat yol: lms_course_books cədvəli yoxdursa və ya fənn üçün boşdursa, kitab dərs resurslarından tanınır
+// (bax resourceBooks.ts), o da yoxdursa Kitabxanadakı fənnə aid daxili kitablar təklif olunur.
+
+export interface CourseResourceRef {
+  courseId: number;
+  termNumber: number;
+  title: string;
+  body: string | null;
+}
+
+export type CourseBooksItem = { courseId: number; courseTitle: string; termNumber: number; books: CourseBookView[] };
+
+function relevantCourses(courses: StudentCourseRef[], matched: Set<number> | null) {
+  const seen = new Set<number>();
+  return courses.filter((course) => {
+    if (matched && !matched.has(course.courseId)) return false;
+    if (seen.has(course.courseId)) return false;
+    seen.add(course.courseId);
+    return true;
+  });
+}
+
+/** Dərs resurslarında adı çəkilən Kitabxana kitabları (fəsil/səhifə ilə). */
+export function courseBooksFromResources(input: {
+  courses: StudentCourseRef[];
+  matchedCourseIds: Set<number> | null;
+  currentTerm: number;
+  resources: CourseResourceRef[];
+  catalog: readonly LibraryBook[];
+}): CourseBooksItem[] {
+  const items: CourseBooksItem[] = [];
+  for (const course of relevantCourses(input.courses, input.matchedCourseIds)) {
+    const limit = Math.max(input.currentTerm, course.termNumber);
+    const byTerm = new Map<number, CourseBookView[]>();
+    for (const resource of input.resources) {
+      if (resource.courseId !== course.courseId || resource.termNumber > limit) continue;
+      const match = matchResourceBook(resource, input.catalog);
+      if (!match) continue;
+      const book = input.catalog.find((candidate) => candidate.slug === match.slug);
+      const views = byTerm.get(resource.termNumber) ?? [];
+      if (views.some((view) => view.slug === match.slug && view.openPage === match.openPage)) continue;
+      views.push({
+        slug: match.slug,
+        pageFrom: match.printedFrom !== null ? match.openPage : null,
+        pageTo: match.printedTo !== null && book ? match.printedTo + book.pageOffset : null,
+        chapterTitle: match.chapterTitle,
+        note: null,
+        available: true,
+        bookTitle: match.bookTitle,
+        bookShortTitle: match.bookShortTitle,
+        author: book?.author ?? "",
+        printedFrom: match.printedFrom,
+        printedTo: match.printedTo,
+        openPage: match.openPage,
+      });
+      byTerm.set(resource.termNumber, views);
+    }
+    const terms = Array.from(byTerm.keys()).sort((a, b) => b - a);
+    const term = terms.includes(course.termNumber) ? course.termNumber : terms[0];
+    if (term === undefined) continue;
+    items.push({ courseId: course.courseId, courseTitle: course.title, termNumber: term, books: byTerm.get(term)!.slice(0, MAX_BOOKS_PER_LESSON) });
+  }
+  return items;
+}
+
+function plain(value: string) {
+  return value.toLocaleLowerCase("az").replace(/[^\p{L}]/gu, "");
+}
+
+/** Fənnin adına uyğun mövzulu Kitabxana kitabları (məs. «Fiqh» → Şərhu Mənhəcis-Salikin). Təyin edilmiş kitab deyil, təklifdir. */
+export function suggestedLibraryBooks(input: { courses: StudentCourseRef[]; matchedCourseIds: Set<number> | null; catalog: readonly LibraryBook[] }) {
+  const result: Array<{ courseId: number; courseTitle: string; termNumber: number; books: LibraryBook[] }> = [];
+  for (const course of relevantCourses(input.courses, input.matchedCourseIds)) {
+    const title = plain(course.title);
+    const books = input.catalog.filter((book) => {
+      const subject = plain(book.subject);
+      return subject.length >= 3 && title.includes(subject);
+    });
+    if (books.length) result.push({ courseId: course.courseId, courseTitle: course.title, termNumber: course.termNumber, books });
+  }
+  return result;
 }

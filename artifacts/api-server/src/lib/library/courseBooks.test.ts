@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { LIBRARY_BOOKS } from "./catalog.js";
-import { answerCourseBooks, detectCourseBooksQuestion, MAX_BOOKS_PER_LESSON, resolveCourseBooks, validateCourseBooks } from "./courseBooks.js";
+import { answerCourseBooks, courseBooksFromResources, detectCourseBooksQuestion, MAX_BOOKS_PER_LESSON, resolveCourseBooks, suggestedLibraryBooks, validateCourseBooks } from "./courseBooks.js";
 import { uploadedRowToBook, uploadedSlug } from "./uploads.js";
 
 const manhaj = LIBRARY_BOOKS.find((book) => book.slug === "manhaj-as-salikin")!;
@@ -103,4 +103,34 @@ test("answerCourseBooks answers only for the student's courses", () => {
   assert.match(nahw.reply, /«Nəhv» dərsi üçün hələ/);
   const all = answerCourseBooks({ courses, matchedCourseIds: null, currentTerm: 2, rows, catalog });
   assert.deepEqual(all.items.map((item) => item.courseId), [1], "course 9 is not the student's");
+});
+
+test("courseBooksFromResources: book attached as a lesson resource is found with chapter + pages (lms_course_books missing)", () => {
+  const courses = [{ courseId: 7, title: "TEST Fiqh dərsi", termNumber: 1 }, { courseId: 8, title: "Nəhv", termNumber: 1 }];
+  const items = courseBooksFromResources({
+    courses,
+    matchedCourseIds: new Set([7]),
+    currentTerm: 1,
+    resources: [
+      { courseId: 7, termNumber: 1, title: "Zoom", body: "https://meet.google.com/test-abc-def" },
+      { courseId: 7, termNumber: 1, title: "TEST kitab — شرح منهج السالكين", body: "باب نواقض الوضوء, səh. 55-56" },
+      { courseId: 7, termNumber: 2, title: "التحفة السنية", body: "" }, // gələcək semestr — göstərilmir
+    ],
+    catalog,
+  });
+  assert.equal(items.length, 1);
+  assert.equal(items[0].courseTitle, "TEST Fiqh dərsi");
+  assert.equal(items[0].books.length, 1);
+  const [book] = items[0].books;
+  assert.equal(book.slug, "manhaj-as-salikin");
+  assert.equal(book.chapterTitle, "باب نواقض الوضوء");
+  assert.equal(book.printedFrom, 55);
+  assert.equal(book.printedTo, 56);
+  assert.equal(book.openPage, 56);
+});
+
+test("suggestedLibraryBooks: course title subject → built-in library book", () => {
+  const suggestions = suggestedLibraryBooks({ courses: [{ courseId: 7, title: "TEST Fiqh dərsi", termNumber: 1 }, { courseId: 9, title: "Təfsir", termNumber: 1 }], matchedCourseIds: null, catalog: LIBRARY_BOOKS });
+  assert.equal(suggestions.length, 1);
+  assert.equal(suggestions[0].books[0].slug, "manhaj-as-salikin");
 });

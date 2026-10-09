@@ -3735,6 +3735,10 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
   });
 
   useEffect(() => {
+    // GET /admin/role-permissions is owner-only on the server (requireSystemOwner);
+    // the shared permission sets are only used by the owner's permission dialogs,
+    // so the board (İdarə heyəti) must not request them at all (avoids a 403).
+    if (!canConfigurePermissions) return;
     void fetch(apiUrl('/admin/role-permissions')).then(async (response) => {
       if (!response.ok) return;
       const data = await response.json() as { teacher?: RolePermissionKey[]; supervisor?: RolePermissionKey[]; owner_assistant?: RolePermissionKey[] };
@@ -3744,7 +3748,7 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
         owner_assistant: data.owner_assistant ?? current.owner_assistant,
       }));
     }).catch(() => undefined);
-  }, []);
+  }, [canConfigurePermissions]);
 
   useEffect(() => {
     if (!individualProfileQuery.data || !permissionUser) return;

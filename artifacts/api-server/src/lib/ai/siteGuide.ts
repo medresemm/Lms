@@ -18,6 +18,8 @@ export interface GuideTopic {
   tips?: string[];
   /** Əlaqəli mövzular üçün təklif (düymə) mətnləri. */
   related?: string[];
+  /** Admin paneldə bu mövzunun aid olduğu bölmə (istifadəçidə yoxdursa, addımlar əvəzinə qısa izah verilir). */
+  section?: AdminSectionId;
 }
 
 /** Sualın "necə / harada" (istifadə qaydası) sualı olduğunu göstərən sözlər. */
@@ -320,7 +322,8 @@ export const GUIDE_TOPICS: GuideTopic[] = [
     keywords: ["panel", "bolme", "tab", "menyu", "menu", "sayt", "admin"],
     standalone: ["paneldan istifade", "paneldən istifade", "admin panel nece"],
     steps: [
-      "Yuxarıdakı bölmə düymələri rolunuza və icazələrinizə görə görünür: «Yeni elan», «Tələbələrə bildiriş», «Məqalə», «Günün faydası», «Tələbələri idarə et», «Müraciətlər», «İmtahan və testlər», «Tədris proqramı», «İstifadəçi rolları», «Dərsləri idarə et», «Statistika», «Audit tarixçəsi», «Şəhadətnamə idarəsi».",
+      // Bu sətir cavabda istifadəçinin öz bölmələri ilə əvəz olunur (bax adminOverviewSteps).
+      "Yuxarıdakı bölmə düymələri rolunuza və icazələrinizə görə görünür.",
       "Aşağıda: «Mənim cədvəlim», «Müəllimlər cədvəli», «Məsləhətləşmə / Əlaqə», «Sual-cavab».",
       "Tələbə, müraciət və ya dərsi tez tapmaq üçün «Tələbə, müraciət və ya dərs axtar...» axtarış sahəsindən istifadə edin.",
     ],
@@ -358,6 +361,7 @@ export const GUIDE_TOPICS: GuideTopic[] = [
   },
   {
     id: "admin-students",
+    section: "student-management",
     modes: ["admin"],
     title: "Tələbələri idarə etmək",
     keywords: ["telebeleri", "idare", "telebeleri idare", "qiymet yaz", "qiymet daxil", "qiymetlendirme", "davamiyyet", "uzr muraciet", "semestr kecid", "cedvele giris", "muellim secim", "texerruc", "mezun", "silinmis hesab"],
@@ -368,6 +372,7 @@ export const GUIDE_TOPICS: GuideTopic[] = [
   },
   {
     id: "admin-announcement",
+    section: "announcement",
     modes: ["admin"],
     title: "Elan və bildiriş göndərmək",
     keywords: ["elan", "bildiris", "duyuru", "xeber"],
@@ -378,6 +383,7 @@ export const GUIDE_TOPICS: GuideTopic[] = [
   },
   {
     id: "admin-exams",
+    section: "exams",
     modes: ["admin"],
     title: "Test və tapşırıq yaratmaq",
     keywords: ["imtahan", "test", "sinav", "tapsiriq", "tapsirig", "odev"],
@@ -398,6 +404,7 @@ export const GUIDE_TOPICS: GuideTopic[] = [
   },
   {
     id: "admin-applications",
+    section: "application",
     modes: ["admin"],
     title: "Müraciətlərə baxmaq",
     keywords: ["muraciet", "qebul", "basvuru"],
@@ -407,6 +414,58 @@ export const GUIDE_TOPICS: GuideTopic[] = [
     ],
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Admin panel bölmələri — admin-panel.tsx-dəki düymələrin görünmə qaydası ilə eyni
+// (İdarə paneli plitələri + «Şəhadətnamə idarəsi», «Cədvəl hazırlama», «Mədrəsə Kitabxanası»).
+
+export type AdminSectionId =
+  | "announcement" | "student-notifications" | "article" | "benefit" | "student-management" | "application" | "exams"
+  | "course-content" | "users" | "course-activation" | "statistics" | "audit-history" | "graduation-certificates"
+  | "schedule-prep" | "library";
+
+export interface AdminGuideAccess {
+  isOwner: boolean;
+  /** owner, owner_assistant, admin, teacher, supervisor */
+  role: string;
+  permissions: ReadonlySet<string>;
+}
+
+const ADMIN_SECTIONS: Array<{ id: AdminSectionId; label: string; visible: (access: AdminGuideAccess) => boolean }> = (() => {
+  const perm = (permission: string) => (access: AdminGuideAccess) => access.permissions.has(permission);
+  const board = (access: AdminGuideAccess) => access.role === "owner_assistant";
+  return [
+    { id: "announcement", label: "Yeni elan", visible: perm("announcements") },
+    { id: "student-notifications", label: "Tələbələrə bildiriş", visible: perm("announcements") },
+    { id: "article", label: "Məqalə", visible: perm("articles") },
+    { id: "benefit", label: "Günün faydası", visible: perm("dailyBenefits") },
+    {
+      id: "student-management", label: "Tələbələri idarə et",
+      visible: (access) => access.permissions.has("students")
+        || (access.permissions.has("assignments") && ["teacher", "admin", "owner_assistant"].includes(access.role)),
+    },
+    { id: "application", label: "Müraciətlər", visible: perm("applications") },
+    { id: "exams", label: "İmtahan və testlər", visible: perm("assignments") },
+    { id: "course-content", label: "Tədris proqramı", visible: perm("schedule") },
+    { id: "users", label: "İstifadəçi rolları", visible: board },
+    { id: "course-activation", label: "Dərsləri idarə et", visible: board },
+    { id: "statistics", label: "Statistika", visible: () => false },
+    { id: "audit-history", label: "Audit tarixçəsi", visible: () => false },
+    { id: "graduation-certificates", label: "Şəhadətnamə idarəsi", visible: board },
+    { id: "schedule-prep", label: "Cədvəl hazırlama", visible: (access) => board(access) || access.role === "admin" },
+    { id: "library", label: "Mədrəsə Kitabxanası", visible: () => true },
+  ];
+})();
+
+/** İstifadəçinin admin paneldə həqiqətən gördüyü bölmələr (sahib hamısını görür). */
+export function adminSectionsFor(access: AdminGuideAccess) {
+  return ADMIN_SECTIONS.filter((section) => access.isOwner || section.visible(access)).map((section) => ({ id: section.id, label: section.label }));
+}
+
+function adminOverviewSteps(topic: GuideTopic, access: AdminGuideAccess) {
+  const labels = adminSectionsFor(access).map((section) => `«${section.label}»`);
+  return topic.steps.map((step, index) => (index === 0 ? `Sizin hesabınızda açıq olan bölmələr: ${labels.join(", ")}.` : step));
+}
 
 export function isGuideQuestion(parsed: ParsedMessage) {
   // «necə» (how) və «neçə» (how many) normallaşdırmadan sonra eyni olur, ona görə orijinal mətnə baxırıq:
@@ -436,8 +495,16 @@ export function findGuideTopic(parsed: ParsedMessage, mode: AiMode): GuideTopic 
   return best;
 }
 
-export function guideReply(topic: GuideTopic): AiReply {
-  return blockReply([{ type: "steps", title: topic.title, steps: topic.steps, tips: topic.tips?.length ? topic.tips : undefined }], topic.related ?? []);
+export function guideReply(topic: GuideTopic, access?: AdminGuideAccess): AiReply {
+  if (access && topic.section && !adminSectionsFor(access).some((section) => section.id === topic.section)) {
+    const label = ADMIN_SECTIONS.find((section) => section.id === topic.section)?.label ?? topic.title;
+    return blockReply([{
+      type: "text",
+      text: `«${label}» bölməsi sizin hesabınızda açıq deyil. Bu imkan lazımdırsa, sistem sahibindən icazə istəyin.`,
+    }], ["Admin paneldən necə istifadə edim?"]);
+  }
+  const steps = access && topic.id === "admin-overview" ? adminOverviewSteps(topic, access) : topic.steps;
+  return blockReply([{ type: "steps", title: topic.title, steps, tips: topic.tips?.length ? topic.tips : undefined }], topic.related ?? []);
 }
 
 export function guideTopicList(mode: AiMode) {
@@ -447,13 +514,14 @@ export function guideTopicList(mode: AiMode) {
 /**
  * "Necə / harada" sualı və ya müstəqil açar söz (məs. «çıxış») varsa bələdçi cavabı qaytarır.
  * Mövzu tapılmasa, amma sual istifadə qaydası barədədirsə, ümumi bələdçi qaytarılır.
+ * access (admin rejimi) verilərsə, bələdçi yalnız istifadəçinin gördüyü bölmələri sadalayır.
  */
-export function answerGuide(parsed: ParsedMessage, mode: AiMode): AiReply | null {
+export function answerGuide(parsed: ParsedMessage, mode: AiMode, access?: AdminGuideAccess): AiReply | null {
   const topic = findGuideTopic(parsed, mode);
-  if (topic) return guideReply(topic);
+  if (topic) return guideReply(topic, access);
   if (isGuideQuestion(parsed) && countKeywords(parsed, ["sayt", "kabinet", "panel", "istifade", "kullan"]) > 0) {
     const overview = GUIDE_TOPICS.find((item) => item.id === (mode === "admin" ? "admin-overview" : "overview"));
-    return overview ? guideReply(overview) : null;
+    return overview ? guideReply(overview, access) : null;
   }
   return null;
 }

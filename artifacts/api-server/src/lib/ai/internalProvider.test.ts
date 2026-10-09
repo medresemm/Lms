@@ -158,3 +158,43 @@ test("admin global search and did-you-mean suggestions", async () => {
   assert.match(near.reply, /Bunu nəzərdə tuturdunuz\?/);
   assert.match((await ask("zzqxwv", adminContext())).reply, /başa düşmədim/);
 });
+
+test("admin: lesson/course searched by its name finds schedule, teacher, group and students (not 'Testlər: 0')", async () => {
+  const ctx = adminContext();
+  const testLesson = { ...fiqhLesson, resourceId: 9, title: "TEST Fiqh dərsi", lessonDays: ["friday"], lessonTime: "20:00", teacherName: "TEST Müəllim" };
+  const base = await ctx.courses();
+  ctx.courses = async () => base.map((course) => (course.courseId === 2 ? { ...course, lessons: [...course.lessons, testLesson] } : course));
+  const answer = await ask("TEST Fiqh dərsi", ctx);
+  assert.doesNotMatch(answer.reply, /Testlər:/);
+  assert.match(answer.reply, /Fiqh \(Fiqh\)/);
+  assert.match(answer.reply, /«TEST Fiqh dərsi» · 2-ci semestr · müəllim: TEST Müəllim · Cümə 20:00/);
+  assert.match(answer.reply, /Tələbələr \(2\)[\s\S]*T0013[\s\S]*T0014/);
+  // Yazı səhvi ilə də qlobal axtarış dərsi tapır.
+  assert.match((await ask("TEST Fiqh dersii", ctx)).reply, /TEST Fiqh dərsi|Fiqh/);
+  // Fənn adı + başqa söz: köhnə marşrutlar dəyişmir.
+  assert.match((await ask("Quran tələbələri", adminContext())).reply, /Tələbələr \(1\)[\s\S]*T0012/);
+  assert.match((await ask("Təcvid testi nəticələri", adminContext())).reply, /Təcvid testi[\s\S]*90%/);
+  // Cədvəl icazəsi olmayan heyət dərs kartını görmür.
+  assert.doesNotMatch((await ask("TEST Fiqh dərsi", adminContext(["students"]))).reply, /müəllim: TEST Müəllim/);
+});
+
+test("admin guide lists only the sections the current account actually has", async () => {
+  const text = (answer: Awaited<ReturnType<typeof ask>>) => [answer.reply, JSON.stringify(answer.blocks ?? [])].join("\n");
+  // İdarə heyəti (sahib deyil): Statistika və Audit tarixçəsi yoxdur.
+  const board = text(await ask("Admin paneldən necə istifadə edim?", adminContext(["applications", "teacherAssignment", "students", "announcements"], { role: "owner_assistant" })));
+  assert.match(board, /Sizin hesabınızda açıq olan bölmələr/);
+  assert.match(board, /«Müraciətlər»/);
+  assert.match(board, /«İstifadəçi rolları»/);
+  assert.match(board, /«Şəhadətnamə idarəsi»/);
+  assert.doesNotMatch(board, /Statistika|Audit tarixçəsi|«Məqalə»|«Tədris proqramı»/);
+  // Sahib hamısını görür.
+  const owner = text(await ask("Admin paneldən necə istifadə edim?", adminContext([], { isOwner: true, role: "owner" })));
+  assert.match(owner, /«Statistika»[\s\S]*«Audit tarixçəsi»/);
+  // Müəllim: İstifadəçi rolları / Cədvəl hazırlama yoxdur.
+  const teacher = text(await ask("Admin paneldən necə istifadə edim?", adminContext(["schedule", "assignments", "students"], { role: "teacher" })));
+  assert.match(teacher, /«Tədris proqramı»[\s\S]*«Mədrəsə Kitabxanası»/);
+  assert.doesNotMatch(teacher, /İstifadəçi rolları|Cədvəl hazırlama|Statistika/);
+  // Bölmə yoxdursa, addımlar yerinə qısa izah.
+  const noAnnouncements = text(await ask("Elanı necə yayımlayım?", adminContext(["students"], { role: "owner_assistant" })));
+  assert.match(noAnnouncements, /«Yeni elan» bölməsi sizin hesabınızda açıq deyil/);
+});

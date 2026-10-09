@@ -66,7 +66,7 @@ import {
 } from "./lms.js";
 import { answerLibrary, resolveLibraryMessage } from "../lib/library/search.js";
 import { searchableLibraryBooks } from "../lib/library/uploadedBooks.js";
-import { answerCourseBooks, detectCourseBooksQuestion, termLabel, type StudentCourseRef } from "../lib/library/courseBooks.js";
+import { answerCourseBooks, courseBooksFromResources, detectCourseBooksQuestion, suggestedLibraryBooks, termLabel, type StudentCourseRef } from "../lib/library/courseBooks.js";
 import { blockReply, ensureBlocks } from "../lib/ai/blocks.js";
 import { fullLibraryCatalog, loadCourseBooksRows } from "../lib/library/courseBooksRepo.js";
 import { parse as parseMessage } from "../lib/ai/text.js";
@@ -263,18 +263,51 @@ async function answerStudentCourseBooks(ctx: StudentAiContext, message: string) 
   courses.sort((a, b) => Math.abs(overview.currentTermNumber - a.termNumber) - Math.abs(overview.currentTermNumber - b.termNumber));
   const parsed = parseMessage(message, false);
   const matched = new Set(courses.filter((course) => titleMatches(parsed, course.title)).map((course) => course.courseId));
-  const [{ available, rows }, catalog] = await Promise.all([
-    loadCourseBooksRows(Array.from(new Set(courses.map((course) => course.courseId)))),
+  const courseIds = Array.from(new Set(courses.map((course) => course.courseId)));
+  const [{ available, rows }, catalog, resources] = await Promise.all([
+    loadCourseBooksRows(courseIds),
     fullLibraryCatalog(),
+    loadCourseResourcesForBooks(courseIds, overview.currentTermNumber),
   ]);
-  if (!available) {
-    return blockReply([{ type: "text", text: "Dərs kitabları bölməsi hələ hazırlanır. Müəllimləriniz kitab seçəndən sonra burada görəcəksiniz." }], ["Dərs cədvəlim", "Fənlərim"]);
+  const matchedCourseIds = matched.size ? matched : null;
+  const result = available
+    ? answerCourseBooks({ courses, matchedCourseIds, currentTerm: overview.currentTermNumber, rows, catalog })
+    : null;
+  // lms_course_books yoxdursa və ya bu fənn üçün boşdursa — kitab dərs resurslarından (məs. «TEST kitab — شرح منهج السالكين,
+  // باب نواقض الوضوء, səh. 55-56») tanınır.
+  const assigned = result?.items ?? [];
+  const items = [
+    ...assigned,
+    ...courseBooksFromResources({ courses, matchedCourseIds, currentTerm: overview.currentTermNumber, resources, catalog })
+      .filter((item) => !assigned.some((existing) => existing.courseId === item.courseId)),
+  ];
+  if (!items.length) {
+    const suggestions = suggestedLibraryBooks({ courses, matchedCourseIds, catalog });
+    const name = matchedCourseIds && courses.some((course) => matched.has(course.courseId))
+      ? `«${courses.find((course) => matched.has(course.courseId))!.title}» dərsi üçün`
+      : "Dərsləriniz üçün";
+    const notAssigned = `${name} müəllim hələ kitab təyin etməyib.`;
+    if (!suggestions.length) {
+      return blockReply([{ type: "text", text: `${notAssigned} Kitab seçiləndən sonra burada və dərs pəncərəsində görünəcək.` }], ["Dərs cədvəlim", "Fənlərim", "Kitabxana"]);
+    }
+    return blockReply([
+      { type: "text", text: `${notAssigned} Kitabxanada bu fənnə aid kitab var — müəllim başqa kitab seçə bilər:` },
+      ...suggestions.map((item) => ({
+        type: "card" as const,
+        title: item.courseTitle,
+        badge: { text: "Kitabxanada" },
+        items: item.books.map((book) => ({
+          title: book.shortTitle,
+          detail: book.title,
+          meta: [book.subject],
+          action: { label: "Oxu", href: `/kitabxana/${encodeURIComponent(book.slug)}` },
+        })),
+      })),
+    ], ["Dərs cədvəlim", "Fənlərim", "Kitabxanada axtar: "]);
   }
-  const result = answerCourseBooks({ courses, matchedCourseIds: matched.size ? matched : null, currentTerm: overview.currentTermNumber, rows, catalog });
-  if (!result.items.length) return blockReply([{ type: "text", text: result.reply }], ["Dərs cədvəlim", "Fənlərim"]);
   return blockReply([
-    { type: "text", text: result.items.length === 1 ? "Bu dərsdə keçəcəyiniz kitab:" : "Dərslərinizdə keçəcəyiniz kitablar:" },
-    ...result.items.map((item) => ({
+    { type: "text", text: items.length === 1 && items[0].books.length === 1 ? "Bu dərsdə keçəcəyiniz kitab:" : "Dərslərinizdə keçəcəyiniz kitablar:" },
+    ...items.map((item) => ({
       type: "card" as const,
       title: item.courseTitle,
       badge: { text: termLabel(item.termNumber) },
@@ -292,6 +325,16 @@ async function answerStudentCourseBooks(ctx: StudentAiContext, message: string) 
     })),
     { type: "text", text: "«Oxu» düyməsi kitabı seçilmiş fəsildə açır.", tone: "muted" },
   ], ["Dərs cədvəlim", "Fənlərim", "Kitabxanada axtar: "]);
+}
+
+// Tələbənin öz fənlərinin (≤ cari semestr) vaxtı keçməmiş resursları — yalnız kitab tanımaq üçün (başlıq + mətn).
+async function loadCourseResourcesForBooks(courseIds: number[], currentTerm: number) {
+  if (!courseIds.length) return [];
+  const rows = await db.select().from(resourcesTable)
+    .where(and(inArray(resourcesTable.courseId, courseIds), lte(resourcesTable.termNumber, currentTerm)))
+    .orderBy(asc(resourcesTable.id));
+  return rows.filter((row) => !resourceLinkIsExpired(row))
+    .map((row) => ({ courseId: row.courseId, termNumber: row.termNumber, title: row.title, body: row.body }));
 }
 
 function buildStudentContext(profile: ProfileRow, application: ApplicationRow): StudentAiContext {

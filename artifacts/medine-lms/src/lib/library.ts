@@ -98,7 +98,7 @@ export function saveReadingPage(userId: string | null | undefined, slug: string,
 }
 
 /** Kataloqu yükləyir və şəkil açarını vaxtı bitməzdən əvvəl yeniləyir. */
-export function useLibraryCatalog() {
+export function useLibraryCatalog(enabled = true) {
   const { getToken } = useAuth();
   const [state, setState] = useState<CatalogState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -128,7 +128,7 @@ export function useLibraryCatalog() {
     }
   }, [getToken]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (enabled) void load(); }, [load, enabled]);
 
   useEffect(() => {
     if (!state) return;

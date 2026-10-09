@@ -7,6 +7,8 @@
 import type {
   AdminAiContext,
   AiApplication,
+  AiCourseInfo,
+  AiLesson,
   AiAssignmentOverview,
   AiExamOverview,
   AiReply,
@@ -759,11 +761,72 @@ async function examBranch(ctx: AdminAiContext, parsed: ParsedMessage, isCount: b
 // Kurslar
 // ---------------------------------------------------------------------------
 
+/** Tələbə filtri sözləri (semestr, davamiyyət, qiymət, təhvil) — belə sorğular dərs kartı ilə deyil, tələbə filtri ilə cavablanır. */
+function studentFilterRequested(parsed: ParsedMessage, entities: Set<Entity>) {
+  return detectTerm(parsed) !== null || entities.has("attendance") || entities.has("grade") || entities.has("assignment")
+    || entities.has("excuse") || entities.has("subjectRequest") || entities.has("application");
+}
+
+/**
+ * Dərs/fənn adı ilə dəqiq axtarış: «TEST Fiqh dərsi» kimi sorğularda fənnin və ya dərs qrupunun (resursun) adı
+ * sorğunun içində tam keçirsə və sorğunun əksər hissəsini təşkil edirsə, «test», «dərs» kimi sözlər
+ * testlər/kurslar bölməsinə yönləndirilmir — birbaşa həmin dərs göstərilir.
+ */
+async function courseTitleLookup(ctx: AdminAiContext, parsed: ParsedMessage): Promise<Array<{ course: AiCourseInfo; lessons: AiLesson[] }> | null> {
+  if (!(ctx.isOwner || ctx.permissions.has("schedule"))) return null;
+  const queryWords = parsed.tokens.filter((token) => token.length >= 2);
+  if (!queryWords.length) return null;
+  const text = ` ${parsed.text} `;
+  // Başlığın bütün sözləri sorğuda olmalıdır (yazı səhvinə dözümlü); nəticə — başlığın sorğunu nə qədər əhatə etməsi.
+  const coverage = (title: string) => {
+    const normalized = normalizeText(title).trim();
+    if (normalized.length < 3) return 0;
+    const words = tokenize(normalized);
+    if (!words.length) return 0;
+    const exact = text.includes(` ${normalized} `);
+    const fuzzy = exact || words.every((word) => queryWords.some((token) => token === word || (word.length >= 4 && tokenSimilarity(token, word) >= 0.8)));
+    return fuzzy ? Math.min(1, words.length / queryWords.length) : 0;
+  };
+  const courses = await ctx.courses();
+  const found: Array<{ course: AiCourseInfo; lessons: AiLesson[]; score: number }> = [];
+  for (const course of courses) {
+    const lessons = course.lessons.filter((lesson) => coverage(lesson.title) >= 0.6);
+    const score = Math.max(coverage(course.title), ...course.lessons.map((lesson) => coverage(lesson.title)));
+    if (score >= 0.6) found.push({ course, lessons, score });
+  }
+  if (!found.length) return null;
+  const top = Math.max(...found.map((item) => item.score));
+  return found.filter((item) => item.score >= top - 0.01);
+}
+
+async function courseDetailsReply(ctx: AdminAiContext, parsed: ParsedMessage, entities: Set<Entity>, matched: Array<{ course: AiCourseInfo; lessons: AiLesson[] }>): Promise<AiReply> {
+  const lines: string[] = [];
+  const wantsStudents = entities.has("student") || has(parsed, KW.listWords);
+  for (const { course, lessons: highlighted } of matched.slice(0, 3)) {
+    lines.push(`${course.title} (${course.category})`);
+    const lessons = highlighted.length ? highlighted : course.lessons;
+    if (!lessons.length) lines.push("• Bu fənn üçün hələ dərs qrupu (cədvəl) yoxdur.");
+    for (const lesson of lessons) {
+      const name = lesson.title && normalizeText(lesson.title) !== normalizeText(course.title) ? `«${lesson.title}» · ` : "";
+      const days = lesson.lessonDays.length ? ` · ${lessonDaysLabel(lesson.lessonDays)}${lesson.lessonTime ? ` ${lesson.lessonTime}` : ""}` : "";
+      lines.push(`• ${name}${termLabel(lesson.termNumber)} · müəllim: ${lesson.teacherName ?? course.instructor ?? "—"}${days}${lesson.isMandatory ? "" : " (seçmə)"}`);
+    }
+    const students = await ctx.courseStudents(course.courseId);
+    lines.push(`Tələbələr (${students.length})${students.length ? ":" : " — cari semestrdə bu dərsə yazılan tələbə yoxdur."}`);
+    if (students.length) bullet(lines, students.map((student) => studentLine(student)), wantsStudents ? 40 : 15);
+    lines.push("");
+  }
+  return reply(lines, ["Dərs siyahısı", "Müəllim cədvəli", ...matched.slice(0, 1).map(({ course }) => `${course.title} tələbələri`)]);
+}
+
 async function courseBranch(ctx: AdminAiContext, parsed: ParsedMessage, entities: Set<Entity>, isCount: boolean): Promise<AiReply | null> {
   if (!(ctx.isOwner || ctx.permissions.has("schedule"))) return noPermission("Cədvəl");
   const courses = await ctx.courses();
   const hits = new Set(matchTitles(parsed, courses.map((course) => course.title)));
   const matched = courses.filter((course) => hits.has(course.title));
+  if (matched.length && !entities.has("student") && !has(parsed, KW.listWords)) {
+    return courseDetailsReply(ctx, parsed, entities, matched.map((course) => ({ course, lessons: [] })));
+  }
   if (matched.length) {
     const lines: string[] = [];
     const wantsStudents = entities.has("student") || has(parsed, KW.listWords);
@@ -846,7 +909,13 @@ async function searchCandidates(ctx: AdminAiContext): Promise<SearchCandidate[]>
     if (teacherIds.has(member.clerkUserId)) continue;
     candidates.push({ type: "Heyət", label: `${member.name} — ${ROLE_LABELS[member.role] ?? member.role}`, query: `heyət ${member.name}`, fields: [member.name, member.email?.split("@")[0]] });
   }
-  for (const course of courses) candidates.push({ type: "Dərslər", label: course.title, query: course.title, fields: [course.title, course.category] });
+  for (const course of courses) {
+    candidates.push({ type: "Dərslər", label: course.title, query: course.title, fields: [course.title, course.category] });
+    for (const lesson of course.lessons) {
+      if (normalizeText(lesson.title) === normalizeText(course.title)) continue;
+      candidates.push({ type: "Dərslər", label: `${lesson.title} — ${course.title}${lesson.teacherName ? ` · ${lesson.teacherName}` : ""}`, query: lesson.title, fields: [lesson.title] });
+    }
+  }
   for (const item of applications ?? []) {
     if (item.deleted || item.status === "approved") continue;
     candidates.push({ type: "Müraciətlər", label: `${item.firstName} ${item.lastName} — ${STATUS_LABELS[item.status] ?? item.status}`, query: `müraciət ${item.firstName} ${item.lastName}`, fields: [item.firstName, item.lastName, item.username, item.email.split("@")[0]] });
@@ -900,7 +969,7 @@ async function globalSearch(ctx: AdminAiContext, tokens: string[]): Promise<AiRe
 export async function answerAdmin(parsed: ParsedMessage, ctx: AdminAiContext): Promise<AiReply> {
   if (!parsed.tokens.length) return adminHelp(ctx);
 
-  const guide = answerGuide(parsed, "admin");
+  const guide = answerGuide(parsed, "admin", { isOwner: ctx.isOwner, role: ctx.role, permissions: ctx.permissions });
   if (guide) return guide;
 
   // 1) Dəqiq identifikatorlar: e-poçt, T-nömrə, telefon.
@@ -929,7 +998,11 @@ export async function answerAdmin(parsed: ParsedMessage, ctx: AdminAiContext): P
   }
   if (has(parsed, ["umumi statistika", "umumi veziyyet", "hesabat", "dashboard", "icmal"]) && !residual.length) return overallStats(ctx);
 
-  // 2) Müraciət, üzr, heyət, sual, elan kimi aydın obyektlər.
+  // 2) Fənnin / dərs qrupunun adı tam yazılıbsa («TEST Fiqh dərsi») — həmin dərs (cədvəl, müəllim, tələbələr).
+  const titled = await courseTitleLookup(ctx, parsed);
+  if (titled && !studentFilterRequested(parsed, entities)) return courseDetailsReply(ctx, parsed, entities, titled);
+
+  // 3) Müraciət, üzr, heyət, sual, elan kimi aydın obyektlər.
   if (entities.has("subjectRequest")) return subjectRequestBranch(ctx, status, isCount);
   if (entities.has("excuse")) return excuseBranch(ctx, parsed, status, isCount);
   if (entities.has("application")) return applicationBranch(ctx, parsed, status, isCount);
@@ -937,7 +1010,7 @@ export async function answerAdmin(parsed: ParsedMessage, ctx: AdminAiContext): P
   if (entities.has("question") && !entities.has("student")) return questionBranch(ctx, parsed, status, isCount);
   if ((entities.has("announcement") || entities.has("notification")) && !entities.has("student")) return noticeBranch(ctx, parsed, entities, isCount);
 
-  // 3) Tapşırıq/test: «təhvil verməyənlər» tələbə filtridir.
+  // 4) Tapşırıq/test: «təhvil verməyənlər» tələbə filtridir.
   const missingFilter = entities.has("assignment") && has(parsed, NEGATION);
   if (entities.has("assignment") && !missingFilter && !entities.has("student")) return assignmentBranch(ctx, parsed, entities, isCount);
   if (entities.has("exam") && !entities.has("student")) return examBranch(ctx, parsed, isCount);

@@ -13,7 +13,8 @@
     "test:ai": "tsx --test src/lib/ai/internalProvider.test.ts",
     "test:certificate": "tsx --test src/lib/certificateBidi.test.ts",
     "test:lesson-attendance": "tsx --test src/lib/lessonAttendance.test.ts",
-    "test:research": "tsx --test src/lib/ai/research.test.ts"
+    "test:research": "tsx --test src/lib/ai/research.test.ts",
+    "test:ai-modes": "tsx --test src/lib/ai/adminRouting.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1100.0",

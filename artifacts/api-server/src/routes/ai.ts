@@ -3,8 +3,9 @@
 // - POST /api/ai/student/chat — yalnız təsdiqlənmiş tələbə; istifadəçi kimliyi yalnız Clerk sessiyasından
 //   (getAuth) götürülür, sorğu gövdəsindən heç bir ID qəbul edilmir. Kontekst yalnız həmin tələbənin öz
 //   məlumatlarından qurulur.
-// - POST /api/ai/admin/chat — sahib və bütün heyət rolları. LMS məlumatları üçün «students» icazəsi tələb
-//   olunur; Şamilə/Dorar mənbə axtarışı isə istənilən heyət üzvünə açıqdır.
+// - POST /api/ai/admin/chat — sahib və bütün heyət rolları. Gövdədə `source`: "internal" (yalnız LMS, «students»
+//   icazəsi tələb olunur) və ya "external" (yalnız Şamilə/Dorar; `target`: shamela | dorar | all). Rejimlər
+//   qarışmır — bax lib/ai/adminRouting.ts.
 // - POST /api/ai/admin/shamela/page — Şamilə səhifəsini canlı açır (heyət üçün; heç nə saxlanmır).
 //
 // Server heç nə saxlamır: söhbət üçün cədvəl yoxdur, mesaj mətni log edilmir, bazaya yazılmır.
@@ -77,9 +78,8 @@ import {
   type AiTeacher,
   type StudentAiContext,
 } from "../lib/ai/aiProvider.js";
-import { findGuideTopic, guideReply } from "../lib/ai/siteGuide.js";
-import { parse } from "../lib/ai/text.js";
-import { answerResearch, detectResearchIntent, openShamelaPage, ResearchUpstreamError, shamelaPageUrl } from "../lib/ai/research.js";
+import { parseSourceSelection, routeAdminMessage } from "../lib/ai/adminRouting.js";
+import { answerResearch, openShamelaPage, ResearchUpstreamError, shamelaPageUrl } from "../lib/ai/research.js";
 
 const router: IRouter = Router();
 
@@ -865,27 +865,20 @@ router.post("/ai/admin/chat", noStore, requireAiStaff, rateLimit, async (req, re
       res.status(400).json({ error: `Mesaj boş olmamalı və ${MAX_MESSAGE_LENGTH} simvoldan uzun olmamalıdır.` });
       return;
     }
-    const research = detectResearchIntent(input.message);
-    if (research) {
-      res.json(await answerResearch(research));
+    const selection = parseSourceSelection(req.body);
+    if (!selection) {
+      res.status(400).json({ error: "Mənbə rejimi düzgün deyil." });
       return;
     }
     const permissions = res.locals.aiPermissions as ReadonlySet<string>;
     const isOwner = res.locals.aiIsOwner === true;
-    if (!isOwner && !permissions.has("students")) {
-      const topic = findGuideTopic(parse(input.message, true), "admin");
-      if (topic && (topic.id === "admin-research" || topic.id === "ai")) {
-        res.json(guideReply(topic));
-        return;
-      }
-      res.json({
-        reply: "Bağışlayın, LMS məlumatlarına (tələbələr, dərslər, qiymətlər və s.) baxmaq üçün «Tələbələr» icazəsi lazımdır. Bunun üçün idarəçiyə müraciət edin.\n\nBununla belə, Şamilə kitabxanasında və Dorar hədis bazasında axtarış edə bilərsiniz.",
-        suggestions: ["Şamilədə axtar: إنما الأعمال بالنيات", "Hədis yoxla: إنما الأعمال بالنيات"],
-      });
-      return;
-    }
-    const context = buildAdminContext(permissions, isOwner, String(res.locals.aiRole ?? ""));
-    const result = await getAiProvider().answer(input, context);
+    const result = await routeAdminMessage(
+      { message: input.message, mode: selection.mode, target: selection.target, canReadLms: isOwner || permissions.has("students") },
+      {
+        internal: () => getAiProvider().answer(input, buildAdminContext(permissions, isOwner, String(res.locals.aiRole ?? ""))),
+        research: (intent) => answerResearch(intent),
+      },
+    );
     res.json(result);
   } catch (error) {
     next(error);

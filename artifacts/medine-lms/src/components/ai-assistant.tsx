@@ -34,7 +34,8 @@ type ChatMessage = {
   role: 'user' | 'assistant';
   text: string;
   suggestions?: string[];
-  sources?: ResearchSources;
+  /** Köhnə mesajlarda tək obyekt, yenilərində qrup massivi. */
+  sources?: ResearchSources | ResearchSources[];
   error?: boolean;
   at: number;
 };
@@ -60,8 +61,15 @@ const adminTiles: Tile[] = [
   { label: 'Müraciətlər', hint: 'Gözləyən müraciətlər və statuslar', prompt: 'Neçə müraciət gözləyir?', Icon: ClipboardList },
   { label: 'Ümumi statistika', hint: 'Tələbə, müəllim, tapşırıq, test sayları', prompt: 'Ümumi statistika', Icon: UsersRound },
   { label: 'Paneldən istifadə', hint: 'Bölmələr və düymələr üzrə bələdçi', prompt: 'Admin paneldən necə istifadə edim?', Icon: Compass },
-  { label: 'Şamilədə axtar', hint: 'Kitab mətnləri, müəllif və cild/səhifə', prompt: 'Şamilədə axtar: ', Icon: BookText, fill: true },
-  { label: 'Hədis yoxla', hint: 'Dorar: ravi, mühəddis, mənbə, hökm', prompt: 'Hədis yoxla: ', Icon: ScrollText, fill: true },
+];
+
+// «Xarici» rejimdə nümunə sorğular (seçilmiş mənbədə axtarılır).
+const externalTiles: Tile[] = [
+  { label: 'Niyyət hədisi', hint: 'إنما الأعمال بالنيات', prompt: 'إنما الأعمال بالنيات', Icon: ScrollText },
+  { label: 'Elm tələbi', hint: 'طلب العلم فريضة', prompt: 'طلب العلم فريضة', Icon: BookText },
+  { label: 'Səbr', hint: 'فضل الصبر', prompt: 'فضل الصبر', Icon: BookOpen },
+  { label: 'Valideynə hörmət', hint: 'بر الوالدين', prompt: 'بر الوالدين', Icon: LibraryBig },
+  { label: 'Öz sorğum', hint: 'Ərəbcə açar söz yazın', prompt: '', Icon: Search, fill: true },
 ];
 
 const gold = '#e3c27a';
@@ -78,6 +86,42 @@ function isResearchSources(value: unknown): value is ResearchSources {
   return (sources.kind === 'shamela' || sources.kind === 'dorar') && Array.isArray(sources.items) && typeof sources.query === 'string';
 }
 
+function sourceGroups(value: unknown): ResearchSources[] {
+  if (Array.isArray(value)) return value.filter(isResearchSources).slice(0, 3);
+  return isResearchSources(value) ? [value] : [];
+}
+
+// Heyət üçün mənbə rejimi: «Daxili» (yalnız LMS) və ya «Xarici» (yalnız Şamilə/Dorar). Server də tətbiq edir.
+type SourceMode = 'internal' | 'external';
+type ExternalTarget = 'shamela' | 'dorar' | 'all';
+type SourcePreference = { mode: SourceMode; target: ExternalTarget };
+const SOURCE_PREFIX = 'medine-ai-source:';
+
+function loadSourcePreference(userId: string | null | undefined, fallback: SourceMode): SourcePreference {
+  const defaults: SourcePreference = { mode: fallback, target: 'shamela' };
+  if (!userId || typeof window === 'undefined') return defaults;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(`${SOURCE_PREFIX}${userId}`) || 'null') as Partial<SourcePreference> | null;
+    return {
+      mode: parsed?.mode === 'internal' || parsed?.mode === 'external' ? parsed.mode : fallback,
+      target: parsed?.target === 'dorar' || parsed?.target === 'all' || parsed?.target === 'shamela' ? parsed.target : 'shamela',
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+function saveSourcePreference(userId: string | null | undefined, preference: SourcePreference) {
+  if (!userId || typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(`${SOURCE_PREFIX}${userId}`, JSON.stringify(preference));
+  } catch {
+    // localStorage bağlıdırsa seçim yalnız bu səhifədə qalır.
+  }
+}
+
+const TARGET_LABELS: Record<ExternalTarget, string> = { shamela: 'Şamilə', dorar: 'Hədis (Dorar)', all: 'Hamısı' };
+
 function storageKey(userId: string | null | undefined) {
   return userId ? `${STORAGE_PREFIX}${userId}` : null;
 }
@@ -90,7 +134,7 @@ function loadMessages(key: string | null): ChatMessage[] {
     return parsed.filter((item): item is ChatMessage => Boolean(item) && typeof item === 'object'
       && ((item as ChatMessage).role === 'user' || (item as ChatMessage).role === 'assistant')
       && typeof (item as ChatMessage).text === 'string')
-      .map((item) => (item.sources && !isResearchSources(item.sources) ? { ...item, sources: undefined } : item))
+      .map((item) => (item.sources && !sourceGroups(item.sources).length ? { ...item, sources: undefined } : item))
       .slice(-MAX_STORED_MESSAGES);
   } catch {
     return [];
@@ -253,8 +297,19 @@ function DorarCard({ item, sourceUrl }: { item: DorarItem; sourceUrl: string }) 
   );
 }
 
-function ResearchResults({ sources, getToken }: { sources: ResearchSources; getToken: GetToken }) {
+function ResearchResults({ sources, getToken, heading }: { sources: ResearchSources; getToken: GetToken; heading?: boolean }) {
   if (!sources.items.length) return null;
+  if (heading) {
+    return (
+      <section className="mt-4">
+        <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.18em] text-[#e3c27a]">
+          {sources.kind === 'shamela' ? <BookText size={13} /> : <ScrollText size={13} />}
+          {sources.kind === 'shamela' ? 'Şamilə' : 'Hədis (Dorar)'} · {sources.items.length}
+        </h3>
+        <ResearchResults sources={sources} getToken={getToken} />
+      </section>
+    );
+  }
   if (sources.kind === 'shamela') {
     return (
       <div className="mt-3 space-y-3">
@@ -273,7 +328,7 @@ function ResearchResults({ sources, getToken }: { sources: ResearchSources; getT
 }
 
 function BrandTile({ size = 'lg' }: { size?: 'lg' | 'sm' }) {
-  const classes = size === 'lg' ? 'h-20 w-20 rounded-[22px] text-4xl' : 'h-9 w-9 rounded-xl text-base';
+  const classes = size === 'lg' ? 'h-14 w-14 rounded-[18px] text-3xl sm:h-20 sm:w-20 sm:rounded-[22px] sm:text-4xl' : 'h-9 w-9 rounded-xl text-base';
   return (
     <div className={`${classes} flex items-center justify-center bg-gradient-to-br from-[#f3dca6] via-[#e3c27a] to-[#b98d3e] font-serif font-bold text-[#17130c] shadow-[0_0_40px_rgba(227,194,122,.35)]`} aria-hidden="true">
       M.
@@ -281,21 +336,26 @@ function BrandTile({ size = 'lg' }: { size?: 'lg' | 'sm' }) {
   );
 }
 
-export function AiAssistant({ mode, backHref, backLabel }: { mode: AiAssistantMode; backHref?: string; backLabel?: string }) {
+export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { mode: AiAssistantMode; backHref?: string; backLabel?: string; canReadLms?: boolean }) {
   const { user } = useUser();
   const { getToken } = useAuth();
   const key = storageKey(user?.id);
+  const defaultSource: SourceMode = canReadLms ? 'internal' : 'external';
   const [messages, setMessages] = useState<ChatMessage[]>(() => loadMessages(key));
+  const [source, setSource] = useState<SourcePreference>(() => loadSourcePreference(user?.id, defaultSource));
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const tiles = mode === 'admin' ? adminTiles : studentTiles;
-  const endpoint = mode === 'admin' ? '/api/ai/admin/chat' : '/api/ai/student/chat';
+  const isStaff = mode === 'admin';
+  const external = isStaff && source.mode === 'external';
+  const tiles = !isStaff ? studentTiles : external ? externalTiles : adminTiles;
+  const endpoint = isStaff ? '/api/ai/admin/chat' : '/api/ai/student/chat';
 
-  // İstifadəçi dəyişəndə (və ya Clerk gec yüklənəndə) həmin istifadəçinin tarixçəsini yüklə.
+  // İstifadəçi dəyişəndə (və ya Clerk gec yüklənəndə) həmin istifadəçinin tarixçəsini və rejimini yüklə.
   useEffect(() => { setMessages(loadMessages(key)); }, [key]);
   useEffect(() => { saveMessages(key, messages); }, [key, messages]);
+  useEffect(() => { setSource(loadSourcePreference(user?.id, defaultSource)); }, [user?.id, defaultSource]);
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
@@ -304,6 +364,14 @@ export function AiAssistant({ mode, backHref, backLabel }: { mode: AiAssistantMo
     const last = messages[messages.length - 1];
     return last?.role === 'assistant' ? last.suggestions ?? [] : [];
   }, [messages]);
+
+  function changeSource(next: Partial<SourcePreference>) {
+    setSource((current) => {
+      const updated = { ...current, ...next };
+      saveSourcePreference(user?.id, updated);
+      return updated;
+    });
+  }
 
   async function send(text: string) {
     const message = text.trim().slice(0, MAX_MESSAGE_LENGTH);
@@ -318,19 +386,21 @@ export function AiAssistant({ mode, backHref, backLabel }: { mode: AiAssistantMo
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ message, history }),
+        body: JSON.stringify(isStaff ? { message, history, source: source.mode, target: source.target } : { message, history }),
         cache: 'no-store',
       });
       const data = await response.json().catch(() => null) as { reply?: string; suggestions?: string[]; sources?: unknown; error?: string } | null;
       if (!response.ok || !data?.reply) {
         throw new Error(data?.error || 'Cavab almaq mümkün olmadı. Bir az sonra yenidən cəhd edin.');
       }
-      setMessages((current) => [...current, { id: newId(), role: 'assistant', text: data.reply as string, suggestions: Array.isArray(data.suggestions) ? data.suggestions.slice(0, 4) : [], sources: isResearchSources(data.sources) ? data.sources : undefined, at: Date.now() }]);
+      const groups = sourceGroups(data.sources);
+      setMessages((current) => [...current, { id: newId(), role: 'assistant', text: data.reply as string, suggestions: Array.isArray(data.suggestions) ? data.suggestions.slice(0, 4) : [], sources: groups.length ? groups : undefined, at: Date.now() }]);
     } catch (error) {
       setMessages((current) => [...current, { id: newId(), role: 'assistant', text: error instanceof Error ? error.message : 'Xəta baş verdi.', error: true, at: Date.now() }]);
     } finally {
       setSending(false);
-      inputRef.current?.focus();
+      // Telefonda klaviaturanı yenidən açmamaq üçün fokus yalnız geniş ekranda qaytarılır.
+      if (typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches) inputRef.current?.focus();
     }
   }
 
@@ -364,69 +434,104 @@ export function AiAssistant({ mode, backHref, backLabel }: { mode: AiAssistantMo
   }
 
   const hasChat = messages.length > 0;
+  const placeholder = !isStaff
+    ? 'Nə ilə kömək edim?'
+    : external
+      ? source.target === 'dorar' ? 'Hədis mətnindən bir hissə yazın (ərəbcə)…' : source.target === 'all' ? 'Şamilə və Dorar-da axtarış (ərəbcə)…' : 'Şamilədə axtarış (ərəbcə açar söz)…'
+      : 'LMS üzrə sual verin…';
+  const intro = !isStaff
+    ? 'Yalnız sizin dərsləriniz, cədvəliniz, tapşırıqlarınız və nəticələriniz əsasında cavab verirəm.'
+    : external
+      ? 'Xarici rejim: yazdığınızı yalnız Şamilə kitabxanasında və/və ya Dorar hədis bazasında axtarıram. LMS məlumatlarına baxılmır. Mətnlər burada göstərilir, saytda saxlanmır.'
+      : 'Daxili rejim: tələbələr, müəllimlər, dərslər, müraciətlər, tapşırıqlar, testlər və elanlar üzrə yalnız LMS bazasından cavab verirəm — hərf səhvlərini də başa düşürəm.';
+  const chipRow = 'flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
   return (
-    <section className="relative mx-auto flex h-[100dvh] w-full max-w-4xl flex-col overflow-hidden text-[#f4ead5]" data-testid={`section-ai-assistant-${mode}`} aria-label="Mədinə AI">
-      <header className="relative z-10 flex items-center justify-between gap-3 px-5 pt-5 md:px-7">
-        <div className="flex min-w-0 items-center gap-3">
-          {backHref && (
-            <Link href={backHref} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#e3c27a]/30 px-3 py-2 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6]" data-testid="link-ai-back">
-              <ArrowLeft size={14} /> <span className="hidden sm:inline">{backLabel ?? 'Panelə qayıt'}</span><span className="sr-only sm:hidden">{backLabel ?? 'Panelə qayıt'}</span>
-            </Link>
-          )}
-          <BrandTile size="sm" />
-          <div>
-            <p className="font-serif text-lg leading-none text-[#f4ead5]">Mədinə <span style={{ color: gold }}>AI</span></p>
-            <p className="mt-1 text-[10px] uppercase tracking-[.18em] text-[#f4ead5]/55">{mode === 'admin' ? 'Admin köməkçisi' : 'Tələbə köməkçisi'} · daxili</p>
+    <section className="relative mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden text-[#f4ead5]" data-testid={`section-ai-assistant-${mode}`} aria-label="Mədinə AI">
+      <header className="relative z-10 shrink-0 px-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:px-5 sm:pt-5 md:px-7">
+        <div className="flex items-center justify-between gap-2 sm:gap-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            {backHref && (
+              <Link href={backHref} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#e3c27a]/30 px-2.5 py-2 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6] sm:px-3" data-testid="link-ai-back">
+                <ArrowLeft size={14} /> <span className="hidden sm:inline">{backLabel ?? 'Panelə qayıt'}</span><span className="sr-only sm:hidden">{backLabel ?? 'Panelə qayıt'}</span>
+              </Link>
+            )}
+            <BrandTile size="sm" />
+            <div className="min-w-0">
+              <p className="font-serif text-lg leading-none text-[#f4ead5]">Mədinə <span style={{ color: gold }}>AI</span></p>
+              <p className="mt-1 truncate text-[10px] uppercase tracking-[.14em] text-[#f4ead5]/55 sm:tracking-[.18em]">{isStaff ? 'Admin köməkçisi' : 'Tələbə köməkçisi'} · {external ? 'xarici' : 'daxili'}</p>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={clearHistory} disabled={!hasChat || sending} className="inline-flex items-center gap-1.5 rounded-full border border-[#e3c27a]/30 px-3 py-2 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6] disabled:cursor-not-allowed disabled:opacity-40" data-testid="button-ai-clear-history">
-            <Trash2 size={13} /> Tarixçəni təmizlə
+          <button type="button" onClick={clearHistory} disabled={!hasChat || sending} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#e3c27a]/30 px-2.5 py-2 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6] disabled:cursor-not-allowed disabled:opacity-40 sm:px-3" aria-label="Tarixçəni təmizlə" data-testid="button-ai-clear-history">
+            <Trash2 size={13} /> <span className="hidden sm:inline">Tarixçəni təmizlə</span>
           </button>
         </div>
+        {isStaff && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-2 sm:mt-3">
+            <div role="radiogroup" aria-label="Mənbə rejimi" className="inline-flex rounded-full border border-[#e3c27a]/40 bg-black/30 p-0.5" data-testid="ai-source-switch">
+              {([['internal', 'Daxili', 'Yalnız LMS məlumatları'], ['external', 'Xarici', 'Yalnız xarici mənbələr: Şamilə, Dorar']] as const).map(([value, label, title]) => (
+                <button key={value} type="button" role="radio" aria-checked={source.mode === value} title={title} onClick={() => changeSource({ mode: value })} disabled={sending}
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition sm:px-4 ${source.mode === value ? 'bg-gradient-to-br from-[#f3dca6] to-[#c49a4c] text-[#17130c] shadow-[0_0_14px_rgba(227,194,122,.3)]' : 'text-[#f4ead5]/70 hover:text-[#f3dca6]'}`}
+                  data-testid={`button-ai-source-${value}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {external && (
+              <div role="radiogroup" aria-label="Xarici mənbə" className="inline-flex flex-wrap gap-1" data-testid="ai-external-target">
+                {(['shamela', 'dorar', 'all'] as const).map((value) => (
+                  <button key={value} type="button" role="radio" aria-checked={source.target === value} onClick={() => changeSource({ target: value })} disabled={sending}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${source.target === value ? 'border-[#e3c27a] bg-[#e3c27a]/15 text-[#f3dca6]' : 'border-[#e3c27a]/25 text-[#f4ead5]/65 hover:border-[#e3c27a]/60'}`}
+                    data-testid={`button-ai-target-${value}`}>
+                    {TARGET_LABELS[value]}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!external && !canReadLms && <span className="text-[10px] text-[#f4ead5]/50">LMS məlumatları üçün «Tələbələr» icazəsi lazımdır.</span>}
+          </div>
+        )}
       </header>
 
-      <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-5 pb-4 pt-4 md:px-7">
+      <div ref={scrollRef} className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3 pt-3 sm:px-5 sm:pb-4 sm:pt-4 md:px-7" data-testid="ai-chat-scroll">
         {!hasChat ? (
-          <div className="relative mx-auto mt-2 flex max-w-md flex-col items-center rounded-t-[999px] border border-b-0 border-[#e3c27a]/45 bg-[linear-gradient(180deg,rgba(227,194,122,.08),rgba(0,0,0,0)_70%)] px-6 pb-8 pt-14 text-center shadow-[inset_0_0_60px_rgba(227,194,122,.06)]">
+          <div className="relative mx-auto mt-1 flex max-w-md flex-col items-center rounded-t-[999px] border border-b-0 border-[#e3c27a]/45 bg-[linear-gradient(180deg,rgba(227,194,122,.08),rgba(0,0,0,0)_70%)] px-5 pb-5 pt-8 text-center shadow-[inset_0_0_60px_rgba(227,194,122,.06)] sm:mt-2 sm:px-6 sm:pb-8 sm:pt-14">
             <p className="absolute right-4 top-6 hidden max-w-[9rem] text-right font-serif text-xs italic text-[#f4ead5]/70 sm:block">“Rəbbim, elmimi artır.”<span className="mt-1 block text-[10px] not-italic text-[#f4ead5]/45">— Taha, 114</span></p>
             <BrandTile />
-            <h2 className="mt-6 font-serif text-4xl font-semibold tracking-tight text-[#f4ead5]">Mədinə <span style={{ color: gold }}>AI</span></h2>
-            <p className="mt-3 text-[11px] uppercase tracking-[.32em] text-[#f4ead5]/70">Sizin dini elm köməkçiniz</p>
-            <div className="mt-5 flex w-full items-center gap-3 text-xs text-[#f4ead5]/80">
+            <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight text-[#f4ead5] sm:mt-6 sm:text-4xl">Mədinə <span style={{ color: gold }}>AI</span></h2>
+            <p className="mt-2 text-[10px] uppercase tracking-[.28em] text-[#f4ead5]/70 sm:mt-3 sm:text-[11px] sm:tracking-[.32em]">Sizin dini elm köməkçiniz</p>
+            <div className="mt-4 hidden w-full items-center gap-3 text-xs text-[#f4ead5]/80 sm:mt-5 sm:flex">
               <span className="h-px flex-1 bg-gradient-to-r from-transparent to-[#e3c27a]/50" />
               <span>Sual edin · Öyrənin · Dərinləşin</span>
               <span className="h-px flex-1 bg-gradient-to-l from-transparent to-[#e3c27a]/50" />
             </div>
-            <p className="mt-5 text-xs leading-5 text-[#f4ead5]/55">
-              {mode === 'admin'
-                ? 'Tələbələr, müəllimlər, dərslər, müraciətlər, tapşırıqlar, testlər və elanlar üzrə LMS bazasından cavab verirəm — hərf səhvlərini də başa düşürəm. Şamilə kitabxanasında və Dorar hədis bazasında da axtarıram: «Şamilədə axtar: …», «Hədis yoxla: …».'
-                : 'Yalnız sizin dərsləriniz, cədvəliniz, tapşırıqlarınız və nəticələriniz əsasında cavab verirəm.'}
-            </p>
+            <p className="mt-3 text-xs leading-5 text-[#f4ead5]/55 sm:mt-5">{intro}</p>
           </div>
         ) : (
           <ol className="space-y-4" aria-live="polite">
-            {messages.map((message) => (
-              <li key={message.id} className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
-                <div className={`max-w-[88%] whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === 'user'
-                  ? 'rounded-br-md bg-gradient-to-br from-[#e3c27a] to-[#c49a4c] text-[#17130c]'
-                  : message.error
-                    ? 'rounded-bl-md border border-red-400/40 bg-red-950/40 text-red-100'
-                    : 'rounded-bl-md border border-[#e3c27a]/20 bg-white/[.04] text-[#f4ead5]'}`} data-testid={`ai-message-${message.role}`}>
-                  {message.role === 'assistant' ? <LinkifiedText text={message.text} /> : <span dir="auto">{message.text}</span>}
-                </div>
-                {message.role === 'assistant' && message.sources && mode === 'admin' && (
-                  <div className="w-full">
-                    <ResearchResults sources={message.sources} getToken={getToken} />
+            {messages.map((message) => {
+              const groups = message.role === 'assistant' && isStaff ? sourceGroups(message.sources) : [];
+              return (
+                <li key={message.id} className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  <div className={`max-w-[92%] whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-6 sm:max-w-[88%] ${message.role === 'user'
+                    ? 'rounded-br-md bg-gradient-to-br from-[#e3c27a] to-[#c49a4c] text-[#17130c]'
+                    : message.error
+                      ? 'rounded-bl-md border border-red-400/40 bg-red-950/40 text-red-100'
+                      : 'rounded-bl-md border border-[#e3c27a]/20 bg-white/[.04] text-[#f4ead5]'}`} data-testid={`ai-message-${message.role}`}>
+                    {message.role === 'assistant' ? <LinkifiedText text={message.text} /> : <span dir="auto">{message.text}</span>}
                   </div>
-                )}
-              </li>
-            ))}
+                  {groups.length > 0 && (
+                    <div className="w-full">
+                      {groups.map((group, index) => <ResearchResults key={`${group.kind}-${index}`} sources={group} getToken={getToken} heading={groups.length > 1} />)}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
             {sending && (
               <li className="flex justify-start">
                 <div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-[#e3c27a]/20 bg-white/[.04] px-4 py-3 text-sm text-[#f4ead5]/70">
-                  <Loader2 size={14} className="animate-spin" /> Hazırlanır…
+                  <Loader2 size={14} className="animate-spin" /> {external ? 'Xarici mənbələrdə axtarılır…' : 'Hazırlanır…'}
                 </div>
               </li>
             )}
@@ -434,17 +539,17 @@ export function AiAssistant({ mode, backHref, backLabel }: { mode: AiAssistantMo
         )}
       </div>
 
-      <div className="relative z-10 space-y-3 px-5 pb-5 md:px-7">
+      <div className="relative z-10 shrink-0 space-y-2 px-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-1 sm:space-y-3 sm:px-5 sm:pb-5 md:px-7">
         {hasChat && lastSuggestions.length > 0 && !sending && (
-          <div className="flex flex-wrap gap-2">
+          <div className={`${chipRow} sm:flex-wrap sm:overflow-visible`}>
             {lastSuggestions.map((suggestion) => (
-              <button key={suggestion} type="button" onClick={() => void send(suggestion)} className="rounded-full border border-[#e3c27a]/35 bg-white/[.03] px-3 py-1.5 text-xs font-semibold text-[#f3dca6] transition hover:border-[#e3c27a]/80 hover:bg-[#e3c27a]/10">
+              <button key={suggestion} type="button" onClick={() => void send(suggestion)} dir="auto" className="shrink-0 whitespace-nowrap rounded-full border border-[#e3c27a]/35 bg-white/[.03] px-3 py-1.5 text-xs font-semibold text-[#f3dca6] transition hover:border-[#e3c27a]/80 hover:bg-[#e3c27a]/10">
                 {suggestion}
               </button>
             ))}
           </div>
         )}
-        <form onSubmit={onSubmit} className="rounded-[22px] border border-[#e3c27a]/60 bg-black/40 p-3 shadow-[0_0_30px_rgba(227,194,122,.08)] focus-within:border-[#e3c27a]">
+        <form onSubmit={onSubmit} className="flex items-end gap-2 rounded-[22px] border border-[#e3c27a]/60 bg-black/40 p-2 shadow-[0_0_30px_rgba(227,194,122,.08)] focus-within:border-[#e3c27a] sm:block sm:p-3">
           <label htmlFor={`ai-input-${mode}`} className="sr-only">Mədinə AI-a sual</label>
           <textarea
             id={`ai-input-${mode}`}
@@ -453,24 +558,28 @@ export function AiAssistant({ mode, backHref, backLabel }: { mode: AiAssistantMo
             onChange={(event) => setInput(event.target.value.slice(0, MAX_MESSAGE_LENGTH))}
             onKeyDown={onKeyDown}
             rows={2}
-            placeholder={mode === 'admin' ? 'Nə ilə kömək edim? (məs. «Hədis yoxla: إنما الأعمال بالنيات»)' : 'Nə ilə kömək edim?'}
+            placeholder={placeholder}
             dir="auto"
-            className="w-full resize-none bg-transparent px-2 py-1 text-sm text-[#f4ead5] outline-none placeholder:text-[#f4ead5]/45"
+            enterKeyHint="send"
+            className="max-h-32 min-h-[2.75rem] w-full flex-1 resize-none bg-transparent px-2 py-1.5 text-base leading-6 text-[#f4ead5] outline-none placeholder:text-[#f4ead5]/45 sm:min-h-0 sm:text-sm"
             data-testid="input-ai-message"
           />
-          <div className="mt-1 flex items-center justify-between gap-3 px-1">
-            <span className="text-[10px] text-[#f4ead5]/45">Söhbət yalnız bu brauzerdə saxlanılır.</span>
-            <button type="submit" disabled={!input.trim() || sending} className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#f3dca6] to-[#c49a4c] text-[#17130c] shadow-[0_0_20px_rgba(227,194,122,.35)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Göndər" data-testid="button-ai-send">
+          <div className="flex shrink-0 items-center justify-between gap-3 sm:mt-1 sm:px-1">
+            <span className="hidden text-[10px] text-[#f4ead5]/45 sm:inline">Söhbət yalnız bu brauzerdə saxlanılır.</span>
+            <button type="submit" disabled={!input.trim() || sending} className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#f3dca6] to-[#c49a4c] text-[#17130c] shadow-[0_0_20px_rgba(227,194,122,.35)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11" aria-label="Göndər" data-testid="button-ai-send">
               {sending ? <Loader2 size={18} className="animate-spin" /> : <SendHorizontal size={18} />}
             </button>
           </div>
         </form>
-        <div className={`grid grid-cols-2 gap-2.5 ${tiles.length > 5 ? 'sm:grid-cols-4 lg:grid-cols-7' : 'sm:grid-cols-5'}`}>
+        <div className={`${chipRow} sm:grid sm:gap-2.5 sm:overflow-visible sm:pb-0 sm:grid-cols-5`} data-testid="ai-tiles">
           {tiles.map(({ label, hint, prompt, Icon, fill }) => (
-            <button key={label} type="button" onClick={() => (fill ? prefill(prompt) : void send(prompt))} disabled={sending} className="group flex flex-col items-center rounded-2xl border border-[#e3c27a]/20 bg-white/[.03] px-3 py-3 text-center transition hover:border-[#e3c27a]/60 hover:bg-[#e3c27a]/[.06] disabled:opacity-50" data-testid={`button-ai-tile-${label}`}>
-              <Icon size={20} style={{ color: gold }} />
-              <span className="mt-2 text-xs font-bold text-[#f4ead5]">{label}</span>
-              <span className="mt-0.5 text-[10px] leading-4 text-[#f4ead5]/55">{hint}</span>
+            <button key={label} type="button" onClick={() => (fill ? prefill(prompt) : void send(prompt))} disabled={sending} title={hint}
+              className="group flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-[#e3c27a]/25 bg-white/[.03] px-3 py-1.5 text-center transition hover:border-[#e3c27a]/60 hover:bg-[#e3c27a]/[.06] disabled:opacity-50 sm:flex-col sm:gap-0 sm:whitespace-normal sm:rounded-2xl sm:border-[#e3c27a]/20 sm:px-3 sm:py-3"
+              data-testid={`button-ai-tile-${label}`}>
+              <Icon size={14} className="sm:hidden" style={{ color: gold }} />
+              <Icon size={20} className="hidden sm:block" style={{ color: gold }} />
+              <span className="text-[11px] font-bold text-[#f4ead5] sm:mt-2 sm:text-xs">{label}</span>
+              <span dir="auto" className="mt-0.5 hidden text-[10px] leading-4 text-[#f4ead5]/55 sm:block">{hint}</span>
             </button>
           ))}
         </div>
@@ -488,11 +597,36 @@ export function AiAssistantLauncher({ href = '/ai' }: { href?: string }) {
   );
 }
 
+// Telefonda klaviatura açılanda görünən sahənin hündürlüyünü izləyir (iOS Safari dvh-ni klaviaturaya görə
+// kiçiltmir). Səhifə həmişə görünən sahəyə sığır: yazı sahəsi aşağıda sabit qalır, söhbət isə öz içində sürüşür.
+function useVisualViewportHeight() {
+  const [box, setBox] = useState<{ height: number; top: number } | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const viewport = window.visualViewport;
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    const previous = meta?.getAttribute('content') ?? null;
+    // Yalnız bu səhifədə: «safe-area» üçün viewport-fit=cover, Android klaviaturası üçün interactive-widget.
+    if (meta && previous && !previous.includes('viewport-fit')) meta.setAttribute('content', `${previous}, viewport-fit=cover, interactive-widget=resizes-content`);
+    const update = () => setBox(viewport ? { height: Math.round(viewport.height), top: Math.max(0, Math.round(viewport.offsetTop)) } : null);
+    update();
+    viewport?.addEventListener('resize', update);
+    viewport?.addEventListener('scroll', update);
+    return () => {
+      viewport?.removeEventListener('resize', update);
+      viewport?.removeEventListener('scroll', update);
+      if (meta && previous !== null) meta.setAttribute('content', previous);
+    };
+  }, []);
+  return box;
+}
+
 // Tam ekran Mədinə AI səhifəsi (/ai). Rol yoxlaması App.tsx-dəki marşrutda aparılır.
-export function AiAssistantPage({ mode, backHref, backLabel }: { mode: AiAssistantMode; backHref: string; backLabel?: string }) {
+export function AiAssistantPage({ mode, backHref, backLabel, canReadLms }: { mode: AiAssistantMode; backHref: string; backLabel?: string; canReadLms?: boolean }) {
+  const viewport = useVisualViewportHeight();
   return (
-    <main className="min-h-[100dvh] bg-[radial-gradient(ellipse_at_top,#2a2214_0%,#121010_45%,#0a0a0b_100%)]" data-testid={`page-ai-assistant-${mode}`}>
-      <AiAssistant mode={mode} backHref={backHref} backLabel={backLabel} />
+    <main className="fixed inset-x-0 top-0 h-[100dvh] overflow-hidden bg-[radial-gradient(ellipse_at_top,#2a2214_0%,#121010_45%,#0a0a0b_100%)]" style={viewport ? { height: viewport.height, top: viewport.top } : undefined} data-testid={`page-ai-assistant-${mode}`}>
+      <AiAssistant mode={mode} backHref={backHref} backLabel={backLabel} canReadLms={canReadLms} />
     </main>
   );
 }

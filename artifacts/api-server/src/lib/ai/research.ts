@@ -473,7 +473,7 @@ export function detectResearchIntent(message: string): ResearchIntent | null {
   return null;
 }
 
-function cleanQuery(value: string) {
+export function cleanQuery(value: string) {
   const query = value.replace(/^[\s:：\-–—،,]+/, "").replace(/^[«"“]+|[»"”]+$/g, "").trim();
   return query.length >= 2 ? query.slice(0, MAX_QUERY_LENGTH) : "";
 }

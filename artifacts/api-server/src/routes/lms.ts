@@ -3932,7 +3932,7 @@ router.post("/admin/schedule-lessons", requireTeacher, async (req, res, next) =>
     const lessonDays = Array.isArray(req.body?.lessonDays) ? req.body.lessonDays.filter((day: unknown): day is string => typeof day === "string") : [];
     const lessonTime = typeof req.body?.lessonTime === "string" ? req.body.lessonTime.trim() : "";
     const validLessonDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-    if (validateTermNumber(termNumber) || !title || !lessonDays.length || lessonDays.some((day) => !validLessonDays.includes(day)) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(lessonTime)) {
+    if (validateTermNumber(termNumber) || !title || !lessonDays.length || lessonDays.some((day: string) => !validLessonDays.includes(day)) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(lessonTime)) {
       res.status(400).json({ error: "Semestr, dərs adı, gün və saat düzgün doldurulmalıdır." });
       return;
     }
@@ -3992,7 +3992,7 @@ router.patch("/admin/schedule-lessons/:resourceId", requireTeacher, async (req, 
     const lessonDays = Array.isArray(req.body?.lessonDays) ? req.body.lessonDays.filter((day: unknown): day is string => typeof day === "string") : existing.lessonDays;
     const lessonTime = typeof req.body?.lessonTime === "string" ? req.body.lessonTime.trim() : existing.lessonTime ?? "";
     const validLessonDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-    if (!lessonDays.length || lessonDays.some((day) => !validLessonDays.includes(day)) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(lessonTime)) {
+    if (!lessonDays.length || lessonDays.some((day: string) => !validLessonDays.includes(day)) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(lessonTime)) {
       res.status(400).json({ error: "Gün və dərs saatı düzgün doldurulmalıdır." });
       return;
     }

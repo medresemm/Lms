@@ -772,9 +772,13 @@ function MedineAiRoute() {
 
   if (isStaff) {
     if (!profile) return <AccountGateLoading />;
-    // Bütün heyət üzvləri admin rejiminə girə bilər: Şamilə/Dorar axtarışı hamıya açıqdır,
-    // LMS məlumatları üçün isə «students» icazəsini server ayrıca yoxlayır.
-    return <AiAssistantPage mode="admin" backHref="/admin" backLabel="Admin panelə qayıt" />;
+    // Bütün heyət üzvləri admin rejiminə girə bilər: «Xarici» (Şamilə/Dorar) hamıya açıqdır,
+    // «Daxili» (LMS məlumatları) üçün isə «students» icazəsini server ayrıca yoxlayır.
+    const ownerEmail = import.meta.env.VITE_SYSTEM_OWNER_EMAIL?.trim().toLowerCase();
+    const userEmail = user?.primaryEmailAddress?.emailAddress?.trim().toLowerCase();
+    const canReadLms = profile.role === 'owner' || isOwnerMetadata(user) || Boolean(ownerEmail && userEmail === ownerEmail)
+      || (profile.rolePermissions ?? []).includes('students');
+    return <AiAssistantPage mode="admin" backHref="/admin" backLabel="Admin panelə qayıt" canReadLms={canReadLms} />;
   }
 
   const accessPending = !scheduleAccessQuery.data && (scheduleAccessQuery.isLoading || scheduleAccessQuery.isFetching);
@@ -782,6 +786,11 @@ function MedineAiRoute() {
   if (scheduleAccessQuery.data?.onboardingRequired && !scheduleAccessQuery.data.approved) return <Redirect to="/admission-exam" />;
   if (scheduleAccessQuery.isError || !scheduleAccessQuery.data) return <Redirect to="/user-portal" />;
   return <AiAssistantPage mode="student" backHref="/user-portal" backLabel="Kabinetə qayıt" />;
+}
+
+function isOwnerMetadata(user: { publicMetadata?: unknown } | null | undefined) {
+  const metadata = user?.publicMetadata;
+  return typeof metadata === 'object' && metadata !== null && 'role' in metadata && (metadata as { role?: unknown }).role === 'owner';
 }
 
 function AccountGateLoading() {

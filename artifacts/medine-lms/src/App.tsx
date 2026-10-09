@@ -310,7 +310,7 @@ function HomePage() {
             <p className="mt-4 text-sm leading-5 text-[hsl(var(--muted-foreground))]">Müraciətinizi göndərin, müəllim heyətimiz məlumatlarınızı nəzərdən keçirsin.</p>
           </div>
         </section>
-         <section className="mt-8 max-w-3xl">
+         <section className="mt-6 max-w-3xl">
            <DailyBenefitCard benefit={dailyBenefitQuery.data} isLoading={dailyBenefitQuery.isLoading} hasError={dailyBenefitQuery.isError} />
          </section>
          <section className="mt-10 max-w-3xl" data-testid="section-articles">
@@ -427,19 +427,19 @@ function PublicArticlesPage() {
 
 function DailyBenefitCard({ benefit, isLoading, hasError }: { benefit?: DailyBenefit; isLoading: boolean; hasError: boolean }) {
   return (
-    <section className="relative overflow-hidden rounded-[30px] bg-[hsl(var(--accent))] p-8 text-[hsl(var(--primary))] shadow-[var(--shadow-sm)] md:p-10]" data-testid="section-daily-benefit">
-      <Quote className="absolute -right-2 -top-3 h-28 w-28 rotate-12 text-[hsl(var(--primary)/.08)]" strokeWidth={1} />
+    <section className="relative overflow-hidden rounded-2xl border border-[hsl(37_70%_42%/.18)] bg-[hsl(var(--accent))] px-5 py-4 text-[hsl(var(--primary))] shadow-[var(--shadow-xs)] sm:px-6" data-testid="section-daily-benefit">
+      <Quote className="pointer-events-none absolute -right-1 -top-2 h-16 w-16 rotate-12 text-[hsl(var(--primary)/.08)]" strokeWidth={1.25} />
       <div className="relative">
-        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.18em]"><Quote size={15} /> Günün faydası</div>
-        {isLoading && <p className="mt-8 text-sm font-semibold text-[hsl(var(--primary)/.65)]">Yüklənir...</p>}
-        {hasError && <p className="mt-8 text-sm font-semibold text-[hsl(var(--primary)/.65)]">Günün faydası hazırda yüklənmədi.</p>}
+        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--primary)/.72)]"><Quote size={13} /> Günün faydası</div>
+        {isLoading && <p className="mt-3 text-sm font-semibold text-[hsl(var(--primary)/.65)]">Yüklənir...</p>}
+        {hasError && <p className="mt-3 text-sm font-semibold text-[hsl(var(--primary)/.65)]">Günün faydası hazırda yüklənmədi.</p>}
         {!isLoading && !hasError && benefit && (
           <>
-            <blockquote className="mt-8 font-serif text-2xl leading-tight tracking-[-.025em] md:text-3xl">“{benefit.body}”</blockquote>
-            <p className="mt-7 text-xs font-bold text-[hsl(var(--primary)/.68)]">— {benefit.source}</p>
+            <blockquote className="mt-2.5 font-serif text-lg leading-snug tracking-[-.02em] sm:text-xl">“{benefit.body}”</blockquote>
+            <p className="mt-3 text-xs font-bold text-[hsl(var(--primary)/.7)]">— {benefit.source}</p>
           </>
         )}
-        {!isLoading && !hasError && !benefit && <p className="mt-8 text-sm font-semibold text-[hsl(var(--primary)/.65)]">Günün faydası hələ əlavə edilməyib.</p>}
+        {!isLoading && !hasError && !benefit && <p className="mt-3 text-sm font-semibold text-[hsl(var(--primary)/.65)]">Günün faydası hələ əlavə edilməyib.</p>}
       </div>
     </section>
   );

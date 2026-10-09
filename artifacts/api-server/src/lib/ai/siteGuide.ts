@@ -65,11 +65,14 @@ export const GUIDE_TOPICS: GuideTopic[] = [
     title: "Onlayn dərsə qoşulmaq",
     keywords: ["qosul", "katil", "zoom", "meet", "telegram", "canli", "link", "kecid", "baglanti"],
     steps: [
-      "Menyuda «Dərs Cədvəlim» bölməsini açın və dərsin gününü seçin.",
-      "Dərs kartında «PDF və bütün linklərə bax» düyməsini basın.",
-      "Açılan pəncərədə «Dərs bağlantıları» hissəsindən Telegram, Zoom və ya Google Meet linkinə klikləyin.",
+      "Menyuda «Dərs Cədvəlim» bölməsini açın — bu günün dərsinin altında «Dərsə qoşul» düyməsi var.",
+      "Və ya dərs kartında «PDF və bütün linklərə bax» düyməsini basıb «Dərs bağlantıları» hissəsindən Zoom və ya Google Meet linkinə klikləyin.",
+      "Dərs vaxtı sayt üzərindən qoşulduqda girişiniz avtomatik qeyd olunur və müəllim davamiyyəti bu əsasda təsdiqləyir.",
     ],
-    tips: ["Link görünmürsə, müəllim hələ əlavə etməyib — «Məsləhətləşmə / Əlaqə» bölməsindən müəllimə yaza bilərsiniz."],
+    tips: [
+      "Davamiyyətin qeyd olunması üçün linki birbaşa kopyalamayın, saytdakı düymə ilə qoşulun (dərsdən 15 dəqiqə əvvəldən 3 saat sonrasına qədər).",
+      "Link görünmürsə, müəllim hələ əlavə etməyib — «Məsləhətləşmə / Əlaqə» bölməsindən müəllimə yaza bilərsiniz.",
+    ],
     related: ["Resurslar haradadır?", "Dərs cədvəlini harada görüm?"],
   },
   {

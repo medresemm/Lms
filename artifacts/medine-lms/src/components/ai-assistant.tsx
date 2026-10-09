@@ -74,10 +74,13 @@ function newId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const siteBase = import.meta.env.BASE_URL.replace(/\/$/, '');
+
 function LinkifiedText({ text }: { text: string }) {
-  const parts = text.split(/(https?:\/\/[^\s)]+)/g);
-  return <>{parts.map((part, index) => /^https?:\/\//.test(part)
-    ? <a key={index} href={part} target="_blank" rel="noreferrer noopener" className="break-all underline decoration-[#e3c27a]/60 underline-offset-2 hover:text-[#f3dca6]">{part}</a>
+  // Dərsə qoşulma linkləri (/api/.../join) saytın öz ünvanıdır: qoşulma qeyd olunur, sonra Zoom/Meet açılır.
+  const parts = text.split(/(https?:\/\/[^\s)]+|\/api\/(?:lessons|courses)\/\d+\/join[^\s)]*)/g);
+  return <>{parts.map((part, index) => /^https?:\/\/|^\/api\//.test(part)
+    ? <a key={index} href={part.startsWith('/api/') ? `${siteBase}${part}` : part} target="_blank" rel="noreferrer noopener" className="break-all underline decoration-[#e3c27a]/60 underline-offset-2 hover:text-[#f3dca6]">{part}</a>
     : <span key={index}>{part}</span>)}</>;
 }
 

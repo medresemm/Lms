@@ -405,18 +405,94 @@ function AttendanceExcuses({ onRead }: { onRead?: () => void }) {
   </div>;
 }
 
+type LessonSessionStatus = 'present' | 'late' | 'absent' | 'excused';
+type LessonSessionSummary = { total: number; joined: number; notJoined: number; confirmed: number; state: 'confirmed' | 'partial' | 'pending' };
+type LessonSessionItem = { resourceId: number; courseId: number; courseTitle: string; teacherName: string | null; termNumber: number; lessonTime: string | null; sessionDate: string; summary: LessonSessionSummary };
+type LessonSessionRow = { profileId: number; studentName: string; studentNumber: number; joined: boolean; joinedAt: string | null; punctuality: 'on_time' | 'late' | null; autoStatus: 'present' | 'absent'; finalStatus: LessonSessionStatus | null; suggestedStatus: LessonSessionStatus };
+type LessonSessionDetail = LessonSessionItem & { rows: LessonSessionRow[] };
+
+const lessonStatusLabels: Record<LessonSessionStatus, string> = { present: 'İştirak', late: 'Gecikib', absent: 'Qayıb', excused: 'Üzrlü' };
+
+function formatBakuTime(value: string) {
+  return new Intl.DateTimeFormat('az-AZ', { timeZone: 'Asia/Baku', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+}
+
+function formatSessionDate(value: string) {
+  return new Intl.DateTimeFormat('az-AZ', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`));
+}
+
 function LessonAttendance() {
-  const [items, setItems] = useState<Array<{ id: number; studentName: string; courseTitle: string; sessionDate: string; joinedAt: string; punctuality: string; finalStatus: string | null }>>([]);
+  const [sessions, setSessions] = useState<LessonSessionItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const load = () => { setLoading(true); void fetch(apiUrl('/admin/lesson-attendance'), { cache: 'no-store' }).then((r) => r.ok ? r.json() : Promise.reject()).then(setItems).catch(() => setItems([])).finally(() => setLoading(false)); };
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [detail, setDetail] = useState<LessonSessionDetail | null>(null);
+  const [overrides, setOverrides] = useState<Partial<Record<number, 'present' | 'late' | 'absent'>>>({});
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const load = () => { setLoading(true); void fetch(apiUrl('/admin/attendance/lesson-sessions'), { cache: 'no-store' }).then((r) => r.ok ? r.json() : Promise.reject()).then(setSessions).catch(() => setSessions([])).finally(() => setLoading(false)); };
   useEffect(load, []);
-  const decide = async (id: number, status: 'present' | 'late' | 'absent') => {
-    const response = await fetch(apiUrl(`/admin/lesson-attendance/${id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
-    if (response.ok) setItems((current) => current.map((item) => item.id === id ? { ...item, finalStatus: status } : item));
+  const keyOf = (item: Pick<LessonSessionItem, 'resourceId' | 'sessionDate'>) => `${item.resourceId}:${item.sessionDate}`;
+  const open = async (item: LessonSessionItem) => {
+    const key = keyOf(item);
+    if (openKey === key) { setOpenKey(null); setDetail(null); return; }
+    setOpenKey(key); setDetail(null); setOverrides({}); setEditing(false); setNotice('');
+    const response = await fetch(apiUrl(`/admin/attendance/lesson-sessions/${item.resourceId}/${item.sessionDate}`), { cache: 'no-store' });
+    const data = await response.json().catch(() => ({})) as LessonSessionDetail & { error?: string };
+    if (!response.ok) { setNotice(data.error ?? 'Dərs siyahısını yükləmək alınmadı.'); return; }
+    setDetail(data);
   };
+  const confirm = async () => {
+    if (!detail) return;
+    setBusy(true); setNotice('');
+    try {
+      const response = await fetch(apiUrl(`/admin/attendance/lesson-sessions/${detail.resourceId}/${detail.sessionDate}/confirm`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ overrides }) });
+      const data = await response.json().catch(() => ({})) as LessonSessionDetail & { error?: string; written?: number };
+      if (!response.ok) { setNotice(data.error ?? 'Davamiyyəti təsdiqləmək alınmadı.'); return; }
+      setDetail(data); setOverrides({}); setEditing(false);
+      setSessions((current) => current.map((item) => keyOf(item) === keyOf(data) ? { ...item, summary: data.summary } : item));
+      setNotice(`Davamiyyət təsdiqləndi: ${data.written ?? data.rows.length} tələbə üçün yazıldı.`);
+    } finally { setBusy(false); }
+  };
+  const stateBadge = (summary: LessonSessionSummary) => summary.state === 'confirmed'
+    ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Təsdiqlənib</span>
+    : summary.state === 'partial'
+      ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">Qismən təsdiqlənib</span>
+      : <span className="rounded-full bg-[hsl(var(--muted))] px-2 py-0.5 text-[10px] font-bold text-[hsl(var(--primary))]">Təsdiq gözləyir</span>;
   return <section className="mt-5 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid="section-lesson-attendance">
-    <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">Onlayn dərsə qoşulmalar</p>
-    {loading ? <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Yüklənir...</p> : !items.length ? <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Qoşulma qeydi yoxdur.</p> : <div className="mt-3 space-y-2">{items.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[hsl(var(--muted)/.35)] p-3"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{item.studentName} · {item.courseTitle}</p><p className="text-xs text-[hsl(var(--muted-foreground))]">{item.sessionDate} · {new Date(item.joinedAt).toLocaleString('az-AZ')} · {item.punctuality === 'on_time' ? 'Vaxtında' : 'Gecikib'}</p></div><div className="flex gap-1.5">{(['present', 'late', 'absent'] as const).map((status) => <button key={status} type="button" onClick={() => void decide(item.id, status)} className={`rounded-lg px-2.5 py-1.5 text-[10px] font-bold ${item.finalStatus === status ? 'bg-[hsl(var(--primary))] text-white' : 'border border-[hsl(var(--border))] text-[hsl(var(--primary))]'}`}>{status === 'present' ? 'İştirak' : status === 'late' ? 'Gecikib' : 'Qayıb'}</button>)}</div></div>)}</div>}
+    <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">Onlayn dərs davamiyyəti (avtomatik)</p>
+    <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Tələbə dərs vaxtı saytdakı Zoom / Google Meet düyməsi ilə qoşulduqda «girib» kimi qeyd olunur, qoşulmayanlar «girməyib» görünür. Tələbələri tək-tək seçmək lazım deyil — siyahını yoxlayıb «Təsdiq et» düyməsini basın. Qeyd: sistem yalnız sayt üzərindən linkə keçidi qeyd edir, Zoom/Meet-də faktiki qalma müddətini ölçmür.</p>
+    {loading ? <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Yüklənir...</p> : !sessions.length ? <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Son 14 gündə cədvəldə onlayn dərs yoxdur.</p> : <div className="mt-3 space-y-2">{sessions.map((item) => {
+      const key = keyOf(item);
+      const isOpen = openKey === key;
+      return <div key={key} className={`rounded-xl border ${isOpen ? 'border-[hsl(var(--accent))]' : 'border-transparent'} bg-[hsl(var(--muted)/.35)]`}>
+        <button type="button" onClick={() => void open(item)} className="focus-ring flex w-full flex-wrap items-center justify-between gap-3 p-3 text-left" aria-expanded={isOpen} data-testid={`button-lesson-session-${item.resourceId}-${item.sessionDate}`}>
+          <span><span className="block text-sm font-bold text-[hsl(var(--primary))]">{item.courseTitle}{item.teacherName ? ` · ${item.teacherName}` : ''}</span><span className="mt-0.5 block text-xs text-[hsl(var(--muted-foreground))]">{formatSessionDate(item.sessionDate)} · {item.lessonTime ?? '—'} · {item.termNumber}-ci semestr</span></span>
+          <span className="flex flex-wrap items-center gap-2 text-[11px] font-bold"><span className="text-emerald-700">Girib: {item.summary.joined}</span><span className="text-red-700">Girməyib: {item.summary.notJoined}</span>{stateBadge(item.summary)}</span>
+        </button>
+        {isOpen && <div className="border-t border-[hsl(var(--border))] p-3">
+          {!detail ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{notice || 'Siyahı yüklənir...'}</p> : <>
+            {!detail.rows.length ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Bu dərs qrupuna təyin olunmuş tələbə tapılmadı.</p> : <div className="space-y-1.5">{detail.rows.map((row) => {
+              const chosen: LessonSessionStatus = overrides[row.profileId] ?? row.suggestedStatus;
+              return <div key={row.profileId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[hsl(var(--card))] px-3 py-2" data-testid={`row-lesson-session-student-${row.profileId}`}>
+                <div className="min-w-0"><p className="text-sm font-bold text-[hsl(var(--primary))]">{row.studentName} <span className="text-[10px] font-semibold text-[hsl(var(--muted-foreground))]">T{String(row.studentNumber).padStart(4, '0')}</span></p>
+                  <p className="mt-0.5 text-xs">{row.joined && row.joinedAt ? <span className="font-semibold text-emerald-700">Girib · {formatBakuTime(row.joinedAt)}{row.punctuality === 'late' ? ' (20 dəqiqədən gec)' : ''}</span> : <span className="font-semibold text-red-700">Girməyib</span>}{row.finalStatus && <span className="ml-2 text-[hsl(var(--muted-foreground))]">· Yekun: {lessonStatusLabels[row.finalStatus]}</span>}</p></div>
+                {editing ? <select value={chosen === 'excused' ? '' : chosen} onChange={(event) => { const value = event.target.value as 'present' | 'late' | 'absent'; setOverrides((current) => ({ ...current, [row.profileId]: value })); }} className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-1 text-xs font-bold text-[hsl(var(--primary))]" aria-label={`${row.studentName} üçün status`}>
+                  {chosen === 'excused' && <option value="">Üzrlü (dəyişmə)</option>}
+                  <option value="present">İştirak</option><option value="late">Gecikib</option><option value="absent">Qayıb</option>
+                </select> : <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${chosen === 'absent' ? 'bg-red-100 text-red-800' : chosen === 'late' ? 'bg-amber-100 text-amber-800' : chosen === 'excused' ? 'bg-sky-100 text-sky-800' : 'bg-emerald-100 text-emerald-800'}`}>{lessonStatusLabels[chosen]}</span>}
+              </div>;
+            })}</div>}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button type="button" disabled={busy || !detail.rows.length} onClick={() => void confirm()} className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-xs font-black text-[hsl(var(--primary-foreground))] disabled:opacity-50" data-testid="button-confirm-lesson-session">{busy ? 'Yazılır...' : detail.summary.state === 'confirmed' ? 'Yenidən təsdiq et' : 'Təsdiq et'}</button>
+              {detail.rows.length > 0 && <button type="button" onClick={() => setEditing((current) => !current)} className="focus-ring rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))]" data-testid="button-edit-lesson-session">{editing ? 'Düzəlişi gizlət' : 'Ayrı-ayrı düzəliş et (istəyə bağlı)'}</button>}
+              {stateBadge(detail.summary)}
+            </div>
+            {notice && <p className="mt-2 text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}
+          </>}
+        </div>}
+      </div>;
+    })}</div>}
   </section>;
 }
 

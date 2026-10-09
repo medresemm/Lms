@@ -3,6 +3,7 @@ import { clerkClient, getAuth } from "@clerk/express";
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { getApplicationWindowStatus, type ApplicationWindow } from "../lib/applicationWindow.js";
+import { isMeetingUrl } from "../lib/lessonAttendance.js";
 import {
   applicationUploadIntentsTable,
   applicationSettingsTable,
@@ -484,7 +485,7 @@ export function roleForClerkUser(clerkUser: NonNullable<Awaited<ReturnType<typeo
   return metadataRole(clerkUser.publicMetadata) ?? "none" as const;
 }
 
-function ownerDisplayNameParts(clerkUser: NonNullable<Awaited<ReturnType<typeof getClerkUser>>>) {
+export function ownerDisplayNameParts(clerkUser: NonNullable<Awaited<ReturnType<typeof getClerkUser>>>) {
   const configuredName = process.env.SYSTEM_OWNER_NAME?.trim();
   const isOwner = roleForClerkUser(clerkUser) === "owner";
   if (!configuredName || !isOwner) {
@@ -967,12 +968,25 @@ function toCourse(row: typeof coursesTable.$inferSelect, studentView = false) {
     nextLesson: row.nextLesson,
     pdfUrl: row.pdfUrl,
     telegramUrl: row.telegramUrl,
-    zoomUrl: row.zoomUrl,
-    googleMeetUrl: row.googleMeetUrl,
-    lessonUrl: row.lessonUrl,
+    // Tələbələr Zoom/Meet linkini birbaşa deyil, qoşulmanı qeyd edən sayt linki ilə alır (avtomatik davamiyyət).
+    zoomUrl: studentView ? studentJoinUrl(row.id, "zoom", row.zoomUrl) : row.zoomUrl,
+    googleMeetUrl: studentView ? studentJoinUrl(row.id, "meet", row.googleMeetUrl) : row.googleMeetUrl,
+    lessonUrl: studentView ? studentJoinUrl(row.id, "lesson", row.lessonUrl) : row.lessonUrl,
     lessonDays: row.lessonDays,
     lessonTime: row.lessonTime,
   };
+}
+
+function studentJoinUrl(courseId: number, platform: "zoom" | "meet" | "lesson", raw: string | null) {
+  if (!raw) return null;
+  return isMeetingUrl(raw) ? `/api/courses/${courseId}/join?platform=${platform}` : raw;
+}
+
+/** Tələbə görünüşü: canlı dərs qrupunun Zoom/Meet linki qoşulmanı qeyd edən sayt linki ilə əvəz olunur. */
+export async function studentResourceViews(rows: Array<typeof resourcesTable.$inferSelect>) {
+  return (await resourceViews(rows)).map((view) => view.url && isMeetingUrl(view.url) && view.lessonTime && view.lessonDays.length
+    ? { ...view, url: `/api/lessons/${view.id}/join` }
+    : view);
 }
 
 function toAnnouncement(row: typeof announcementsTable.$inferSelect) {
@@ -2149,7 +2163,7 @@ router.get("/courses/:courseId", requireApprovedStudent, async (req, res, next) 
       description: course.description,
       curriculum: course.curriculum,
       lessonDescription: course.lessonDescription,
-       resources: await resourceViews(visibleResources),
+       resources: studentProfile ? await studentResourceViews(visibleResources) : await resourceViews(visibleResources),
     }));
   } catch (error) {
     next(error);
@@ -2359,7 +2373,7 @@ router.get("/resources", requireApprovedStudent, async (req, res, next) => {
       const chosen = assigned.length ? assigned : group.length === 1 ? group : [];
       return chosen.map((resource) => resourceLinkIsExpired(resource) ? { ...resource, url: null, expiresAt: null } : resource);
     });
-    res.json(GetResourcesResponse.parse(await resourceViews(visible)));
+    res.json(GetResourcesResponse.parse(await studentResourceViews(visible)));
   } catch (error) {
     next(error);
   }

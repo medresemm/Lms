@@ -55,6 +55,7 @@ import {
   requireApprovedStudent,
   resourceLinkIsExpired,
   resourceViews,
+  studentResourceViews,
   rolePermissionKeys,
   studentMayAttendResource,
   termDetails,
@@ -178,9 +179,10 @@ function toAiSemesters(semesters: Awaited<ReturnType<typeof buildAcademicProfile
   }));
 }
 
-async function toAiLessons(rows: ResourceRow[]): Promise<AiLesson[]> {
+async function toAiLessons(rows: ResourceRow[], forStudent = false): Promise<AiLesson[]> {
   if (!rows.length) return [];
-  const [views, courses] = await Promise.all([resourceViews(rows), getCourses()]);
+  // Tələbəyə Zoom/Meet linki birbaşa deyil, qoşulmanı qeyd edən sayt linki ilə göstərilir.
+  const [views, courses] = await Promise.all([forStudent ? studentResourceViews(rows) : resourceViews(rows), getCourses()]);
   const titles = new Map(courses.map((course) => [course.id, course.title.trim()]));
   return views.map((view) => ({
     resourceId: view.id,
@@ -248,7 +250,7 @@ function buildStudentContext(profile: ProfileRow, application: ApplicationRow): 
       if (removed.has(row.courseId) || resourceLinkIsExpired(row)) continue;
       if (await studentMayAttendResource(profile.id, row)) visible.push(row);
     }
-    return toAiLessons(visible);
+    return toAiLessons(visible, true);
   });
 
   // /api/assignments ilə eyni qaydalar.

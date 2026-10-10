@@ -3717,11 +3717,10 @@ function TeacherStats({ canEdit, canReadProfiles }: { canEdit: boolean; canReadP
   }, []);
 
   return (
-    <section className="mt-5" aria-labelledby="teacher-stats-title" data-testid="teacher-stats">
+    <section className="mt-5" data-testid="teacher-stats">
       <div className="mb-2 flex items-end justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--secondary-foreground))]">Akademik icmal</p>
-          <h2 id="teacher-stats-title" className="mt-0.5 font-serif text-xl text-[hsl(var(--primary))]">Tələbə statistikası</h2>
         </div>
         <p className="hidden text-xs text-[hsl(var(--muted-foreground))] sm:block">Təsdiqlənmiş tələbələr üzrə</p>
       </div>

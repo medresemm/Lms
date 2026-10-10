@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useI18n, type MessageKey } from '@/lib/i18n';
 
 const siteBase = import.meta.env.BASE_URL.replace(/\/$/, '');
+const ux = (t: (key: MessageKey) => string, key: string) => t(key as MessageKey);
 
 function isTouchDevice() {
   return Boolean(window.matchMedia?.('(pointer: coarse)').matches) || /Android|iPhone|iPad|iPod|Mobile/i.test(window.navigator.userAgent);
@@ -14,9 +16,10 @@ function isTouchDevice() {
  * Yalnız yükləmə ikonu: başlıq sağında kiçik kvadrat düymə.
  */
 export function SchedulePdfButton({ apiPath, fileName, testId, className = '' }: { apiPath: string; fileName: string; testId: string; className?: string }) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const url = `${siteBase}/api${apiPath}`;
-  const label = 'Cədvəli PDF yüklə (A5)';
+  const label = ux(t, 'uxSchedulePdfLabel');
 
   const download = async () => {
     if (busy) return;
@@ -24,7 +27,7 @@ export function SchedulePdfButton({ apiPath, fileName, testId, className = '' }:
       const opened = window.open(url, '_blank');
       if (opened) {
         opened.opener = null;
-        toast({ title: 'PDF açıldı', description: 'PDF yeni vərəqdə açıldı. Saxlamaq üçün brauzerin yükləmə və ya paylaşma düyməsinə basın.' });
+        toast({ title: ux(t, 'uxPdfOpened'), description: ux(t, 'uxPdfOpenedBody') });
       } else {
         window.location.assign(url);
       }
@@ -35,7 +38,7 @@ export function SchedulePdfButton({ apiPath, fileName, testId, className = '' }:
       const response = await fetch(url, { credentials: 'include' });
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: string } | null;
-        throw new Error(payload?.error || 'Cədvəl PDF-i yüklənə bilmədi.');
+        throw new Error(payload?.error || ux(t, 'uxSchedulePdfFail'));
       }
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
@@ -46,12 +49,12 @@ export function SchedulePdfButton({ apiPath, fileName, testId, className = '' }:
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-      toast({ title: 'Cədvəl yükləndi', description: 'Cədvəl A5 PDF kimi yükləndi.' });
+      toast({ title: ux(t, 'uxScheduleDownloaded'), description: ux(t, 'uxScheduleDownloadedBody') });
     } catch (downloadError) {
       toast({
         variant: 'destructive',
-        title: 'Yükləmə alınmadı',
-        description: downloadError instanceof Error ? downloadError.message : 'Cədvəl PDF-i yüklənə bilmədi.',
+        title: ux(t, 'uxDownloadFailed'),
+        description: downloadError instanceof Error ? downloadError.message : ux(t, 'uxSchedulePdfFail'),
       });
     } finally {
       setBusy(false);

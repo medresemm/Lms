@@ -45,7 +45,7 @@ import { createPortal } from 'react-dom';
 import type { AcademicProfile, Announcement, AssignmentAttachment, AssignmentUploadInput, Course, Dashboard, LearningResource } from '@workspace/api-client-react';
 import { getGetCourseQueryKey, getGetResourcesQueryKey, getGetStudentAssignmentQueryKey, getGetStudentAssignmentsQueryKey, useGetCourse, useGetResources, useGetStudentAssignment, useGetStudentAssignments, useRequestStudentAssignmentUploadUrl, useSubmitAssignment } from '@workspace/api-client-react';
 import { ArticlesLink, HomeLink } from '@/components/home-link';
-import { LanguageSwitch, useI18n } from '@/lib/i18n';
+import { LanguageSwitch, useI18n, type MessageKey } from '@/lib/i18n';
 import { MessageCenter } from '@/components/message-center';
 import { loadUnansweredQuestionCount, QaCenter } from '@/components/qa-center';
 import { StudentExamsLauncher, StudentExamsSection } from '@/components/exam-module';
@@ -88,8 +88,22 @@ const navItems = [
   { id: 'qa', labelKey: 'navQa', href: '#sual-cavab', icon: HelpCircle, testId: 'link-nav-sual-cavab' },
 ] as const;
 
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat('az-AZ', { day: 'numeric', month: 'long' }).format(new Date(value));
+function sdText(t: (key: MessageKey) => string, key: string) {
+  const value = t(key as MessageKey);
+  return typeof value === 'string' ? value : key;
+}
+
+function uiDateLocale(locale: string) {
+  return locale === 'ar' ? 'ar' : 'az-AZ';
+}
+
+function displayTerm(t: (key: MessageKey) => string, locale: string, termNumber: number, azLabel?: string | null) {
+  if (locale === 'ar') return sdText(t, 'sdTermOrdinal').replace('{n}', String(termNumber));
+  return azLabel && azLabel.trim() ? azLabel : `${termNumber}-ci Semestr`;
+}
+
+const formatDate = (value: string, locale = 'az') =>
+  new Intl.DateTimeFormat(uiDateLocale(locale), { day: 'numeric', month: 'long', numberingSystem: 'latn' }).format(new Date(value));
 
 const assignmentInputClass = 'focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm text-[hsl(var(--foreground))] outline-none transition placeholder:text-[hsl(var(--muted-foreground)/.65)]';
 const assignmentButtonClass = 'focus-ring inline-flex items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50';
@@ -311,7 +325,7 @@ function Sidebar({ onClose, currentSemester, unansweredQuestionCount = 0, onOpen
         <p className="text-[12px] leading-5 text-[hsl(var(--sidebar-foreground)/.58)]">{t('smallStepsBody')}</p>
       </div>
       <div className="mt-6 border-t border-[hsl(var(--sidebar-border))] pt-5 text-[11px] text-[hsl(var(--sidebar-foreground)/.42)]">
-        © 2024 Mədinə Akademiyası
+        {sdText(t, 'sdCopyright')}
       </div>
     </aside>
   );
@@ -468,7 +482,7 @@ function TranscriptSection({ profile }: { profile: AcademicProfile }) {
         </div>
         <div className="rounded-xl bg-[hsl(var(--muted)/.45)] p-4">
           <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{t('academicStatus')}</p>
-          <p className="mt-2 text-lg font-bold text-[hsl(var(--primary))]">{profile.statusLabel}</p>
+          <p className="mt-2 text-lg font-bold text-[hsl(var(--primary))]">{displayTerm(t, locale, profile.currentTermNumber, profile.statusLabel)}</p>
           <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('currentTermShort')}: {profile.currentTermNumber}</p>
         </div>
       </div>
@@ -477,7 +491,7 @@ function TranscriptSection({ profile }: { profile: AcademicProfile }) {
         <label className="flex items-center gap-2 text-xs font-bold text-[hsl(var(--primary))]">
           {t('semester')}
           <select value={selectedTerm} onChange={(event) => setSelectedTerm(Number(event.target.value))} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-bold" data-testid="select-transcript-semester">
-            {visibleSemesters.map((item) => <option key={item.termNumber} value={item.termNumber}>{item.label}</option>)}
+            {visibleSemesters.map((item) => <option key={item.termNumber} value={item.termNumber}>{displayTerm(t, locale, item.termNumber, item.label)}</option>)}
           </select>
         </label>
         <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">{semester.subjects.length} {t('subjectCount')} · {semester.gpa === null ? t('gpaMissing') : `GPA: ${semester.gpa.toFixed(2)}`}</span>
@@ -489,7 +503,7 @@ function TranscriptSection({ profile }: { profile: AcademicProfile }) {
           const attendance = semesterAttendance(item.subjects);
           return (
             <button key={item.termNumber} type="button" onClick={() => setSelectedTerm(item.termNumber)} className={`focus-ring rounded-xl border p-3 text-left transition ${isSelected ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent)/.16)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] hover:bg-[hsl(var(--muted)/.5)]'}`} aria-pressed={isSelected} data-testid={`button-semester-summary-${item.termNumber}`}>
-              <span className="text-xs font-bold text-[hsl(var(--primary))]">{item.label}</span>
+              <span className="text-xs font-bold text-[hsl(var(--primary))]">{displayTerm(t, locale, item.termNumber, item.label)}</span>
               <span className="mt-2 flex items-center justify-between gap-2 text-[11px] text-[hsl(var(--muted-foreground))]"><span>GPA</span><strong className="text-[hsl(var(--primary))]">{item.gpa === null ? '—' : item.gpa.toFixed(2)}</strong></span>
               <span className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[hsl(var(--muted-foreground))]"><span>{t('attendance')}</span><strong className="text-[hsl(var(--primary))]">{attendance === null ? '—' : `${attendance}%`}</strong></span>
             </button>
@@ -567,7 +581,7 @@ function UpcomingLessons({ resources, courseNames, onJoin }: { resources: Learni
 }
 
 function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingRequired, onboardingExamId, onOpenOnboardingExam, onOpenCourse }: { profile?: AcademicProfile; scheduleAccessApproved: boolean; onboardingRequired?: boolean; onboardingExamId?: number | null; onOpenOnboardingExam?: (examId?: number) => void; onOpenCourse?: (courseId: number, teacherName?: string | null) => void }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [showAttendance, setShowAttendance] = useState(false);
   const [showExcuses, setShowExcuses] = useState(false);
   const [excuses, setExcuses] = useState<Array<{ id: number; courseTitle: string; attendanceDate: string; teacherName: string; reason: string; status: string }>>([]);
@@ -579,7 +593,7 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
   const matchLessonBook = useResourceBookMatcher(Boolean(profile) && scheduleAccessApproved);
   useEffect(() => { setSelectedScheduleDay(null); }, [activeTerm]);
   if (!profile) return <section className="h-28 animate-pulse rounded-2xl bg-[hsl(var(--muted))]" data-testid="section-academic-profile" />;
-  const currentSemesterLabel = profile.semesters.find((item) => item.termNumber === profile.currentTermNumber)?.label ?? `${profile.currentTermNumber}-ci Semestr`;
+  const currentSemesterLabel = displayTerm(t, locale, profile.currentTermNumber, profile.semesters.find((item) => item.termNumber === profile.currentTermNumber)?.label);
   const semester = profile.semesters.find((item) => item.termNumber === activeTerm) ?? profile.semesters[0];
   const courseNames = new Map(semester.subjects.map((subject) => [subject.courseId, subject.title]));
   const termResources = resourcesQuery.data ?? [];
@@ -611,29 +625,29 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
     <section id="profil" className="mt-0 animate-rise-in" data-testid="section-academic-profile">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Şəxsi kabinet</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdPersonalCabinet')}</p>
         </div>
-        <span className="rounded-full bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-xs font-bold text-[hsl(var(--secondary-foreground))]" data-testid="text-academic-status">{profile.statusLabel}</span>
+        <span className="rounded-full bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-xs font-bold text-[hsl(var(--secondary-foreground))]" data-testid="text-academic-status">{displayTerm(t, locale, profile.currentTermNumber, profile.statusLabel)}</span>
       </div>
        <aside className="rounded-2xl bg-[hsl(var(--primary))] px-4 py-3 text-[hsl(var(--primary-foreground))] shadow-[var(--shadow-xs)]">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--primary-foreground)/.75)]"><GraduationCap className="text-[hsl(var(--accent))]" size={14} /> Tələbə məlumatı</p>
+              <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--primary-foreground)/.75)]"><GraduationCap className="text-[hsl(var(--accent))]" size={14} /> {sdText(t, 'sdStudentInfoShort')}</p>
               <p className="mt-1 break-words font-serif text-xl leading-tight">{formatFullName(profile.firstName, profile.lastName)}</p>
-              <p className="mt-1 text-xs font-bold text-[hsl(var(--accent))]" data-testid="text-student-number">Tələbə № T{String(profile.studentNumber).padStart(4, '0')}</p>
+              <p className="mt-1 text-xs font-bold text-[hsl(var(--accent))]" data-testid="text-student-number">{t('studentNo')} T{String(profile.studentNumber).padStart(4, '0')}</p>
             </div>
-            <div className="shrink-0 text-right" aria-label="Aktiv semestr">
-              <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--accent))]">Aktiv semestr</p>
+            <div className="shrink-0 text-right" aria-label={sdText(t, 'sdActiveTerm')}>
+              <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--accent))]">{sdText(t, 'sdActiveTerm')}</p>
               <p className="mt-0.5 font-serif text-base leading-tight text-[hsl(var(--primary-foreground))]" data-testid="text-current-semester">{currentSemesterLabel}</p>
-              <p className="mt-1.5 inline-flex rounded-full bg-[hsl(var(--primary-foreground)/.12)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--accent))]" data-testid="text-account-status">Status: Tələbə</p>
+              <p className="mt-1.5 inline-flex rounded-full bg-[hsl(var(--primary-foreground)/.12)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--accent))]" data-testid="text-account-status">{t('accountStatus')}: {t('studentFallback')}</p>
             </div>
           </div>
           <div className="mt-3 grid gap-2 border-t border-[hsl(var(--primary-foreground)/.22)] pt-2.5 sm:grid-cols-2">
-            <div className="rounded-lg bg-[hsl(var(--primary-foreground)/.1)] px-2.5 py-2"><p className="text-[10px] font-bold uppercase tracking-[.12em]">Semestr ortalaması</p><p className="mt-0.5 text-base font-bold text-[hsl(var(--accent))]" data-testid="text-semester-gpa">{semester.gpa === null ? '—' : semester.gpa.toFixed(2)}</p></div>
-            <div className="rounded-lg bg-[hsl(var(--sidebar-accent)/.55)] px-2.5 py-2"><button type="button" onClick={() => setShowAttendance((current) => !current)} className="focus-ring w-full rounded-lg text-left" aria-expanded={showAttendance} data-testid="button-open-attendance"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--primary-foreground)/.82)]">Davamiyyət</p><p className="mt-0.5 text-base font-bold text-[hsl(var(--accent))]" data-testid="text-attendance-absence-count">{semester.subjects.reduce((count, subject) => count + subject.absenceCount, 0)} qayıb</p></button></div>
+            <div className="rounded-lg bg-[hsl(var(--primary-foreground)/.1)] px-2.5 py-2"><p className="text-[10px] font-bold uppercase tracking-[.12em]">{t('semesterAverage')}</p><p className="mt-0.5 text-base font-bold text-[hsl(var(--accent))]" data-testid="text-semester-gpa">{semester.gpa === null ? '—' : semester.gpa.toFixed(2)}</p></div>
+            <div className="rounded-lg bg-[hsl(var(--sidebar-accent)/.55)] px-2.5 py-2"><button type="button" onClick={() => setShowAttendance((current) => !current)} className="focus-ring w-full rounded-lg text-left" aria-expanded={showAttendance} data-testid="button-open-attendance"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--primary-foreground)/.82)]">{t('attendance')}</p><p className="mt-0.5 text-base font-bold text-[hsl(var(--accent))]" data-testid="text-attendance-absence-count">{semester.subjects.reduce((count, subject) => count + subject.absenceCount, 0)} {t('absencesWord')}</p></button></div>
           </div>
           {showAttendance && <AttendanceDetails semester={semester} />}
-          <button type="button" onClick={() => void loadExcuses()} className="focus-ring mt-2 inline-flex items-center gap-2 rounded-lg border border-[hsl(var(--destructive)/.28)] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] shadow-[var(--shadow-xs)] hover:bg-[hsl(var(--muted))]" aria-expanded={showExcuses} data-testid="button-open-excuses">Davamiyyətə görə üzr {excuses.length > 0 && <span className="rounded-full bg-[hsl(var(--destructive))] px-2 py-0.5 text-[10px] text-white">{excuses.length}</span>}</button>
+          <button type="button" onClick={() => void loadExcuses()} className="focus-ring mt-2 inline-flex items-center gap-2 rounded-lg border border-[hsl(var(--destructive)/.28)] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] shadow-[var(--shadow-xs)] hover:bg-[hsl(var(--muted))]" aria-expanded={showExcuses} data-testid="button-open-excuses">{t('excuses')} {excuses.length > 0 && <span className="rounded-full bg-[hsl(var(--destructive))] px-2 py-0.5 text-[10px] text-white">{excuses.length}</span>}</button>
           {showExcuses && <StudentExcuses excuses={excuses} />}
        </aside>
         <div className="mt-5" id="ders-cedvelim">
@@ -653,7 +667,7 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-7">
                   {scheduleByDay.map(({ day, label, lessons }) => { const live = lessons.some((lesson) => lessonIsLive(lesson)); return <button key={day} type="button" onClick={() => setSelectedScheduleDay(day)} className={`focus-ring relative rounded-xl border px-2 py-3 text-center transition hover:-translate-y-0.5 ${day === (selectedScheduleDay ?? todayKey) ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent))] text-[hsl(var(--primary))] shadow-[0_4px_0_hsl(37_83%_52%)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]'}`} aria-expanded={day === (selectedScheduleDay ?? todayKey)} data-testid={`button-schedule-day-${day}`}><span className="block text-xs font-black">{label}</span><span className="mt-1 block text-[10px] font-semibold opacity-70">{lessons.length ? `${lessons.length} ${t('lessonWord')}` : t('noLesson')}</span>{live && <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[hsl(var(--destructive))] px-1.5 py-0.5 text-[9px] font-black text-white"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> {t('liveNow')}</span>}</button>; })}
                 </div>
-                  {(() => { const selected = scheduleByDay.find(({ day }) => day === (selectedScheduleDay ?? todayKey)) ?? scheduleByDay[0]; return <div className="mt-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid="section-selected-daily-schedule"><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--primary))]">{selected.label}</p>{selected.lessons.length ? <div className="mt-3 space-y-2">{selected.lessons.map((lesson) => <div key={lesson.id} className="space-y-1.5"><button type="button" onClick={() => onOpenCourse?.(lesson.courseId, lesson.teacherName)} className="focus-ring flex w-full items-start justify-between gap-3 rounded-lg bg-[hsl(var(--muted)/.45)] px-3 py-3 text-left transition hover:-translate-y-0.5 hover:bg-[hsl(var(--accent)/.2)]" data-testid={`button-open-scheduled-lesson-${lesson.id}`}><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{courseNames.get(lesson.courseId) ?? lesson.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{(lesson.teacherNames?.length ?? 0) > 1 ? t('teachersLabel') : t('roleTeacher')}: {lesson.teacherName || t('noTeacherAssigned')}</p><p className="mt-2 text-[10px] font-bold text-[hsl(var(--secondary-foreground))]">{t('pdfAndLinks')}</p></div><span className="shrink-0 rounded-lg bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-sm font-black text-[hsl(var(--secondary-foreground))]">{timeForLessonDay(lesson.lessonTime, selected.day) ?? '—'}</span></button><CourseBooksList compact books={courseBooks.booksFor(lesson.courseId, lesson.termNumber)[0]?.books ?? []} testId={`list-lesson-books-${lesson.id}`} />{!(courseBooks.booksFor(lesson.courseId, lesson.termNumber)[0]?.books.length) && (() => { const match = matchLessonBook(lesson); return match ? <ResourceBookRead match={match} /> : null; })()}{selected.day === todayKey && timeForLessonDay(lesson.lessonTime, selected.day) && <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/lessons/${lesson.id}/join`} target="_blank" rel="noreferrer" className={`focus-ring flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-black ${lessonIsLive(lesson) ? 'bg-[hsl(var(--destructive))] text-white' : 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]'}`} title={t('joinNote')} data-testid={`link-join-lesson-${lesson.id}`}><Video size={14} /> {lessonIsLive(lesson) ? t('joinLive') : t('joinClass')}</a>}</div>)}</div> : <div className="mt-4 flex flex-col items-center rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] px-4 py-5 text-center"><div className="grid h-10 w-10 place-items-center rounded-full bg-[hsl(var(--accent)/.28)] text-[hsl(var(--secondary-foreground))]"><Coffee size={19} strokeWidth={1.8} /></div><p className="mt-3 text-sm font-semibold text-[hsl(var(--primary))]">{t('noPlanToday')}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">İstirahət edə bilərsiniz!</p></div>}</div>; })()}
+                  {(() => { const selected = scheduleByDay.find(({ day }) => day === (selectedScheduleDay ?? todayKey)) ?? scheduleByDay[0]; return <div className="mt-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid="section-selected-daily-schedule"><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--primary))]">{selected.label}</p>{selected.lessons.length ? <div className="mt-3 space-y-2">{selected.lessons.map((lesson) => <div key={lesson.id} className="space-y-1.5"><button type="button" onClick={() => onOpenCourse?.(lesson.courseId, lesson.teacherName)} className="focus-ring flex w-full items-start justify-between gap-3 rounded-lg bg-[hsl(var(--muted)/.45)] px-3 py-3 text-left transition hover:-translate-y-0.5 hover:bg-[hsl(var(--accent)/.2)]" data-testid={`button-open-scheduled-lesson-${lesson.id}`}><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{courseNames.get(lesson.courseId) ?? lesson.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{(lesson.teacherNames?.length ?? 0) > 1 ? t('teachersLabel') : t('roleTeacher')}: {lesson.teacherName || t('noTeacherAssigned')}</p><p className="mt-2 text-[10px] font-bold text-[hsl(var(--secondary-foreground))]">{t('pdfAndLinks')}</p></div><span className="shrink-0 rounded-lg bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-sm font-black text-[hsl(var(--secondary-foreground))]">{timeForLessonDay(lesson.lessonTime, selected.day) ?? '—'}</span></button><CourseBooksList compact books={courseBooks.booksFor(lesson.courseId, lesson.termNumber)[0]?.books ?? []} testId={`list-lesson-books-${lesson.id}`} />{!(courseBooks.booksFor(lesson.courseId, lesson.termNumber)[0]?.books.length) && (() => { const match = matchLessonBook(lesson); return match ? <ResourceBookRead match={match} /> : null; })()}{selected.day === todayKey && timeForLessonDay(lesson.lessonTime, selected.day) && <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/lessons/${lesson.id}/join`} target="_blank" rel="noreferrer" className={`focus-ring flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-black ${lessonIsLive(lesson) ? 'bg-[hsl(var(--destructive))] text-white' : 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]'}`} title={t('joinNote')} data-testid={`link-join-lesson-${lesson.id}`}><Video size={14} /> {lessonIsLive(lesson) ? t('joinLive') : t('joinClass')}</a>}</div>)}</div> : <div className="mt-4 flex flex-col items-center rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] px-4 py-5 text-center"><div className="grid h-10 w-10 place-items-center rounded-full bg-[hsl(var(--accent)/.28)] text-[hsl(var(--secondary-foreground))]"><Coffee size={19} strokeWidth={1.8} /></div><p className="mt-3 text-sm font-semibold text-[hsl(var(--primary))]">{t('noPlanToday')}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdRestDay')}</p></div>}</div>; })()}
               </div>}
             </div>
             )}
@@ -665,11 +679,13 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
 }
 
 function StudentExcuses({ excuses }: { excuses: Array<{ id: number; courseTitle: string; attendanceDate: string; teacherName: string; reason: string; status: string }> }) {
-  const statusLabel: Record<string, string> = { pending: 'Gözləmədə', approved: 'Təsdiqlənib', rejected: 'Qəbul edilməyib' };
-  return <div className="mt-5 rounded-xl border border-[hsl(var(--border))] p-4" data-testid="student-excuses"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">Göndərdiyim üzrlər</p>{excuses.length ? <div className="mt-3 space-y-2">{excuses.map((excuse) => <div key={excuse.id} className="rounded-lg bg-[hsl(var(--muted)/.45)] p-3 text-xs"><div className="flex flex-wrap justify-between gap-2 font-bold text-[hsl(var(--primary))]"><span>{excuse.courseTitle}</span><span>{statusLabel[excuse.status] ?? excuse.status}</span></div><p className="mt-1 text-[hsl(var(--muted-foreground))]">{excuse.attendanceDate} · {excuse.teacherName}</p><p className="mt-2 leading-5">{excuse.reason}</p></div>)}</div> : <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Hələ üzr müraciəti göndərilməyib.</p>}</div>;
+  const { t } = useI18n();
+  const statusLabel: Record<string, string> = { pending: t('statusPending'), approved: t('statusApproved'), rejected: sdText(t, 'sdExcuseRejected') };
+  return <div className="mt-5 rounded-xl border border-[hsl(var(--border))] p-4" data-testid="student-excuses"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdMyExcuses')}</p>{excuses.length ? <div className="mt-3 space-y-2">{excuses.map((excuse) => <div key={excuse.id} className="rounded-lg bg-[hsl(var(--muted)/.45)] p-3 text-xs"><div className="flex flex-wrap justify-between gap-2 font-bold text-[hsl(var(--primary))]"><span>{excuse.courseTitle}</span><span>{statusLabel[excuse.status] ?? excuse.status}</span></div><p className="mt-1 text-[hsl(var(--muted-foreground))]">{excuse.attendanceDate} · {excuse.teacherName}</p><p className="mt-2 leading-5">{excuse.reason}</p></div>)}</div> : <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdNoExcusesYet')}</p>}</div>;
 }
 
 function AttendanceDetails({ semester }: { semester: AcademicProfile['semesters'][number] }) {
+  const { t, locale } = useI18n();
   const [expandedCourseId, setExpandedCourseId] = useState<number | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
   const [reason, setReason] = useState('');
@@ -677,7 +693,7 @@ function AttendanceDetails({ semester }: { semester: AcademicProfile['semesters'
   const [isSending, setIsSending] = useState(false);
   return (
     <div className="mt-5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 text-[hsl(var(--foreground))] shadow-sm" data-testid="attendance-details">
-      <div className="mb-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--primary))]">Davamiyyət üzrə fənn detalları</p><p className="mt-1 text-sm text-[hsl(var(--foreground)/.75)]">Hər fənn üzrə iştirak, qayıb sayı və hesablanmış faiz</p></div>
+      <div className="mb-4"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--primary))]">{sdText(t, 'sdAttSubjectDetails')}</p><p className="mt-1 text-sm text-[hsl(var(--foreground)/.75)]">{sdText(t, 'sdAttSubjectHint')}</p></div>
       <div className="space-y-2">
         {semester.subjects.map((subject) => {
           const isExpanded = expandedCourseId === subject.courseId;
@@ -689,11 +705,11 @@ function AttendanceDetails({ semester }: { semester: AcademicProfile['semesters'
           const presentCount = attendanceRecords.filter((record) => record.status === 'present').length;
           return <div key={subject.courseId} className={`overflow-hidden rounded-xl border transition ${isExpanded ? 'border-[hsl(var(--accent))] shadow-sm' : 'border-[hsl(var(--border))]'}`}>
             <button type="button" onClick={() => setExpandedCourseId((current) => current === subject.courseId ? null : subject.courseId)} className={`flex w-full items-center justify-between gap-3 px-3 py-3 text-left text-sm ${isExpanded ? 'bg-[hsl(var(--accent)/.12)]' : 'bg-[hsl(var(--background))] hover:bg-[hsl(var(--muted)/.45)]'}`} aria-expanded={isExpanded} data-testid={`button-attendance-subject-${subject.courseId}`}>
-              <span className="min-w-0"><span className="block truncate font-semibold text-[hsl(var(--primary))]">{subject.title}</span><span className="mt-1 block text-[11px] text-[hsl(var(--foreground)/.75)]">{presentCount ? `${presentCount} iştirak · ` : ''}{subject.absenceCount} qayıb{lateCount ? ` · ${lateCount} gecikmə` : ''} · Qayıb faizi: {subject.attendancePercent === null ? '—%' : `${subject.attendancePercent}%`}</span></span>
-              <span className="shrink-0 rounded-lg bg-[hsl(var(--muted))] px-2 py-1 text-[10px] font-bold text-[hsl(var(--primary))]">{isExpanded ? 'Bağla' : 'Qeydlərə bax'}</span>
+              <span className="min-w-0"><span className="block truncate font-semibold text-[hsl(var(--primary))]">{subject.title}</span><span className="mt-1 block text-[11px] text-[hsl(var(--foreground)/.75)]">{[presentCount ? sdText(t, 'sdPresentCount').replace('{n}', String(presentCount)) : '', sdText(t, 'sdAbsenceCount').replace('{n}', String(subject.absenceCount)), lateCount ? sdText(t, 'sdLateCount').replace('{n}', String(lateCount)) : ''].filter(Boolean).join(' · ')} · {t('absenceRate')}: {subject.attendancePercent === null ? '—%' : `${subject.attendancePercent}%`}</span></span>
+              <span className="shrink-0 rounded-lg bg-[hsl(var(--muted))] px-2 py-1 text-[10px] font-bold text-[hsl(var(--primary))]">{isExpanded ? t('close') : sdText(t, 'sdViewRecords')}</span>
             </button>
             {isExpanded && <div className="border-t border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-3">
-              {attendanceRecords.length ? <div className="space-y-2">{attendanceRecords.map((record) => <div key={record.id} className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 text-xs"><div className="flex items-center justify-between gap-2"><p className="font-bold text-[hsl(var(--primary))]">{new Intl.DateTimeFormat('az-AZ', { dateStyle: 'medium' }).format(new Date(`${record.attendanceDate}T00:00:00`))}</p><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${record.status === 'present' ? 'bg-emerald-100 text-emerald-800' : record.status === 'late' || record.status === 'excused' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`} data-testid={`attendance-status-${record.id}`}>{record.status === 'present' ? '✓ İştirak' : record.status === 'late' ? 'Gecikib' : record.status === 'excused' ? 'Üzrlü' : 'Qayıb'}</span></div><p className="mt-1 text-[hsl(var(--foreground)/.8)]">{record.status === 'present' ? 'Təsdiq edən müəllim:' : 'Qeyd edən müəllim:'} <span className="font-semibold">{record.teacherName}</span></p>{record.status === 'absent' && (selectedRecordId === record.id ? <div className="mt-3 flex flex-col gap-2"><textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Üzrünüzü yazın..." rows={2} className="focus-ring w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs text-[hsl(var(--foreground))]" /><div className="flex gap-2"><button type="button" disabled={isSending || reason.trim().length < 3} onClick={async () => { setIsSending(true); setNotice(''); const response = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/attendance-excuses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendanceRecordId: record.id, reason: reason.trim() }) }); const data = await response.json().catch(() => ({})); setIsSending(false); if (!response.ok) { setNotice(data.error ?? 'Üzr göndərilə bilmədi.'); return; } setNotice('Üzrünüz müəllimə göndərildi.'); setSelectedRecordId(null); setReason(''); }} className="rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50">{isSending ? 'Göndərilir...' : 'Üzrü göndər'}</button><button type="button" onClick={() => { setSelectedRecordId(null); setReason(''); }} className="rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))]">Bağla</button></div></div> : <button type="button" onClick={() => { setSelectedRecordId(record.id); setNotice(''); }} className="mt-3 rounded-lg border border-[hsl(var(--primary)/.35)] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))]">Üzr bildir</button>)}</div>)}</div> : <p className="text-xs font-medium text-[hsl(var(--foreground)/.75)]">Bu fənn üzrə hələ davamiyyət qeydi yoxdur.</p>}
+              {attendanceRecords.length ? <div className="space-y-2">{attendanceRecords.map((record) => <div key={record.id} className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 text-xs"><div className="flex items-center justify-between gap-2"><p className="font-bold text-[hsl(var(--primary))]">{new Intl.DateTimeFormat(uiDateLocale(locale), { dateStyle: 'medium', numberingSystem: 'latn' }).format(new Date(`${record.attendanceDate}T00:00:00`))}</p><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${record.status === 'present' ? 'bg-emerald-100 text-emerald-800' : record.status === 'late' || record.status === 'excused' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`} data-testid={`attendance-status-${record.id}`}>{record.status === 'present' ? `✓ ${t('shortPresent')}` : record.status === 'late' ? t('shortLate') : record.status === 'excused' ? t('shortExcused') : t('shortAbsent')}</span></div><p className="mt-1 text-[hsl(var(--foreground)/.8)]">{record.status === 'present' ? sdText(t, 'sdConfirmedBy') : sdText(t, 'sdRecordedBy')} <span className="font-semibold">{record.teacherName}</span></p>{record.status === 'absent' && (selectedRecordId === record.id ? <div className="mt-3 flex flex-col gap-2"><textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder={sdText(t, 'sdExcusePlaceholder')} rows={2} className="focus-ring w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs text-[hsl(var(--foreground))]" /><div className="flex gap-2"><button type="button" disabled={isSending || reason.trim().length < 3} onClick={async () => { setIsSending(true); setNotice(''); const response = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/attendance-excuses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendanceRecordId: record.id, reason: reason.trim() }) }); const data = await response.json().catch(() => ({})); setIsSending(false); if (!response.ok) { setNotice(data.error ?? sdText(t, 'sdExcuseFailed')); return; } setNotice(sdText(t, 'sdExcuseSent')); setSelectedRecordId(null); setReason(''); }} className="rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50">{isSending ? t('sending') : sdText(t, 'sdSendExcuse')}</button><button type="button" onClick={() => { setSelectedRecordId(null); setReason(''); }} className="rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))]">{t('close')}</button></div></div> : <button type="button" onClick={() => { setSelectedRecordId(record.id); setNotice(''); }} className="mt-3 rounded-lg border border-[hsl(var(--primary)/.35)] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))]">{sdText(t, 'sdReportExcuse')}</button>)}</div>)}</div> : <p className="text-xs font-medium text-[hsl(var(--foreground)/.75)]">{sdText(t, 'sdNoSubjectAttendance')}</p>}
               {notice && <p className="mt-2 text-xs font-semibold text-[hsl(var(--primary))]">{notice}</p>}
             </div>}
           </div>;
@@ -704,24 +720,25 @@ function AttendanceDetails({ semester }: { semester: AcademicProfile['semesters'
 }
 
 function AttendanceHistory({ records }: { records: AcademicProfile['semesters'][number]['attendanceRecords'] }) {
+  const { t, locale } = useI18n();
   const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
   const [reason, setReason] = useState('');
   const [notice, setNotice] = useState('');
   const [isSending, setIsSending] = useState(false);
   const statusLabels: Record<string, string> = {
-    present: 'İştirak edib',
-    absent: 'İştirak etməyib',
-    late: 'Gecikib',
-    excused: 'Üzrlü',
+    present: t('statusPresent'),
+    absent: t('statusAbsent'),
+    late: t('statusLate'),
+    excused: t('statusExcused'),
   };
   return (
     <div className="mt-5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))]" data-testid="attendance-history">
       <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/.45)] px-4 py-3">
-        <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--primary))]">Davamiyyət tarixçəsi</p>
-        <p className="mt-1 text-xs text-[hsl(var(--foreground)/.75)]">Fənn, dərs tarixi və qeydi daxil edən müəllim</p>
+        <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--primary))]">{t('attHistory')}</p>
+        <p className="mt-1 text-xs text-[hsl(var(--foreground)/.75)]">{sdText(t, 'sdAttHistoryHint')}</p>
       </div>
       {!records.length ? (
-        <p className="px-4 py-5 text-sm text-[hsl(var(--foreground)/.75)]">Bu semestr üzrə hələ davamiyyət qeydi yoxdur.</p>
+        <p className="px-4 py-5 text-sm text-[hsl(var(--foreground)/.75)]">{sdText(t, 'sdNoTermAttendanceYet')}</p>
       ) : (
         <div className="divide-y divide-[hsl(var(--border))]">
           {records.map((record) => (
@@ -730,10 +747,10 @@ function AttendanceHistory({ records }: { records: AcademicProfile['semesters'][
                 <p className="font-semibold text-[hsl(var(--primary))]">{record.courseTitle}</p>
                 <p className="mt-1 text-xs text-[hsl(var(--foreground)/.75)]">{record.teacherName}</p>
               </div>
-              <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-[hsl(var(--foreground)/.85)]"><CalendarDays size={14} />{new Intl.DateTimeFormat('az-AZ', { dateStyle: 'medium' }).format(new Date(`${record.attendanceDate}T00:00:00`))}</p>
+              <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-[hsl(var(--foreground)/.85)]"><CalendarDays size={14} />{new Intl.DateTimeFormat(uiDateLocale(locale), { dateStyle: 'medium', numberingSystem: 'latn' }).format(new Date(`${record.attendanceDate}T00:00:00`))}</p>
               <span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-bold ${record.status === 'present' ? 'bg-emerald-100 text-emerald-800' : record.status === 'excused' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>{statusLabels[record.status] ?? record.status}</span>
               {record.status === 'absent' && <div className="sm:col-span-3">
-                {selectedRecordId === record.id ? <div className="mt-1 flex flex-col gap-2 sm:flex-row"><textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Üzrünüzü yazın..." rows={2} className="focus-ring min-w-0 flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs" /><button type="button" disabled={isSending || reason.trim().length < 3} onClick={async () => { setIsSending(true); setNotice(''); const response = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/attendance-excuses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendanceRecordId: record.id, reason: reason.trim() }) }); const data = await response.json().catch(() => ({})); setIsSending(false); if (!response.ok) { setNotice(data.error ?? 'Üzr göndərilə bilmədi.'); return; } setNotice('Üzrünüz müəllimə göndərildi.'); setSelectedRecordId(null); setReason(''); }} className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50">{isSending ? 'Göndərilir...' : 'Üzrü göndər'}</button></div> : <button type="button" onClick={() => { setSelectedRecordId(record.id); setNotice(''); }} className="focus-ring mt-1 rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))]">Üzr bildir</button>}
+                {selectedRecordId === record.id ? <div className="mt-1 flex flex-col gap-2 sm:flex-row"><textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder={sdText(t, 'sdExcusePlaceholder')} rows={2} className="focus-ring min-w-0 flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs" /><button type="button" disabled={isSending || reason.trim().length < 3} onClick={async () => { setIsSending(true); setNotice(''); const response = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/attendance-excuses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attendanceRecordId: record.id, reason: reason.trim() }) }); const data = await response.json().catch(() => ({})); setIsSending(false); if (!response.ok) { setNotice(data.error ?? sdText(t, 'sdExcuseFailed')); return; } setNotice(sdText(t, 'sdExcuseSent')); setSelectedRecordId(null); setReason(''); }} className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50">{isSending ? t('sending') : sdText(t, 'sdSendExcuse')}</button></div> : <button type="button" onClick={() => { setSelectedRecordId(record.id); setNotice(''); }} className="focus-ring mt-1 rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))]">{sdText(t, 'sdReportExcuse')}</button>}
               </div>}
             </div>
           ))}
@@ -745,14 +762,15 @@ function AttendanceHistory({ records }: { records: AcademicProfile['semesters'][
 }
 
 function SemesterResources({ resources, isLoading, courseNames }: { resources: LearningResource[]; isLoading: boolean; courseNames: Map<number, string> }) {
-  const kindLabel: Record<string, string> = { pdf: 'PDF', telegram: 'Telegram', material: 'Material', text: 'Mətn' };
+  const { t } = useI18n();
+  const kindLabel: Record<string, string> = { pdf: 'PDF', telegram: 'Telegram', material: sdText(t, 'sdKindMaterial'), text: t('announcementBody') };
   const resourceHref = (resource: LearningResource) => resource.url?.startsWith('/objects/courses/')
     ? `${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/resources/${resource.id}/file${resource.url ? '?download=1' : ''}`
     : resource.url?.startsWith('/api/') ? `${import.meta.env.BASE_URL.replace(/\/$/, '')}${resource.url}` : resource.url;
   return (
     <div className="mt-6 border-t border-[hsl(var(--border))] pt-5" data-testid="section-semester-resources">
-      <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">Seçilən semestr</p><h3 className="mt-1 font-serif text-xl text-[hsl(var(--primary))]">Materiallar</h3></div><FileText className="text-[hsl(var(--secondary-foreground))]" size={19} /></div>
-      {isLoading ? <div className="mt-4 h-20 animate-pulse rounded-xl bg-[hsl(var(--muted))]" /> : resources.length ? <div className="mt-4 space-y-3">{resources.map((resource) => <article key={resource.id} className="rounded-xl bg-[hsl(var(--muted)/.5)] p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{kindLabel[resource.kind] ?? resource.kind} · {courseNames.get(resource.courseId) ?? 'Fənn materialı'}</p><p className="mt-1 text-sm font-bold text-[hsl(var(--primary))]">{resource.title}</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{resource.body}</p></div>{resource.url && <a href={resourceHref(resource) ?? undefined} target="_blank" rel="noreferrer" className="focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[hsl(var(--card))] px-2.5 py-2 text-xs font-bold text-[hsl(var(--secondary-foreground))] hover:underline" data-testid={`link-semester-resource-${resource.id}`}><ArrowUpRight size={14} /> {resource.url.startsWith('/objects/courses/') ? 'PDF-i aç' : 'Aç'}</a>}</div></article>)}</div> : <p className="mt-4 rounded-xl border border-dashed border-[hsl(var(--border))] p-4 text-center text-xs text-[hsl(var(--muted-foreground))]">Bu semestr üçün hələ material əlavə edilməyib.</p>}
+      <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdSelectedTerm')}</p><h3 className="mt-1 font-serif text-xl text-[hsl(var(--primary))]">{sdText(t, 'sdMaterials')}</h3></div><FileText className="text-[hsl(var(--secondary-foreground))]" size={19} /></div>
+      {isLoading ? <div className="mt-4 h-20 animate-pulse rounded-xl bg-[hsl(var(--muted))]" /> : resources.length ? <div className="mt-4 space-y-3">{resources.map((resource) => <article key={resource.id} className="rounded-xl bg-[hsl(var(--muted)/.5)] p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{kindLabel[resource.kind] ?? resource.kind} · {courseNames.get(resource.courseId) ?? sdText(t, 'sdCourseMaterial')}</p><p className="mt-1 text-sm font-bold text-[hsl(var(--primary))]">{resource.title}</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{resource.body}</p></div>{resource.url && <a href={resourceHref(resource) ?? undefined} target="_blank" rel="noreferrer" className="focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[hsl(var(--card))] px-2.5 py-2 text-xs font-bold text-[hsl(var(--secondary-foreground))] hover:underline" data-testid={`link-semester-resource-${resource.id}`}><ArrowUpRight size={14} /> {resource.url.startsWith('/objects/courses/') ? sdText(t, 'sdOpenPdf') : t('open')}</a>}</div></article>)}</div> : <p className="mt-4 rounded-xl border border-dashed border-[hsl(var(--border))] p-4 text-center text-xs text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdNoMaterialsYet')}</p>}
     </div>
   );
 }
@@ -813,10 +831,10 @@ function OwnProfileCard({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     void fetch(`${base}/api/account/profile`).then(async (response) => {
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Profil məlumatları yüklənmədi.');
+      if (!response.ok) throw new Error(data.error || sdText(t, 'sdProfileLoadFailed'));
       setProfile(data as OwnProfile);
       setForm(data as OwnProfile);
-    }).catch((error) => { setIsError(true); setNotice(error instanceof Error ? error.message : 'Profil məlumatları yüklənmədi.'); }).finally(() => setIsLoading(false));
+    }).catch((error) => { setIsError(true); setNotice(error instanceof Error ? error.message : sdText(t, 'sdProfileLoadFailed')); }).finally(() => setIsLoading(false));
   }, [base]);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -824,9 +842,9 @@ function OwnProfileCard({ onClose }: { onClose: () => void }) {
     try {
       const response = await fetch(`${base}/api/account/profile`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Məlumatlar yadda saxlanılmadı.');
-      setProfile(data as OwnProfile); setForm(data as OwnProfile); setNotice('Məlumatlarınız uğurla yeniləndi.');
-    } catch (error) { setIsError(true); setNotice(error instanceof Error ? error.message : 'Məlumatlar yadda saxlanılmadı.'); }
+      if (!response.ok) throw new Error(data.error || sdText(t, 'sdProfileSaveFailed'));
+      setProfile(data as OwnProfile); setForm(data as OwnProfile); setNotice(sdText(t, 'sdProfileSaved'));
+    } catch (error) { setIsError(true); setNotice(error instanceof Error ? error.message : sdText(t, 'sdProfileSaveFailed')); }
     finally { setIsSaving(false); }
   };
   return <section className="mt-6 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)]" data-testid="section-own-profile-edit">
@@ -844,7 +862,8 @@ function OwnProfileCard({ onClose }: { onClose: () => void }) {
   </section>;
 }
 
-function ResourceLink({ href, label, icon: Icon, external = false, courseId, download = false, onJoin, prominent = false }: { href: string | null | undefined; label: string; icon: typeof FileText; external?: boolean; courseId?: number; download?: boolean; onJoin?: () => void; prominent?: boolean }) {
+function ResourceLink({ href, label, icon: Icon, external = false, courseId, download = false, onJoin, prominent = false, testIdLabel }: { href: string | null | undefined; label: string; icon: typeof FileText; external?: boolean; courseId?: number; download?: boolean; onJoin?: () => void; prominent?: boolean; testIdLabel?: string }) {
+  const { t } = useI18n();
    const prominentClass = /telegram/i.test(label)
      ? 'bg-sky-500 text-white hover:bg-sky-600'
      : /zoom/i.test(label)
@@ -853,7 +872,7 @@ function ResourceLink({ href, label, icon: Icon, external = false, courseId, dow
          ? 'bg-emerald-600 text-white hover:bg-emerald-700'
          : 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:opacity-90';
   if (!href) {
-     return <span className={prominent ? `inline-flex min-h-12 cursor-not-allowed items-center gap-3 rounded-xl bg-[hsl(var(--muted))] px-4 py-3 text-sm font-bold text-[hsl(var(--muted-foreground)/.58)]` : 'inline-flex cursor-not-allowed items-center gap-1.5 text-[10px] font-semibold text-[hsl(var(--muted-foreground)/.48)]'} title={`${label} linki hələ əlavə edilməyib`}><Icon size={prominent ? 19 : 13} /> {label}</span>;
+     return <span className={prominent ? `inline-flex min-h-12 cursor-not-allowed items-center gap-3 rounded-xl bg-[hsl(var(--muted))] px-4 py-3 text-sm font-bold text-[hsl(var(--muted-foreground)/.58)]` : 'inline-flex cursor-not-allowed items-center gap-1.5 text-[10px] font-semibold text-[hsl(var(--muted-foreground)/.48)]'} title={sdText(t, 'sdLinkMissing').replace('{label}', label)}><Icon size={prominent ? 19 : 13} /> {label}</span>;
   }
   const resolvedHref = href.startsWith('/objects/courses/') && courseId
     ? `${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/courses/${courseId}/pdf${download ? '?download=1' : ''}`
@@ -861,15 +880,16 @@ function ResourceLink({ href, label, icon: Icon, external = false, courseId, dow
       // Zoom/Meet linkləri sayt üzərindən açılır ki, dərsə qoşulma avtomatik davamiyyət üçün qeyd olunsun.
       ? `${import.meta.env.BASE_URL.replace(/\/$/, '')}${href}`
       : href;
-   return <a href={resolvedHref} download={download || undefined} target={external ? '_blank' : undefined} rel={external ? 'noreferrer' : undefined} onClick={(event) => { event.stopPropagation(); onJoin?.(); }} className={`focus-ring inline-flex items-center gap-3 transition ${prominent ? `min-h-12 rounded-xl px-4 py-3 text-sm font-black shadow-[0_4px_0_rgba(0,0,0,.18)] hover:-translate-y-0.5 ${prominentClass}` : 'gap-1.5 text-[10px] font-bold text-[hsl(var(--primary))] hover:text-[hsl(var(--destructive))]'}`} data-testid={`link-${label.toLowerCase().replace(' ', '-')}`}><Icon size={prominent ? 19 : 13} /> {label}</a>;
+   return <a href={resolvedHref} download={download || undefined} target={external ? '_blank' : undefined} rel={external ? 'noreferrer' : undefined} onClick={(event) => { event.stopPropagation(); onJoin?.(); }} className={`focus-ring inline-flex items-center gap-3 transition ${prominent ? `min-h-12 rounded-xl px-4 py-3 text-sm font-black shadow-[0_4px_0_rgba(0,0,0,.18)] hover:-translate-y-0.5 ${prominentClass}` : 'gap-1.5 text-[10px] font-bold text-[hsl(var(--primary))] hover:text-[hsl(var(--destructive))]'}`} data-testid={`link-${(testIdLabel ?? label).toLowerCase().replace(' ', '-')}`}><Icon size={prominent ? 19 : 13} /> {label}</a>;
 }
 
 /** Fənn pəncərəsindəki «Dərs resursları»; Kitabxana kitabını adı çəkən resursda «Oxu» düyməsi göstərilir. */
 function CourseResourcesSection({ resources, courseId }: { resources: LearningResource[]; courseId: number }) {
+  const { t } = useI18n();
   const matchBook = useResourceBookMatcher(resources.length > 0);
   return (
               <div className="mt-8 border-t border-[hsl(var(--border))] pt-6" data-testid="section-course-resources">
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--muted-foreground))]">Dərs resursları</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdCourseResources')}</p>
                 <div className="mt-4 space-y-3">
                   {resources.map((resource) => (
                     <article key={resource.id} className="rounded-2xl bg-[hsl(var(--muted)/.55)] p-4">
@@ -880,7 +900,7 @@ function CourseResourcesSection({ resources, courseId }: { resources: LearningRe
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-[hsl(var(--primary))]">{resource.title}</p>
                           <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{resource.body}</p>
-                            {resource.url && <ResourceLink href={resource.url} label="Resursu aç" icon={ArrowUpRight} external courseId={courseId} prominent />}
+                            {resource.url && <ResourceLink href={resource.url} label={sdText(t, 'sdOpenResource')} testIdLabel="Resursu aç" icon={ArrowUpRight} external courseId={courseId} prominent />}
                             {(() => { const match = matchBook(resource); return match ? <ResourceBookRead match={match} /> : null; })()}
                         </div>
                       </div>
@@ -892,17 +912,18 @@ function CourseResourcesSection({ resources, courseId }: { resources: LearningRe
 }
 
 function CourseDetailModal({ courseId, teacherName, teacherChoiceStatus, onClose }: { courseId: number; teacherName?: string | null; teacherChoiceStatus?: string | null; onClose: () => void }) {
+  const { t } = useI18n();
   const { data, isLoading, isError } = useGetCourse(courseId, {
     query: { queryKey: getGetCourseQueryKey(courseId) },
   });
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[hsl(var(--primary)/.5)] p-0 backdrop-blur-sm sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="course-detail-title" data-testid="modal-course-detail">
-      <button type="button" className="absolute inset-0 cursor-default" aria-label="Pəncərəni bağla" onClick={onClose} />
+      <button type="button" className="absolute inset-0 cursor-default" aria-label={t('closeWindow')} onClick={onClose} />
       <div className="relative max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-t-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-[var(--shadow-xl)] sm:rounded-[28px] sm:p-8">
-        <button type="button" onClick={onClose} className="focus-ring absolute right-5 top-5 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Ətraflı məlumatı bağla" data-testid="button-close-course-detail"><X size={18} /></button>
+        <button type="button" onClick={onClose} className="focus-ring absolute right-5 top-5 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={sdText(t, 'sdCloseDetails')} data-testid="button-close-course-detail"><X size={18} /></button>
         {isLoading && <div className="space-y-4 py-10"><div className="h-4 w-28 animate-pulse rounded bg-[hsl(var(--muted))]" /><div className="h-10 w-2/3 animate-pulse rounded bg-[hsl(var(--muted))]" /><div className="h-24 animate-pulse rounded-2xl bg-[hsl(var(--muted))]" /></div>}
-        {isError && <div className="py-10 text-center"><AlertCircle className="mx-auto text-[hsl(var(--destructive))]" /><p className="mt-3 font-bold text-[hsl(var(--primary))]">Fənn məlumatlarını yükləmək alınmadı.</p></div>}
+        {isError && <div className="py-10 text-center"><AlertCircle className="mx-auto text-[hsl(var(--destructive))]" /><p className="mt-3 font-bold text-[hsl(var(--primary))]">{sdText(t, 'sdCourseLoadFailed')}</p></div>}
         {data && (
           <>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--muted-foreground))]">{data.category}</p>
@@ -910,39 +931,39 @@ function CourseDetailModal({ courseId, teacherName, teacherChoiceStatus, onClose
             <p className="mt-5 text-sm leading-7 text-[hsl(var(--muted-foreground))]">{data.description}</p>
             <div className="mt-7 grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl bg-[hsl(var(--accent)/.28)] p-4" data-testid={`section-course-teacher-${courseId}`}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--muted-foreground))]">Seçilmiş müəllim</p>
-                {teacherName ? <p className="mt-2 text-xl font-bold text-[hsl(var(--primary))]">{teacherName}</p> : <div className="mt-2 flex items-center gap-2 text-[hsl(var(--muted-foreground))]"><span className="grid h-8 w-8 place-items-center rounded-full bg-[hsl(var(--muted))]"><UserRound size={16} strokeWidth={1.8} /></span><p className="text-sm font-semibold">Müəllim tezliklə təyin olunacaq</p></div>}
-                {teacherChoiceStatus === 'approved' && <p className="mt-1 text-xs font-semibold text-[hsl(var(--secondary-foreground))]">Müəllim seçimi təsdiqlənib.</p>}
-                {teacherChoiceStatus === 'pending' && <p className="mt-1 text-xs font-semibold text-[hsl(var(--secondary-foreground))]">Müəllim seçimi təsdiq gözləyir.</p>}
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdChosenTeacher')}</p>
+                {teacherName ? <p className="mt-2 text-xl font-bold text-[hsl(var(--primary))]">{teacherName}</p> : <div className="mt-2 flex items-center gap-2 text-[hsl(var(--muted-foreground))]"><span className="grid h-8 w-8 place-items-center rounded-full bg-[hsl(var(--muted))]"><UserRound size={16} strokeWidth={1.8} /></span><p className="text-sm font-semibold">{sdText(t, 'sdTeacherSoon')}</p></div>}
+                {teacherChoiceStatus === 'approved' && <p className="mt-1 text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{sdText(t, 'sdTeacherChoiceApproved')}</p>}
+                {teacherChoiceStatus === 'pending' && <p className="mt-1 text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{sdText(t, 'sdTeacherChoicePending')}</p>}
               </div>
               <div className="rounded-2xl bg-[hsl(var(--secondary)/.55)] p-4">
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--muted-foreground))]">İrəliləyiş</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdProgress')}</p>
                 <p className="mt-2 text-xl font-bold text-[hsl(var(--primary))]">{data.progress}%</p>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-[hsl(var(--muted))]"><div className="h-full rounded-full bg-[hsl(var(--secondary-foreground))]" style={{ width: `${data.progress}%` }} /></div>
               </div>
               <div className="rounded-2xl bg-[hsl(var(--muted)/.55)] p-4">
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--muted-foreground))]">Növbəti dərs</p>
-                <p className="mt-2 text-sm font-bold text-[hsl(var(--primary))]">{data.nextLesson || 'Növbəti dərs müəyyən edilməyib'}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdNextLesson')}</p>
+                <p className="mt-2 text-sm font-bold text-[hsl(var(--primary))]">{data.nextLesson || sdText(t, 'sdNextLessonUnset')}</p>
               </div>
             </div>
              {(data.telegramUrl || data.zoomUrl || data.googleMeetUrl) && (
                <div className="mt-5 flex flex-wrap gap-4 rounded-2xl bg-[hsl(var(--muted)/.55)] p-4">
-                 <p className="basis-full text-[10px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--muted-foreground))]">Dərs bağlantıları</p>
+                 <p className="basis-full text-[10px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdLessonLinks')}</p>
                   <ResourceLink href={data.telegramUrl} label="Telegram" icon={Send} external prominent />
                   <ResourceLink href={data.zoomUrl} label="Zoom" icon={Video} external prominent />
                   <ResourceLink href={data.googleMeetUrl} label="Google Meet" icon={Video} external prominent />
-                  {(data.zoomUrl || data.googleMeetUrl) && <p className="basis-full text-[11px] leading-5 text-[hsl(var(--muted-foreground))]" data-testid="text-join-tracking-note">Zoom / Google Meet düyməsi ilə dərs vaxtı qoşulduqda girişiniz avtomatik qeyd olunur və müəllim davamiyyəti bu əsasda təsdiqləyir. Sistem yalnız sayt üzərindən linkə keçidi qeyd edir, Zoom/Meet-də qaldığınız müddəti ölçmür.</p>}
+                  {(data.zoomUrl || data.googleMeetUrl) && <p className="basis-full text-[11px] leading-5 text-[hsl(var(--muted-foreground))]" data-testid="text-join-tracking-note">{sdText(t, 'sdJoinTracking')}</p>}
                </div>
              )}
             <div className="mt-8">
-              <h3 className="font-serif text-2xl text-[hsl(var(--primary))]">Tədris proqramı</h3>
+              <h3 className="font-serif text-2xl text-[hsl(var(--primary))]">{sdText(t, 'sdCurriculum')}</h3>
               <ol className="mt-4 space-y-3">{data.curriculum.map((item, index) => <li key={item} className="flex items-start gap-3 text-sm text-[hsl(var(--foreground))]"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--accent)/.35)] text-xs font-bold text-[hsl(var(--primary))]">{index + 1}</span><span className="pt-1">{item}</span></li>)}</ol>
             </div>
              <div className="mt-6 empty:hidden"><CourseBooksSection courseId={data.id} /></div>
-             {data.pdfUrl && <div className="mt-6 rounded-2xl bg-[hsl(var(--secondary)/.55)] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--muted-foreground))]">Əsas kitab PDF-i</p><div className="mt-2 flex flex-wrap gap-3"><ResourceLink href={data.pdfUrl} label="PDF-i aç" icon={FileText} courseId={data.id} prominent /><ResourceLink href={data.pdfUrl} label="PDF-i yüklə" icon={Download} courseId={data.id} download prominent /></div></div>}
+             {data.pdfUrl && <div className="mt-6 rounded-2xl bg-[hsl(var(--secondary)/.55)] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdMainBookPdf')}</p><div className="mt-2 flex flex-wrap gap-3"><ResourceLink href={data.pdfUrl} label={sdText(t, 'sdOpenPdf')} testIdLabel="PDF-i aç" icon={FileText} courseId={data.id} prominent /><ResourceLink href={data.pdfUrl} label={sdText(t, 'sdDownloadPdf')} testIdLabel="PDF-i yüklə" icon={Download} courseId={data.id} download prominent /></div></div>}
             {data.resources.length > 0 && <CourseResourcesSection resources={data.resources} courseId={data.id} />}
             <div className="mt-8 border-t border-[hsl(var(--border))] pt-6">
-              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--muted-foreground))]">Dərsin təsviri</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdLessonDescription')}</p>
               <p className="mt-2 text-sm leading-7 text-[hsl(var(--foreground))]">{data.lessonDescription}</p>
             </div>
           </>
@@ -953,6 +974,7 @@ function CourseDetailModal({ courseId, teacherName, teacherChoiceStatus, onClose
 }
 
 function AnnouncementItem({ announcement }: { announcement: Announcement }) {
+  const { t, locale } = useI18n();
   const isImportant = announcement.type === 'important';
   const isLesson = announcement.type === 'lesson' || announcement.type === 'event';
   const isBook = announcement.type === 'book';
@@ -965,9 +987,9 @@ function AnnouncementItem({ announcement }: { announcement: Announcement }) {
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: markerColor }}>
-            {isImportant ? 'Vacib elan' : isLesson ? 'Yeni dərs' : isBook ? 'Yeni Kitab' : announcement.type === 'announcement' ? 'Elan' : announcement.type === 'news' ? 'Xəbər' : announcement.type === 'admission' ? 'Tələbə qəbulu' : 'Məlumat'}
+            {isImportant ? t('kindImportant') : isLesson ? t('kindLesson') : isBook ? t('kindBook') : announcement.type === 'announcement' ? t('kindAnnouncement') : announcement.type === 'news' ? t('kindNews') : announcement.type === 'admission' ? t('kindAdmission') : t('kindInfo')}
           </span>
-          <span className="text-[10px] text-[hsl(var(--muted-foreground))]" data-testid={`text-announcement-date-${announcement.id}`}>{formatDate(announcement.date)}</span>
+          <span className="text-[10px] text-[hsl(var(--muted-foreground))]" data-testid={`text-announcement-date-${announcement.id}`}>{formatDate(announcement.date, locale)}</span>
         </div>
         <h3 className="mt-1 text-sm font-bold leading-5 text-[hsl(var(--primary))]" data-testid={`text-announcement-title-${announcement.id}`}>{announcement.title}</h3>
         <p className="mt-1 line-clamp-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]" data-testid={`text-announcement-body-${announcement.id}`}>{announcement.body}</p>
@@ -998,19 +1020,25 @@ function AnnouncementsSection({ announcements }: { announcements: Announcement[]
   );
 }
 
-const assignmentStatusLabels: Record<string, string> = {
-  open: 'Açıq',
-  closed: 'Bağlanıb',
-  submitted: 'Təhvil verilib',
-  graded: 'Qiymətləndirilib',
-  resubmission_requested: 'Yenidən təhvil tələb olunur',
+const assignmentStatusKeys: Record<string, string> = {
+  open: 'sdAsOpen',
+  closed: 'sdAsClosed',
+  submitted: 'sdAsSubmitted',
+  graded: 'sdAsGraded',
+  resubmission_requested: 'sdAsResubmit',
 };
 
-function assignmentDueLabel(dueAt: string, status: string) {
+function assignmentStatusText(status: string, t: (key: MessageKey) => string) {
+  const key = assignmentStatusKeys[status];
+  return key ? sdText(t, key) : status;
+}
+
+function assignmentDueLabel(dueAt: string, status: string, t: (key: MessageKey) => string, locale: string) {
   const date = new Date(dueAt);
-  if (Number.isNaN(date.getTime())) return 'Son tarix qeyd edilməyib';
-  if (status === 'closed' || date.getTime() < Date.now()) return `Son tarix: ${date.toLocaleString('az-AZ', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}`;
-  return `Son tarix: ${date.toLocaleString('az-AZ', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}`;
+  if (Number.isNaN(date.getTime())) return sdText(t, 'sdDueMissing');
+  const formatted = date.toLocaleString(uiDateLocale(locale), { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', numberingSystem: 'latn' });
+  if (status === 'closed' || date.getTime() < Date.now()) return sdText(t, 'sdDueAt').replace('{date}', formatted);
+  return sdText(t, 'sdDueAt').replace('{date}', formatted);
 }
 
 function AssignmentAttachmentList({ attachments, prefix }: { attachments: AssignmentAttachment[]; prefix: string }) {
@@ -1029,6 +1057,7 @@ function AssignmentAttachmentList({ attachments, prefix }: { attachments: Assign
 }
 
 function StudentAssignmentDetail({ assignmentId, onClose }: { assignmentId: number; onClose: () => void }) {
+  const { t, locale } = useI18n();
   const queryClient = useQueryClient();
   const assignmentQuery = useGetStudentAssignment(assignmentId, { query: { queryKey: getGetStudentAssignmentQueryKey(assignmentId) } });
   const uploadMutation = useRequestStudentAssignmentUploadUrl();
@@ -1052,11 +1081,11 @@ function StudentAssignmentDetail({ assignmentId, onClose }: { assignmentId: numb
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!assignment || (!answerText.trim() && !selectedFiles.length)) {
-      setError('Mətn cavabı və ya fayl əlavə edin.');
+      setError(sdText(t, 'sdNeedAnswerOrFile'));
       return;
     }
     if (selectedFiles.length > 5) {
-      setError('Bir təhvilə ən çox 5 fayl əlavə edə bilərsiniz.');
+      setError(sdText(t, 'sdMaxFiveFiles'));
       return;
     }
     setError('');
@@ -1065,17 +1094,17 @@ function StudentAssignmentDetail({ assignmentId, onClose }: { assignmentId: numb
       const attachmentIntentIds: number[] = [];
       const allowedTypes = new Set(['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/png', 'image/jpeg', 'text/plain']);
       if (selectedFiles.some((file) => !allowedTypes.has(file.type) || file.size > 10 * 1024 * 1024)) {
-        throw new Error('Hər fayl PDF, DOC, DOCX, PNG, JPG və ya TXT olmalı və 10 MB-dan böyük olmamalıdır.');
+        throw new Error(sdText(t, 'sdFileRules'));
       }
       for (const selectedFile of selectedFiles) {
         const contentType = selectedFile.type as AssignmentUploadInput['contentType'];
         const uploaded = await uploadMutation.mutateAsync({ assignmentId, data: { name: selectedFile.name, size: selectedFile.size, contentType } });
         const uploadResponse = uploaded as typeof uploaded & { id?: number; intentId?: number };
         const putResponse = await fetch(uploaded.uploadURL, { method: 'PUT', headers: { 'Content-Type': selectedFile.type }, body: selectedFile });
-        if (!putResponse.ok) throw new Error('Faylı yükləmək mümkün olmadı.');
+        if (!putResponse.ok) throw new Error(sdText(t, 'sdFileUploadFailed'));
         const intentId = uploadResponse.id ?? uploadResponse.intentId;
         if (intentId) attachmentIntentIds.push(intentId);
-        else if (!uploaded.objectPath) throw new Error('Fayl yükləmə sessiyası tanınmadı.');
+        else if (!uploaded.objectPath) throw new Error(sdText(t, 'sdUploadSessionUnknown'));
       }
       await submitMutation.mutateAsync({ assignmentId, data: { answerText: answerText.trim(), ...(attachmentIntentIds.length ? { attachmentIntentIds } : {}) } });
       await Promise.all([
@@ -1084,52 +1113,52 @@ function StudentAssignmentDetail({ assignmentId, onClose }: { assignmentId: numb
       ]);
       setSelectedFiles([]);
       if (fileInputRef.current) fileInputRef.current.value = '';
-      setNotice('Təhviliniz yadda saxlanıldı.');
+      setNotice(sdText(t, 'sdSubmissionSaved'));
     } catch (submissionError) {
-      setError(submissionError instanceof Error ? submissionError.message : 'Təhvili göndərmək mümkün olmadı.');
+      setError(submissionError instanceof Error ? submissionError.message : sdText(t, 'sdSubmissionFailed'));
     }
   };
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[hsl(var(--primary)/.52)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" data-testid="modal-student-assignment">
       <div className="relative max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-[26px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xl)] md:p-7">
-        <button type="button" onClick={onClose} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Tapşırığı bağla" data-testid="button-close-student-assignment"><X size={18} /></button>
+        <button type="button" onClick={onClose} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={sdText(t, 'sdCloseAssignment')} data-testid="button-close-student-assignment"><X size={18} /></button>
         {assignmentQuery.isLoading ? <div className="space-y-3"><div className="skeleton h-8 w-2/3 rounded-lg" /><div className="skeleton h-24 rounded-xl" /><div className="skeleton h-10 rounded-xl" /></div> : assignmentQuery.isError || !assignment ? (
-          <div className="py-10 text-center"><AlertCircle className="mx-auto text-[hsl(var(--destructive))]" /><p className="mt-3 text-sm font-bold text-[hsl(var(--primary))]">Tapşırıq yüklənmədi.</p><button type="button" onClick={() => void assignmentQuery.refetch()} className={`${assignmentButtonClass} mt-5`} data-testid="button-reload-student-assignment"><RefreshCw size={15} /> Yenidən yoxla</button></div>
+          <div className="py-10 text-center"><AlertCircle className="mx-auto text-[hsl(var(--destructive))]" /><p className="mt-3 text-sm font-bold text-[hsl(var(--primary))]">{sdText(t, 'sdAssignmentLoadFailed')}</p><button type="button" onClick={() => void assignmentQuery.refetch()} className={`${assignmentButtonClass} mt-5`} data-testid="button-reload-student-assignment"><RefreshCw size={15} /> {t('retryCheck')}</button></div>
         ) : (
           <>
             <div className="pr-10">
               <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{assignment.courseTitle} · {assignment.teacherName}</p>
               <h2 className="mt-2 font-serif text-3xl leading-tight text-[hsl(var(--primary))]" data-testid="text-student-assignment-title">{assignment.title}</h2>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
-                <span className={`rounded-full px-2.5 py-1 ${assignment.submission?.status === 'graded' ? 'bg-emerald-100 text-emerald-800' : assignment.submission?.status === 'resubmission_requested' ? 'bg-amber-100 text-amber-900' : 'bg-[hsl(var(--secondary)/.55)] text-[hsl(var(--secondary-foreground))]'}`}>{assignment.submission ? assignmentStatusLabels[assignment.submission.status] : 'Təhvil gözlənilir'}</span>
-                <span className={new Date(assignment.dueAt).getTime() < Date.now() ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--muted-foreground))]'}>{assignmentDueLabel(assignment.dueAt, assignment.status)}</span>
-                <span className="text-[hsl(var(--muted-foreground))]">Maksimum {assignment.maxScore} bal</span>
+                <span className={`rounded-full px-2.5 py-1 ${assignment.submission?.status === 'graded' ? 'bg-emerald-100 text-emerald-800' : assignment.submission?.status === 'resubmission_requested' ? 'bg-amber-100 text-amber-900' : 'bg-[hsl(var(--secondary)/.55)] text-[hsl(var(--secondary-foreground))]'}`}>{assignment.submission ? assignmentStatusText(assignment.submission.status, t) : sdText(t, 'sdAwaitingSubmission')}</span>
+                <span className={new Date(assignment.dueAt).getTime() < Date.now() ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--muted-foreground))]'}>{assignmentDueLabel(assignment.dueAt, assignment.status, t, locale)}</span>
+                <span className="text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdMaxPoints').replace('{n}', String(assignment.maxScore))}</span>
               </div>
             </div>
             <p className="mt-6 whitespace-pre-wrap text-sm leading-6 text-[hsl(var(--foreground))]" data-testid="text-student-assignment-description">{assignment.description}</p>
             <AssignmentAttachmentList attachments={assignment.attachments} prefix="student-assignment" />
             {submission && (
               <div className="mt-5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.28)] p-4" data-testid="section-own-submission">
-                <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold uppercase tracking-[.12em] text-[hsl(var(--primary))]">Sizin son təhviliniz</p><span className="text-xs text-[hsl(var(--muted-foreground))]">{new Date(submission.submittedAt).toLocaleString('az-AZ')}</span></div>
+                <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold uppercase tracking-[.12em] text-[hsl(var(--primary))]">{sdText(t, 'sdYourLastSubmission')}</p><span className="text-xs text-[hsl(var(--muted-foreground))]">{new Date(submission.submittedAt).toLocaleString(uiDateLocale(locale), { numberingSystem: 'latn' })}</span></div>
                 {submission.answerText && <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{submission.answerText}</p>}
                 <AssignmentAttachmentList attachments={submission.attachments} prefix="own-submission" />
-                {submission.score !== null && <p className="mt-3 text-sm font-bold text-[hsl(var(--secondary-foreground))]">Qiymət: {submission.score} / {assignment.maxScore}</p>}
-                {submission.feedback && <p className="mt-2 rounded-lg bg-[hsl(var(--card))] p-3 text-sm leading-5 text-[hsl(var(--muted-foreground))]"><strong className="text-[hsl(var(--primary))]">Müəllim rəyi:</strong> {submission.feedback}</p>}
+                {submission.score !== null && <p className="mt-3 text-sm font-bold text-[hsl(var(--secondary-foreground))]">{t('gradeCol')}: {submission.score} / {assignment.maxScore}</p>}
+                {submission.feedback && <p className="mt-2 rounded-lg bg-[hsl(var(--card))] p-3 text-sm leading-5 text-[hsl(var(--muted-foreground))]"><strong className="text-[hsl(var(--primary))]">{sdText(t, 'sdTeacherFeedback')}</strong> {submission.feedback}</p>}
               </div>
             )}
             {assignment.status === 'closed' || (new Date(assignment.dueAt).getTime() < Date.now() && !submission?.status?.includes('resubmission')) ? (
-              <p className="mt-5 rounded-xl bg-[hsl(var(--destructive)/.08)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]" data-testid="status-assignment-closed">Bu tapşırığa artıq təhvil göndərmək mümkün deyil.</p>
+              <p className="mt-5 rounded-xl bg-[hsl(var(--destructive)/.08)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]" data-testid="status-assignment-closed">{sdText(t, 'sdSubmissionClosed')}</p>
             ) : (
               <form onSubmit={(event) => void submit(event)} className="mt-6 space-y-4 border-t border-[hsl(var(--border))] pt-5">
-                <div><label htmlFor={`answer-${assignment.id}`} className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{submission ? 'Cavabı yenilə' : 'Cavabınız'} <span className="font-normal text-[hsl(var(--muted-foreground))]">(mətn və ya fayl)</span></label><textarea id={`answer-${assignment.id}`} rows={5} maxLength={12000} value={answerText} onChange={(event) => setAnswerText(event.target.value)} className={`${assignmentInputClass} resize-y`} placeholder="Cavabınızı burada yazın..." data-testid="input-assignment-answer" /></div>
+                <div><label htmlFor={`answer-${assignment.id}`} className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{submission ? sdText(t, 'sdUpdateAnswer') : sdText(t, 'sdYourAnswer')} <span className="font-normal text-[hsl(var(--muted-foreground))]">{sdText(t, 'sdTextOrFile')}</span></label><textarea id={`answer-${assignment.id}`} rows={5} maxLength={12000} value={answerText} onChange={(event) => setAnswerText(event.target.value)} className={`${assignmentInputClass} resize-y`} placeholder={sdText(t, 'sdAnswerPlaceholder')} data-testid="input-assignment-answer" /></div>
                  <div className="space-y-2">
-                   <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] px-3 py-3 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--accent)/.12)]"><FileUp size={17} /><span className="min-w-0 flex-1 truncate">{selectedFiles.length ? `${selectedFiles.length} fayl seçilib` : 'Fayllar əlavə et (ən çox 5, hər biri 10 MB)'}</span><input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt" className="sr-only" onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))} data-testid="input-assignment-files" /></label>
-                   {selectedFiles.length > 0 && <div className="space-y-1.5 rounded-xl bg-[hsl(var(--muted)/.28)] p-2.5">{selectedFiles.map((file, index) => <div key={`${file.name}-${file.size}-${index}`} className="flex items-center gap-2 rounded-lg bg-[hsl(var(--card))] px-2.5 py-2 text-xs"><Paperclip size={14} className="shrink-0 text-[hsl(var(--secondary-foreground))]" /><span className="min-w-0 flex-1 truncate font-semibold">{file.name}</span><span className="shrink-0 text-[10px] text-[hsl(var(--muted-foreground))]">{Math.max(1, Math.round(file.size / 1024))} KB</span><button type="button" onClick={() => { setSelectedFiles((current) => current.filter((_, fileIndex) => fileIndex !== index)); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="focus-ring rounded-md p-1 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={`${file.name} faylını sil`} data-testid={`button-remove-assignment-file-${index}`}><X size={14} /></button></div>)}</div>}
+                   <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] px-3 py-3 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--accent)/.12)]"><FileUp size={17} /><span className="min-w-0 flex-1 truncate">{selectedFiles.length ? sdText(t, 'sdFilesSelected').replace('{n}', String(selectedFiles.length)) : sdText(t, 'sdAddFiles')}</span><input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt" className="sr-only" onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))} data-testid="input-assignment-files" /></label>
+                   {selectedFiles.length > 0 && <div className="space-y-1.5 rounded-xl bg-[hsl(var(--muted)/.28)] p-2.5">{selectedFiles.map((file, index) => <div key={`${file.name}-${file.size}-${index}`} className="flex items-center gap-2 rounded-lg bg-[hsl(var(--card))] px-2.5 py-2 text-xs"><Paperclip size={14} className="shrink-0 text-[hsl(var(--secondary-foreground))]" /><span className="min-w-0 flex-1 truncate font-semibold">{file.name}</span><span className="shrink-0 text-[10px] text-[hsl(var(--muted-foreground))]">{Math.max(1, Math.round(file.size / 1024))} KB</span><button type="button" onClick={() => { setSelectedFiles((current) => current.filter((_, fileIndex) => fileIndex !== index)); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="focus-ring rounded-md p-1 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={sdText(t, 'sdRemoveFile').replace('{name}', file.name)} data-testid={`button-remove-assignment-file-${index}`}><X size={14} /></button></div>)}</div>}
                  </div>
                 {error && <p className="text-xs font-semibold text-[hsl(var(--destructive))]" data-testid="status-assignment-submit-error">{error}</p>}
                 {notice && <p className="text-xs font-semibold text-emerald-700" data-testid="status-assignment-submit-success">{notice}</p>}
-                <button type="submit" disabled={submitMutation.isPending || uploadMutation.isPending} className={assignmentButtonClass} data-testid="button-submit-assignment"><Send size={15} /> {submitMutation.isPending || uploadMutation.isPending ? 'Göndərilir...' : submission ? 'Yenidən təhvil ver' : 'Təhvili göndər'}</button>
+                <button type="submit" disabled={submitMutation.isPending || uploadMutation.isPending} className={assignmentButtonClass} data-testid="button-submit-assignment"><Send size={15} /> {submitMutation.isPending || uploadMutation.isPending ? t('sending') : submission ? sdText(t, 'sdResubmit') : sdText(t, 'sdSendSubmission')}</button>
               </form>
             )}
           </>
@@ -1140,7 +1169,7 @@ function StudentAssignmentDetail({ assignmentId, onClose }: { assignmentId: numb
 }
 
 function StudentAssignmentsSection({ termNumber }: { termNumber: number }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const assignmentsQuery = useGetStudentAssignments({ termNumber }, { query: { queryKey: getGetStudentAssignmentsQueryKey({ termNumber }) } });
@@ -1158,7 +1187,7 @@ function StudentAssignmentsSection({ termNumber }: { termNumber: number }) {
            <span className="flex min-w-0 items-center gap-2.5">
              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/80 text-[hsl(var(--primary))]"><FileText size={18} /></span>
              <span className="min-w-0">
-               <span className="block truncate text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--primary)/.7)]">{termNumber}. {t('termLabel')}</span>
+               <span className="block truncate text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--primary)/.7)]">{sdText(t, 'sdTermDot').replace('{n}', String(termNumber))}</span>
                <span className="mt-0.5 block truncate font-serif text-lg leading-tight text-[hsl(var(--primary))]">{t('homework')}</span>
              </span>
            </span>
@@ -1166,8 +1195,8 @@ function StudentAssignmentsSection({ termNumber }: { termNumber: number }) {
          </button>
        ) : (
          <>
-           <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.17em] text-[hsl(var(--muted-foreground))]">{t('currentTermLine')} · {termNumber}. {t('termLabel')}</p><h2 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('homework')}</h2><p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('homeworkHint')}</p></div><div className="flex gap-2"><button type="button" onClick={() => void assignmentsQuery.refetch()} className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-reload-student-assignments"><RefreshCw size={14} /> {t('refresh')}</button><button type="button" onClick={() => setIsOpen(false)} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" aria-expanded="true" data-testid="button-close-student-assignments">{t('close')}</button></div></div>
-           {assignmentsQuery.isLoading ? <div className="mt-5 grid gap-3 md:grid-cols-2"><div className="skeleton h-32 rounded-xl" /><div className="skeleton h-32 rounded-xl" /></div> : assignmentsQuery.isError ? <div className="mt-5 rounded-xl border border-[hsl(var(--destructive)/.22)] bg-[hsl(var(--destructive)/.06)] p-4 text-sm text-[hsl(var(--destructive))]" data-testid="state-student-assignments-error">{t('homeworkLoadFailed')} <button type="button" onClick={() => void assignmentsQuery.refetch()} className="ms-1 font-bold underline" data-testid="button-retry-student-assignments">{t('retry')}</button></div> : !assignments.length ? <div className="mt-5"><EmptyState icon={<FileText size={19} />} title={t('noHomework')} body={t('noHomeworkBody')} /></div> : <div className="mt-5 grid gap-3 md:grid-cols-2">{assignments.map((assignment) => <button key={assignment.id} type="button" onClick={() => setSelectedId(assignment.id)} className="focus-ring min-w-0 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-4 text-left transition hover:-translate-y-0.5 hover:border-[hsl(var(--accent))] hover:bg-[hsl(var(--accent)/.1)]" data-testid={`card-student-assignment-${assignment.id}`}><div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0 max-w-full"><p className="max-w-full break-words text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{assignment.courseTitle}</p><p className="mt-1 max-w-full break-words text-base font-bold text-[hsl(var(--primary))]">{assignment.title}</p></div><ChevronRight size={18} className="shrink-0 text-[hsl(var(--muted-foreground))]" /></div><div className="mt-4 flex flex-wrap gap-2 text-[11px]"><span className="rounded-full bg-[hsl(var(--secondary)/.55)] px-2 py-1 font-bold text-[hsl(var(--secondary-foreground))]">{assignment.submission ? assignmentStatusLabels[assignment.submission.status] : 'Təhvil gözlənilir'}</span><span className={new Date(assignment.dueAt).getTime() < Date.now() ? 'font-semibold text-[hsl(var(--destructive))]' : 'text-[hsl(var(--muted-foreground))]'}>{assignmentDueLabel(assignment.dueAt, assignment.status)}</span></div></button>)}</div>}
+           <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.17em] text-[hsl(var(--muted-foreground))]">{t('currentTermLine')} · {sdText(t, 'sdTermDot').replace('{n}', String(termNumber))}</p><h2 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('homework')}</h2><p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('homeworkHint')}</p></div><div className="flex gap-2"><button type="button" onClick={() => void assignmentsQuery.refetch()} className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-reload-student-assignments"><RefreshCw size={14} /> {t('refresh')}</button><button type="button" onClick={() => setIsOpen(false)} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" aria-expanded="true" data-testid="button-close-student-assignments">{t('close')}</button></div></div>
+           {assignmentsQuery.isLoading ? <div className="mt-5 grid gap-3 md:grid-cols-2"><div className="skeleton h-32 rounded-xl" /><div className="skeleton h-32 rounded-xl" /></div> : assignmentsQuery.isError ? <div className="mt-5 rounded-xl border border-[hsl(var(--destructive)/.22)] bg-[hsl(var(--destructive)/.06)] p-4 text-sm text-[hsl(var(--destructive))]" data-testid="state-student-assignments-error">{t('homeworkLoadFailed')} <button type="button" onClick={() => void assignmentsQuery.refetch()} className="ms-1 font-bold underline" data-testid="button-retry-student-assignments">{t('retry')}</button></div> : !assignments.length ? <div className="mt-5"><EmptyState icon={<FileText size={19} />} title={t('noHomework')} body={t('noHomeworkBody')} /></div> : <div className="mt-5 grid gap-3 md:grid-cols-2">{assignments.map((assignment) => <button key={assignment.id} type="button" onClick={() => setSelectedId(assignment.id)} className="focus-ring min-w-0 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-4 text-left transition hover:-translate-y-0.5 hover:border-[hsl(var(--accent))] hover:bg-[hsl(var(--accent)/.1)]" data-testid={`card-student-assignment-${assignment.id}`}><div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0 max-w-full"><p className="max-w-full break-words text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{assignment.courseTitle}</p><p className="mt-1 max-w-full break-words text-base font-bold text-[hsl(var(--primary))]">{assignment.title}</p></div><ChevronRight size={18} className="shrink-0 text-[hsl(var(--muted-foreground))]" /></div><div className="mt-4 flex flex-wrap gap-2 text-[11px]"><span className="rounded-full bg-[hsl(var(--secondary)/.55)] px-2 py-1 font-bold text-[hsl(var(--secondary-foreground))]">{assignment.submission ? assignmentStatusText(assignment.submission.status, t) : sdText(t, 'sdAwaitingSubmission')}</span><span className={new Date(assignment.dueAt).getTime() < Date.now() ? 'font-semibold text-[hsl(var(--destructive))]' : 'text-[hsl(var(--muted-foreground))]'}>{assignmentDueLabel(assignment.dueAt, assignment.status, t, locale)}</span></div></button>)}</div>}
          </>
        )}
       {selectedId !== null && <StudentAssignmentDetail assignmentId={selectedId} onClose={() => setSelectedId(null)} />}
@@ -1236,7 +1265,9 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
   const resolvedCourses = courses ?? dashboard?.courses ?? [];
   const resolvedAnnouncements = announcements ?? dashboard?.announcements ?? [];
   const studentName = dashboard?.studentName || t('studentFallback');
-  const currentSemester = academicProfile?.semesters.find((item) => item.termNumber === academicProfile.currentTermNumber)?.label;
+  const currentSemester = academicProfile
+    ? displayTerm(t, locale, academicProfile.currentTermNumber, academicProfile.semesters.find((item) => item.termNumber === academicProfile.currentTermNumber)?.label)
+    : undefined;
   const apiBase = import.meta.env.BASE_URL.replace(/\/$/, '');
   const hasNewNotification = Boolean(activeNotification) && !showNotifications;
   const dismissedNotificationIds = useRef(new Set<number>());
@@ -1245,7 +1276,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
     const loadNotifications = () => {
       void fetch(`${apiBase}/api/student/notifications`, { cache: 'no-store' })
         .then(async (response) => {
-          if (!response.ok) throw new Error('Bildirişlər yüklənmədi.');
+          if (!response.ok) throw new Error(sdText(t, 'sdNotificationsFailed'));
           return await response.json() as StudentNotification[];
         })
         .then((notifications) => {
@@ -1258,7 +1289,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
     loadNotifications();
     const interval = window.setInterval(loadNotifications, 20000);
     return () => { active = false; window.clearInterval(interval); };
-  }, [apiBase]);
+  }, [apiBase, t]);
   const dismissNotification = async () => {
     if (!activeNotification) return;
     const notification = activeNotification;
@@ -1360,7 +1391,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
               <Check size={16} className="text-[hsl(var(--secondary-foreground))]" />
             </div>
             <div className="mt-3 space-y-2">
-              {notificationResourcesQuery.data?.map((resource) => ({ resource, date: upcomingLessonDate(resource) })).filter((item): item is { resource: LearningResource; date: Date } => Boolean(item.date)).sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 2).map(({ resource, date }) => <div key={`notice-lesson-${resource.id}`} className="rounded-xl bg-[hsl(var(--accent)/.2)] px-3 py-2.5"><p className="text-xs font-bold text-[hsl(var(--primary))]">{t('upcomingLesson')}</p><p className="mt-1 text-xs text-[hsl(var(--primary))]">{date.toLocaleDateString('az-AZ', { weekday: 'short', day: 'numeric', month: 'short' })}, {date.toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' })} · {notificationCourseNames.get(resource.courseId) ?? resource.title}</p></div>)}
+              {notificationResourcesQuery.data?.map((resource) => ({ resource, date: upcomingLessonDate(resource) })).filter((item): item is { resource: LearningResource; date: Date } => Boolean(item.date)).sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 2).map(({ resource, date }) => <div key={`notice-lesson-${resource.id}`} className="rounded-xl bg-[hsl(var(--accent)/.2)] px-3 py-2.5"><p className="text-xs font-bold text-[hsl(var(--primary))]">{t('upcomingLesson')}</p><p className="mt-1 text-xs text-[hsl(var(--primary))]">{date.toLocaleDateString(uiDateLocale(locale), { weekday: 'short', day: 'numeric', month: 'short', numberingSystem: 'latn' })}, {date.toLocaleTimeString(uiDateLocale(locale), { hour: '2-digit', minute: '2-digit', numberingSystem: 'latn' })} · {notificationCourseNames.get(resource.courseId) ?? resource.title}</p></div>)}
               <div className="rounded-xl bg-[hsl(var(--muted)/.55)] px-3 py-2.5"><p className="text-xs font-bold text-[hsl(var(--primary))]">{t('assignmentDeadlines')}</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('noDeadlineTasks')}</p></div>
               {resolvedAnnouncements.slice(0, 3).map((announcement) => <div key={`notice-announcement-${announcement.id}`} className="rounded-xl bg-[hsl(var(--muted)/.55)] px-3 py-2.5"><p className="text-xs font-bold text-[hsl(var(--primary))]">{t('academyNotice')}</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{announcement.title}</p></div>)}
               {!notificationResourcesQuery.data?.length && !resolvedAnnouncements.length && <p className="text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('noNotifications')}</p>}
@@ -1371,14 +1402,14 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
            <div className="fixed inset-0 z-[65] flex items-center justify-center bg-[hsl(var(--primary)/.48)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="student-notification-title" data-testid="modal-student-notification">
              <article className="relative w-full max-w-lg rounded-[24px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-[var(--shadow-xl)]">
                <button type="button" onClick={() => void dismissNotification()} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={t('closeNotice')} data-testid="button-dismiss-student-notification"><X size={19} /></button>
-               <div className="pr-10"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Akademiyadan bildiriş</p><h2 id="student-notification-title" className="mt-2 font-serif text-3xl leading-tight text-[hsl(var(--primary))]">{activeNotification.title}</h2><p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-[hsl(var(--muted-foreground))]">{activeNotification.body}</p><p className="mt-5 text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{new Date(activeNotification.createdAt).toLocaleDateString('az-AZ')}</p></div>
+               <div className="pr-10"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('noticeFromAcademy')}</p><h2 id="student-notification-title" className="mt-2 font-serif text-3xl leading-tight text-[hsl(var(--primary))]">{activeNotification.title}</h2><p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-[hsl(var(--muted-foreground))]">{activeNotification.body}</p><p className="mt-5 text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{new Date(activeNotification.createdAt).toLocaleDateString(uiDateLocale(locale), { numberingSystem: 'latn' })}</p></div>
              </article>
            </div>
          )}
            {showExams && academicProfile && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[hsl(var(--primary)/.5)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="exams-title" data-testid="modal-student-exams">
               <div className="relative max-h-[92dvh] w-full max-w-5xl overflow-y-auto rounded-[28px] bg-[hsl(var(--background))] shadow-[var(--shadow-xl)]">
-                <div id="exams-title" className="sr-only">İmtahan və testlər</div>
+                <div id="exams-title" className="sr-only">{t('navExams')}</div>
                  <StudentExamsSection termNumber={academicProfile.currentTermNumber} initialExamId={onboardingExamId ?? undefined} onSubmitted={() => setScheduleAccessRefreshKey((value) => value + 1)} onClose={scheduleAccessLoaded && !onboardingRequired && !onboardingExamId ? () => setShowExams(false) : undefined} />
               </div>
             </div>
@@ -1386,8 +1417,8 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
         <main id="icmal" className="mx-auto w-full max-w-[1400px] px-5 py-7 md:px-10 md:py-10">
           {hasError && (
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[hsl(var(--destructive)/.2)] bg-[hsl(var(--destructive)/.06)] px-4 py-3 text-xs text-[hsl(var(--destructive))]" data-testid="status-partial-error">
-              <span className="flex items-center gap-2"><AlertCircle size={15} /> Bəzi məlumatlar yenilənmədi.</span>
-              <button type="button" onClick={onRetry} className="focus-ring font-bold underline underline-offset-2" data-testid="button-retry-partial">Yenilə</button>
+              <span className="flex items-center gap-2"><AlertCircle size={15} /> {sdText(t, 'sdPartialRefresh')}</span>
+              <button type="button" onClick={onRetry} className="focus-ring font-bold underline underline-offset-2" data-testid="button-retry-partial">{t('refresh')}</button>
             </div>
           )}
             <AcademicProfileSection profile={academicProfile} scheduleAccessApproved={scheduleAccessLoaded && scheduleAccessApproved} onboardingRequired={scheduleAccessLoaded && onboardingRequired} onboardingExamId={onboardingExamId} onOpenOnboardingExam={(examId) => { setShowExams(true); if (examId) setOnboardingExamId(examId); }} onOpenCourse={(courseId, teacherName) => setSelectedCourse({ id: courseId, teacherName: teacherName ?? undefined })} />
@@ -1399,8 +1430,8 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
          {showLibrary && (
            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[hsl(var(--primary)/.5)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="library-title" data-testid="modal-student-library">
              <div className="relative max-h-[92dvh] w-full max-w-3xl overflow-y-auto rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-5 shadow-[var(--shadow-xl)] md:p-8">
-               <button type="button" onClick={() => setShowLibrary(false)} className="focus-ring absolute right-5 top-5 z-10 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Kitabxananı bağla" data-testid="button-close-student-library"><X size={18} /></button>
-               <div id="library-title" className="sr-only">Mədrəsə Kitabxanası</div>
+               <button type="button" onClick={() => setShowLibrary(false)} className="focus-ring absolute right-5 top-5 z-10 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={sdText(t, 'sdCloseLibrary')} data-testid="button-close-student-library"><X size={18} /></button>
+               <div id="library-title" className="sr-only">{t('navLibrary')}</div>
                <MedreseLibrary />
              </div>
            </div>
@@ -1408,8 +1439,8 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
          {showTranscript && academicProfile && (
            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[hsl(var(--primary)/.5)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="transcript-title" data-testid="modal-student-transcript">
              <div className="relative max-h-[92dvh] w-full max-w-6xl overflow-y-auto rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 shadow-[var(--shadow-xl)] md:p-5">
-               <button type="button" onClick={() => setShowTranscript(false)} className="focus-ring absolute right-5 top-5 z-10 rounded-full bg-[hsl(var(--card)/.9)] p-2 text-[hsl(var(--muted-foreground))] shadow-[var(--shadow-xs)] hover:bg-[hsl(var(--muted))]" aria-label="Nəticə kartını bağla" data-testid="button-close-student-transcript"><X size={18} /></button>
-               <div id="transcript-title" className="sr-only">Nəticə kartı və transkript</div>
+               <button type="button" onClick={() => setShowTranscript(false)} className="focus-ring absolute right-5 top-5 z-10 rounded-full bg-[hsl(var(--card)/.9)] p-2 text-[hsl(var(--muted-foreground))] shadow-[var(--shadow-xs)] hover:bg-[hsl(var(--muted))]" aria-label={sdText(t, 'sdCloseTranscript')} data-testid="button-close-student-transcript"><X size={18} /></button>
+               <div id="transcript-title" className="sr-only">{t('transcriptTitle')}</div>
                <TranscriptSection profile={academicProfile} />
              </div>
            </div>
@@ -1417,8 +1448,8 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
         {showPasswordChange && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[hsl(var(--primary)/.5)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="password-change-title" data-testid="modal-password-change">
             <div className="relative max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xl)] md:p-8">
-              <button type="button" onClick={() => setShowPasswordChange(false)} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Şifrə dəyişmə pəncərəsini bağla" data-testid="button-close-password-change"><X size={18} /></button>
-              <div id="password-change-title" className="mb-1 pr-10 font-serif text-2xl text-[hsl(var(--primary))]">Şifrəni dəyiş</div>
+              <button type="button" onClick={() => setShowPasswordChange(false)} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={sdText(t, 'sdClosePassword')} data-testid="button-close-password-change"><X size={18} /></button>
+              <div id="password-change-title" className="mb-1 pr-10 font-serif text-2xl text-[hsl(var(--primary))]">{t('changePassword')}</div>
               <PasswordChangeCard />
             </div>
           </div>
@@ -1426,8 +1457,8 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
         {showProfileEdit && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[hsl(var(--primary)/.5)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="profile-edit-title" data-testid="modal-profile-edit">
             <div id="profil-redaktəsi" className="relative max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xl)] md:p-8">
-              <button type="button" onClick={() => setShowProfileEdit(false)} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Məlumatların redaktəsi pəncərəsini bağla" data-testid="button-close-profile-edit"><X size={18} /></button>
-              <div id="profile-edit-title" className="mb-4 pr-10 font-serif text-2xl text-[hsl(var(--primary))]">Məlumatlarımı düzəlt</div>
+              <button type="button" onClick={() => setShowProfileEdit(false)} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={sdText(t, 'sdCloseProfileEdit')} data-testid="button-close-profile-edit"><X size={18} /></button>
+              <div id="profile-edit-title" className="mb-4 pr-10 font-serif text-2xl text-[hsl(var(--primary))]">{t('editProfile')}</div>
               <OwnProfileCard onClose={() => setShowProfileEdit(false)} />
             </div>
           </div>
@@ -1435,8 +1466,8 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
         {showMessages && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[hsl(var(--primary)/.5)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="messages-title" data-testid="modal-messages">
             <div id="mesajlar" className="relative max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xl)] md:p-8">
-              <button type="button" onClick={() => setShowMessages(false)} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Məsləhətləşmə pəncərəsini bağla" data-testid="button-close-messages"><X size={18} /></button>
-              <div id="messages-title" className="mb-4 pr-10 font-serif text-2xl text-[hsl(var(--primary))]">Müəllimlərlə əlaqə</div>
+              <button type="button" onClick={() => setShowMessages(false)} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={sdText(t, 'sdCloseMessages')} data-testid="button-close-messages"><X size={18} /></button>
+              <div id="messages-title" className="mb-4 pr-10 font-serif text-2xl text-[hsl(var(--primary))]">{sdText(t, 'sdTeacherContact')}</div>
               <MessageCenter onUnreadCountChange={setUnreadMessageCount} />
             </div>
           </div>
@@ -1444,8 +1475,8 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
         {showQuestions && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[hsl(var(--primary)/.5)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="questions-title" data-testid="modal-questions">
             <div id="sual-cavab" className="relative max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xl)] md:p-8">
-              <button type="button" onClick={() => setShowQuestions(false)} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Sual-cavab pəncərəsini bağla" data-testid="button-close-questions"><X size={18} /></button>
-              <div id="questions-title" className="mb-4 pr-10 font-serif text-2xl text-[hsl(var(--primary))]">Açıq suallar və cavablar</div>
+              <button type="button" onClick={() => setShowQuestions(false)} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={sdText(t, 'sdCloseQuestions')} data-testid="button-close-questions"><X size={18} /></button>
+              <div id="questions-title" className="mb-4 pr-10 font-serif text-2xl text-[hsl(var(--primary))]">{sdText(t, 'sdOpenQaTitle')}</div>
               <QaCenter canAsk onUnansweredCountChange={setUnansweredQuestionCount} />
             </div>
           </div>

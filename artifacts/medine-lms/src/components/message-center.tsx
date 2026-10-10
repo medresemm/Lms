@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Mail, Reply, Send, Trash2, UserRound } from 'lucide-react';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type MessageKey } from '@/lib/i18n';
 
 type Message = {
   id: number;
@@ -26,9 +26,10 @@ type Message = {
 type Teacher = { clerkUserId: string; firstName: string; lastName: string; displayName: string };
 
 const apiUrl = (path: string) => `${import.meta.env.BASE_URL.replace(/\/$/, '')}/api${path}`;
+const ux = (t: (key: MessageKey) => string, key: string) => t(key as MessageKey);
 
-function dateLabel(value: string) {
-  return new Intl.DateTimeFormat('az-AZ', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+function dateLabel(value: string, locale: 'az' | 'ar') {
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'az-AZ', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 }
 
 function MessageThread({
@@ -58,7 +59,7 @@ function MessageThread({
   onReply: (event: React.FormEvent) => void;
   onDelete: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const thread = messages
     .filter((message) => message.id === selected.id || message.parentMessageId === selected.id)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -72,19 +73,19 @@ function MessageThread({
           {staff && <div className="mt-2 space-y-1 text-xs text-[hsl(var(--muted-foreground))]">
             <p className="flex items-center gap-2"><UserRound size={14} /> {selected.senderEmail} {selected.senderPhone && `· ${selected.senderPhone}`}</p>
             {(selected.senderStudentNumber !== null || selected.senderProgram || selected.senderCourseYear !== null || selected.senderSemester !== null) && (
-              <p>Tələbə № {selected.senderStudentNumber ?? '—'} · {selected.senderProgram ?? 'Proqram qeyd edilməyib'} · {selected.senderCourseYear ?? '—'}-cü il · {selected.senderSemester ?? '—'}-ci semestr</p>
+              <p>{ux(t, 'uxStudentMeta').replace('{no}', String(selected.senderStudentNumber ?? '—')).replace('{program}', selected.senderProgram ?? ux(t, 'uxProgramUnset')).replace('{year}', String(selected.senderCourseYear ?? '—')).replace('{sem}', String(selected.senderSemester ?? '—'))}</p>
             )}
           </div>}
         </div>
         <div className="flex items-center gap-1">
           {!staff && selected.parentMessageId === null && <button type="button" onClick={onToggleEdit} className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-edit-message">{isEditing ? t('cancel') : t('edit')}</button>}
-          {staff && <button type="button" onClick={onDelete} className="focus-ring rounded-lg p-2 text-[hsl(var(--destructive))]" aria-label="Söhbəti sil"><Trash2 size={17} /></button>}
+          {staff && <button type="button" onClick={onDelete} className="focus-ring rounded-lg p-2 text-[hsl(var(--destructive))]" aria-label={ux(t, 'uxDeleteChat')}><Trash2 size={17} /></button>}
         </div>
       </div>
       <div className="mt-5 space-y-3">
         {thread.map((item, index) => (
           <div key={item.id} className={`rounded-2xl p-4 ${index === 0 ? 'bg-[hsl(var(--secondary)/.42)]' : 'bg-[hsl(var(--muted)/.55)]'}`} data-testid={`thread-message-${item.id}`}>
-            <div className="flex items-center justify-between gap-3"><p className="text-xs font-bold text-[hsl(var(--primary))]">{item.senderName}</p><p className="text-[10px] text-[hsl(var(--muted-foreground))]">{dateLabel(item.createdAt)}</p></div>
+            <div className="flex items-center justify-between gap-3"><p className="text-xs font-bold text-[hsl(var(--primary))]">{item.senderName}</p><p className="text-[10px] text-[hsl(var(--muted-foreground))]">{dateLabel(item.createdAt, locale)}</p></div>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-[hsl(var(--foreground))]">{item.body}</p>
             {!staff && <p className="mt-2 text-[10px] font-bold text-[hsl(var(--muted-foreground))]">{item.readAt ? t('messageRead') : t('sent')}</p>}
             {!staff && item.id === selected.id && isEditing && <form onSubmit={onEdit} className="mt-3 border-t border-[hsl(var(--border))] pt-3"><textarea required rows={4} value={editBody} onChange={(event) => onEditBodyChange(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-3 text-sm" data-testid="textarea-edit-message" /><button type="submit" className="focus-ring mt-3 inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))]" data-testid="button-save-message-edit"><Send size={15} /> {t('save')}</button></form>}
@@ -97,7 +98,7 @@ function MessageThread({
 }
 
 export function MessageCenter({ staff = false, onUnreadCountChange }: { staff?: boolean; onUnreadCountChange?: (count: number) => void }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [messages, setMessages] = useState<Message[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [selected, setSelected] = useState<Message | null>(null);
@@ -116,33 +117,33 @@ export function MessageCenter({ staff = false, onUnreadCountChange }: { staff?: 
         fetch(apiUrl('/messages'), { cache: 'no-store' }),
         !staff ? fetch(apiUrl('/teachers'), { cache: 'no-store' }) : Promise.resolve(null),
       ]);
-      if (!messageResponse.ok) throw new Error('Mesajlar yüklənə bilmədi.');
+      if (!messageResponse.ok) throw new Error(ux(t, 'uxMessagesLoadFail'));
       setMessages(await messageResponse.json() as Message[]);
-       if (!teacherResponse?.ok && teacherResponse !== null) throw new Error('Müəllim siyahısı yüklənmədi.');
+       if (!teacherResponse?.ok && teacherResponse !== null) throw new Error(ux(t, 'uxTeachersLoadFail'));
        if (teacherResponse?.ok) setTeachers(await teacherResponse.json() as Teacher[]);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Mesajlar yüklənə bilmədi.');
+      setNotice(error instanceof Error ? error.message : ux(t, 'uxMessagesLoadFail'));
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { void load(); }, [staff]);
+  useEffect(() => { void load(); }, [staff, t]);
   useEffect(() => {
     const interval = window.setInterval(() => { void load(); }, 15000);
     return () => window.clearInterval(interval);
-  }, [staff]);
+  }, [staff, t]);
 
   const sendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
     setNotice('');
-    if (!recipient || !body.trim()) { setNotice('Müəllim və mesaj mətni tələb olunur.'); return; }
+    if (!recipient || !body.trim()) { setNotice(ux(t, 'uxTeacherAndBodyRequired')); return; }
     const response = await fetch(apiUrl('/messages'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipientClerkUserId: recipient, body: body.trim() }) });
     const result = await response.json() as Message & { error?: string };
-    if (!response.ok) { setNotice(result.error || 'Mesaj göndərilə bilmədi.'); return; }
+    if (!response.ok) { setNotice(result.error || ux(t, 'uxMessageSendFail')); return; }
     setBody('');
     setRecipient('');
-    setNotice('Mesaj göndərildi.');
+    setNotice(ux(t, 'uxMessageSent'));
     await load();
   };
 
@@ -161,7 +162,7 @@ export function MessageCenter({ staff = false, onUnreadCountChange }: { staff?: 
       if (response.ok) {
         setMessages((items) => items.map((item) => item.id === message.id ? { ...item, readAt: new Date().toISOString() } : item));
       } else {
-        setNotice('Mesajı oxunmuş kimi qeyd etmək mümkün olmadı.');
+        setNotice(ux(t, 'uxMarkReadFail'));
       }
     }
     if (!staff) {
@@ -171,7 +172,7 @@ export function MessageCenter({ staff = false, onUnreadCountChange }: { staff?: 
         const readAt = new Date().toISOString();
         const successfulIds = new Set(unreadReplies.filter((_, index) => responses[index]?.ok).map((item) => item.id));
         setMessages((items) => items.map((item) => successfulIds.has(item.id) ? { ...item, readAt } : item));
-        if (successfulIds.size !== unreadReplies.length) setNotice('Bəzi cavabları oxunmuş kimi qeyd etmək mümkün olmadı.');
+        if (successfulIds.size !== unreadReplies.length) setNotice(ux(t, 'uxSomeRepliesReadFail'));
       }
     }
   };
@@ -179,25 +180,25 @@ export function MessageCenter({ staff = false, onUnreadCountChange }: { staff?: 
   const editMessage = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selected) return;
-    if (!editBody.trim()) { setNotice('Mesaj mətni boş ola bilməz.'); return; }
+    if (!editBody.trim()) { setNotice(ux(t, 'uxMessageEmpty')); return; }
     const response = await fetch(apiUrl(`/messages/${selected.id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body: editBody.trim() }) });
     const result = await response.json() as Message & { error?: string };
-    if (!response.ok) { setNotice(result.error || 'Mesaj redaktə edilə bilmədi.'); return; }
+    if (!response.ok) { setNotice(result.error || ux(t, 'uxMessageEditFail')); return; }
     setMessages((items) => items.map((item) => item.id === selected.id ? result : item));
     setSelected(result);
     setIsEditing(false);
-    setNotice('Mesaj redaktə edildi.');
+    setNotice(ux(t, 'uxMessageEdited'));
   };
 
   const sendReply = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selected) return;
-    if (!reply.trim()) { setNotice('Cavab mətni boş ola bilməz.'); return; }
+    if (!reply.trim()) { setNotice(ux(t, 'uxReplyEmpty')); return; }
     const response = await fetch(apiUrl(`/messages/${selected.id}/reply`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body: reply.trim() }) });
     const result = await response.json() as { error?: string };
-    if (!response.ok) { setNotice(result.error || 'Cavab göndərilə bilmədi.'); return; }
+    if (!response.ok) { setNotice(result.error || ux(t, 'uxReplySendFail')); return; }
     setReply('');
-    setNotice('Cavab göndərildi.');
+    setNotice(ux(t, 'uxReplySent'));
     await load();
   };
 
@@ -216,10 +217,10 @@ export function MessageCenter({ staff = false, onUnreadCountChange }: { staff?: 
   const deleteMessage = async () => {
     if (!selected) return;
     const response = await fetch(apiUrl(`/messages/${selected.id}`), { method: 'DELETE' });
-    if (!response.ok) { setNotice('Mesaj silinə bilmədi.'); return; }
+    if (!response.ok) { setNotice(ux(t, 'uxMessageDeleteFail')); return; }
     setMessages((items) => items.filter((item) => item.id !== selected.id));
     setSelected(null);
-    setNotice('Mesaj silindi.');
+    setNotice(ux(t, 'uxMessageDeleted'));
   };
 
   return (
@@ -240,7 +241,7 @@ export function MessageCenter({ staff = false, onUnreadCountChange }: { staff?: 
       </form>}
       {notice && <p className="rounded-xl bg-[hsl(var(--secondary)/.35)] p-3 text-sm font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}
        {loading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('messagesLoading')}</p> : !messages.length ? <p className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noMessages')}</p> : <div className="grid gap-4">
-         <div className="space-y-2">{rootMessages.map((message) => { const unread = staff ? !message.readAt : hasUnreadReply(message.id); const preview = staff ? message : [...threadMessages(message.id)].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? message; const previewName = !staff && preview.id !== message.id ? preview.senderName : staff ? message.senderName : message.recipientName; return <div key={message.id}><button type="button" onClick={() => void openMessage(message.id === selected?.id ? null : message)} className={`focus-ring w-full rounded-xl border p-3 text-left ${unread ? 'border-red-300 bg-red-50/60' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'}`} data-testid={`button-message-${message.id}`}><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{previewName}</p><p className="mt-1 line-clamp-2 text-xs text-[hsl(var(--muted-foreground))]">{preview.body}</p></div>{unread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-600" />}</div><p className="mt-2 text-[10px] text-[hsl(var(--muted-foreground))]">{dateLabel(preview.createdAt)}</p></button>{selected?.id === message.id && selected && <MessageThread selected={selected} messages={messages} staff={staff} isEditing={isEditing} editBody={editBody} reply={reply} onToggleEdit={() => { setIsEditing((value) => !value); setEditBody(selected.body); }} onEditBodyChange={setEditBody} onEdit={(event) => void editMessage(event)} onReplyChange={setReply} onReply={(event) => void sendReply(event)} onDelete={() => void deleteMessage()} />}</div>; })}</div>
+         <div className="space-y-2">{rootMessages.map((message) => { const unread = staff ? !message.readAt : hasUnreadReply(message.id); const preview = staff ? message : [...threadMessages(message.id)].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? message; const previewName = !staff && preview.id !== message.id ? preview.senderName : staff ? message.senderName : message.recipientName; return <div key={message.id}><button type="button" onClick={() => void openMessage(message.id === selected?.id ? null : message)} className={`focus-ring w-full rounded-xl border p-3 text-left ${unread ? 'border-red-300 bg-red-50/60' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'}`} data-testid={`button-message-${message.id}`}><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{previewName}</p><p className="mt-1 line-clamp-2 text-xs text-[hsl(var(--muted-foreground))]">{preview.body}</p></div>{unread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-600" />}</div><p className="mt-2 text-[10px] text-[hsl(var(--muted-foreground))]">{dateLabel(preview.createdAt, locale)}</p></button>{selected?.id === message.id && selected && <MessageThread selected={selected} messages={messages} staff={staff} isEditing={isEditing} editBody={editBody} reply={reply} onToggleEdit={() => { setIsEditing((value) => !value); setEditBody(selected.body); }} onEditBodyChange={setEditBody} onEdit={(event) => void editMessage(event)} onReplyChange={setReply} onReply={(event) => void sendReply(event)} onDelete={() => void deleteMessage()} />}</div>; })}</div>
        </div>}
     </section>
   );

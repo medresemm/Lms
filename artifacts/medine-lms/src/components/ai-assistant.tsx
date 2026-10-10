@@ -6,9 +6,8 @@ import { DidYouMean, LibraryHitList } from '@/components/library-search-results'
 import { LIBRARY_SLUG, libraryPageTextApi, libraryReaderHref, searchLibraryApi, type LibraryChapterSuggestion, type LibrarySearchItem } from '@/lib/library';
 import { AiAnswerCard, keepAnchor, MoreButton, PagedList } from '@/components/ai-blocks';
 import { frameOf, inferFrame, readBlocks, readFrame, type AiBlock, type AiFrame } from '@/lib/ai-blocks';
-import { answerScrollTop, initialShown, pagerState, revealMore } from '@/lib/paginate';
+import { answerScrollTop, initialShown, PAGE_STEP, pagerState, revealMore } from '@/lib/paginate';
 import { courseBookRange, type CourseBookView } from '@/lib/course-books';
-import { courseTermLabel } from '@/components/course-books';
 import { AiTestBuilder, loadTestBuilderConfig, type TestBuilderConfig } from '@/components/ai-test-builder';
 import { LanguageSwitch, useI18n, type MessageKey } from '@/lib/i18n';
 
@@ -200,6 +199,7 @@ function LinkifiedText({ text }: { text: string }) {
 }
 
 function CopyButton({ text }: { text: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   async function copy() {
     try {
@@ -212,7 +212,7 @@ function CopyButton({ text }: { text: string }) {
   }
   return (
     <button type="button" onClick={() => void copy()} className="inline-flex items-center gap-1 rounded-full border border-[#e3c27a]/30 px-2.5 py-1 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6]" data-testid="button-ai-source-copy">
-      {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? 'Kopyalandı' : 'Kopyala'}
+      {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? t('aiCopied' as MessageKey) : t('aiCopy' as MessageKey)}
     </button>
   );
 }
@@ -242,6 +242,7 @@ function SourceLink({ href, label }: { href: string; label: string }) {
 type GetToken = () => Promise<string | null>;
 
 function ShamelaCard({ item, getToken, pageEndpoint }: { item: ShamelaItem; getToken: GetToken; pageEndpoint: string }) {
+  const { t } = useI18n();
   const [page, setPage] = useState<ShamelaItem>(item);
   const [full, setFull] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -261,14 +262,14 @@ function ShamelaCard({ item, getToken, pageEndpoint }: { item: ShamelaItem; getT
         cache: 'no-store',
       });
       const data = await response.json().catch(() => null) as { page?: ShamelaItem; error?: string } | null;
-      if (!response.ok || !data?.page || typeof data.page.text !== 'string') throw new Error(data?.error || 'Şamilə hal-hazırda cavab vermir. Bir az sonra yenidən cəhd edin.');
+      if (!response.ok || !data?.page || typeof data.page.text !== 'string') throw new Error(data?.error || t('aiShamelaDown' as MessageKey));
       const next = { ...data.page, title: data.page.title || item.title, author: data.page.author || item.author };
       keepAnchor(card.current, () => {
         setPage(next);
         setFull(true);
       });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Səhifəni açmaq mümkün olmadı.');
+      setError(caught instanceof Error ? caught.message : t('aiPageOpenFail' as MessageKey));
     } finally {
       setLoading(false);
     }
@@ -290,42 +291,43 @@ function ShamelaCard({ item, getToken, pageEndpoint }: { item: ShamelaItem; getT
         <CopyButton text={`${page.text}\n\n— ${citation}\n${url}`} />
       </header>
       <SourceText text={page.text} tall={full} />
-      {full && <p className="mt-1.5 text-[11px] text-[#f4ead5]/50">{page.truncated ? 'Səhifənin ilk hissəsi göstərilir — davamı mənbədədir.' : 'Səhifənin tam mətni.'}</p>}
+      {full && <p className="mt-1.5 text-[11px] text-[#f4ead5]/50">{page.truncated ? t('aiPagePartial' as MessageKey) : t('aiPageFull' as MessageKey)}</p>}
       {error && <p className="mt-2 text-xs text-red-200">{error}</p>}
       <footer className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" disabled={loading || !page.prevPageId} onClick={() => page.prevPageId && void open(page.prevPageId)} className="inline-flex items-center gap-1 rounded-full border border-[#e3c27a]/30 px-2.5 py-1 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 disabled:opacity-35" data-testid="button-shamela-prev">
-            <ChevronLeft size={12} /> Əvvəlki səhifə
+            <ChevronLeft size={12} /> {t('aiPrevPage' as MessageKey)}
           </button>
           <button type="button" disabled={loading} onClick={() => (full && page.pageId === item.pageId ? keepAnchor(card.current, () => { setPage(item); setFull(false); }) : void open(item.pageId))} className="inline-flex items-center gap-1 rounded-full border border-[#e3c27a]/50 bg-[#e3c27a]/10 px-3 py-1 text-[11px] font-bold text-[#f3dca6] transition hover:bg-[#e3c27a]/20 disabled:opacity-50" data-testid="button-shamela-full">
-            {loading ? <Loader2 size={12} className="animate-spin" /> : full && page.pageId === item.pageId ? <ChevronUp size={12} /> : <ChevronDown size={12} />} {full && page.pageId === item.pageId ? 'Qısalt' : full ? 'Tapılan səhifəyə qayıt' : 'Davamı'}
+            {loading ? <Loader2 size={12} className="animate-spin" /> : full && page.pageId === item.pageId ? <ChevronUp size={12} /> : <ChevronDown size={12} />} {full && page.pageId === item.pageId ? t('shortenText') : full ? t('aiBackToHit' as MessageKey) : t('moreText')}
           </button>
           <button type="button" disabled={loading || !page.nextPageId} onClick={() => page.nextPageId && void open(page.nextPageId)} className="inline-flex items-center gap-1 rounded-full border border-[#e3c27a]/30 px-2.5 py-1 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 disabled:opacity-35" data-testid="button-shamela-next">
-            Növbəti səhifə <ChevronRight size={12} />
+            {t('aiNextPage' as MessageKey)} <ChevronRight size={12} />
           </button>
         </div>
-        <SourceLink href={url} label="Mənbə: Şamilə" />
+        <SourceLink href={url} label={`${t('source')}: ${t('targetShamela')}`} />
       </footer>
     </article>
   );
 }
 
-const DORAR_FIELDS: Array<[keyof Omit<DorarItem, 'text'>, string, string]> = [
-  ['narrator', 'Ravi', 'الراوي'],
-  ['muhaddith', 'Mühəddis', 'المحدث'],
-  ['source', 'Mənbə', 'المصدر'],
-  ['page', 'Səhifə / nömrə', 'الصفحة أو الرقم'],
-  ['grading', 'Hökm', 'خلاصة حكم المحدث'],
+const DORAR_FIELDS: Array<[keyof Omit<DorarItem, 'text'>, MessageKey, string]> = [
+  ['narrator', 'aiNarrator' as MessageKey, 'الراوي'],
+  ['muhaddith', 'aiMuhaddith' as MessageKey, 'المحدث'],
+  ['source', 'source', 'المصدر'],
+  ['page', 'aiPageOrNum' as MessageKey, 'الصفحة أو الرقم'],
+  ['grading', 'aiRuling' as MessageKey, 'خلاصة حكم المحدث'],
 ];
 
-const HADITH_STATUS: Record<HadithFull['status'], { title: string; note: string }> = {
-  full: { title: 'Hədisin tam mətni', note: 'Dorar bu hədisi bu mənbədə tam şəkildə verir.' },
-  origin: { title: 'Əsl mənbədəki tam mətn', note: 'Mətn Dorar-ın «أصول الحديث» bölməsindən, sənədi (isnadı) ilə birlikdə götürülüb.' },
-  shamela: { title: 'Şamilədə tapılan mətn', note: 'Dorar tam mətni vermədi; uyğun mətn Şamilə kitabxanasından tapıldı. Zəhmət olmasa mənbədə yoxlayın.' },
-  fragment: { title: 'Tam mətn tapılmadı', note: 'Təəssüf ki, tam mətni tapa bilmədim — yalnız bu parça mövcuddur. Mənbəyə keçib yoxlaya bilərsiniz.' },
+const HADITH_STATUS: Record<HadithFull['status'], { title: MessageKey; note: MessageKey }> = {
+  full: { title: 'aiHadithFullTitle' as MessageKey, note: 'aiHadithFullNote' as MessageKey },
+  origin: { title: 'aiHadithOriginTitle' as MessageKey, note: 'aiHadithOriginNote' as MessageKey },
+  shamela: { title: 'aiHadithShamelaTitle' as MessageKey, note: 'aiHadithShamelaNote' as MessageKey },
+  fragment: { title: 'aiHadithFragTitle' as MessageKey, note: 'aiHadithFragNote' as MessageKey },
 };
 
 function DorarCard({ item, sourceUrl, query, getToken, fullEndpoint }: { item: DorarItem; sourceUrl: string; query: string; getToken: GetToken; fullEndpoint: string }) {
+  const { t } = useI18n();
   const [full, setFull] = useState<HadithFull | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -354,13 +356,13 @@ function DorarCard({ item, sourceUrl, query, getToken, fullEndpoint }: { item: D
       });
       const data = await response.json().catch(() => null) as { full?: HadithFull; error?: string } | null;
       const result = data?.full;
-      if (!response.ok || !result || typeof result.text !== 'string' || !(result.status in HADITH_STATUS)) throw new Error(data?.error || 'Tam mətni yükləmək olmadı. Bir az sonra yenidən cəhd edin.');
+      if (!response.ok || !result || typeof result.text !== 'string' || !(result.status in HADITH_STATUS)) throw new Error(data?.error || t('aiFullFailRetry' as MessageKey));
       keepAnchor(card.current, () => {
         setFull(result);
         setExpanded(true);
       });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Tam mətni yükləmək olmadı.');
+      setError(caught instanceof Error ? caught.message : t('aiFullFail' as MessageKey));
     } finally {
       setLoading(false);
     }
@@ -371,33 +373,33 @@ function DorarCard({ item, sourceUrl, query, getToken, fullEndpoint }: { item: D
   return (
     <article ref={card} className="rounded-2xl border border-[#e3c27a]/25 bg-white/[.035] p-4" data-testid="ai-source-dorar">
       <div className="mb-3 flex items-center justify-between gap-2">
-        {item.abridged ? <span className="rounded-full border border-amber-300/40 bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-100">Mənbədə qısaldılıb</span> : <span />}
+        {item.abridged ? <span className="rounded-full border border-amber-300/40 bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-100">{t('aiAbridged' as MessageKey)}</span> : <span />}
         <CopyButton text={full && expanded && full.status !== 'fragment' ? `${full.text}\n\n— ${full.sourceTitle ?? ''}\n${fullUrl}` : copyText} />
       </div>
       <SourceText text={item.text} />
       {expanded && full && status && (
         <section className={`mt-3 rounded-xl border px-3 py-3 ${full.status === 'fragment' ? 'border-amber-300/35 bg-amber-300/[.06]' : 'border-[#e3c27a]/30 bg-[#e3c27a]/[.06]'}`} data-testid={`ai-dorar-full-${full.status}`}>
-          <p className="text-[12px] font-bold text-[#f3dca6]">{status.title}{full.sourceTitle && full.status !== 'fragment' ? <> · <bdi style={{ fontFamily: arabicFont }}>{full.sourceTitle}</bdi></> : null}</p>
+          <p className="text-[12px] font-bold text-[#f3dca6]">{t(status.title)}{full.sourceTitle && full.status !== 'fragment' ? <> · <bdi style={{ fontFamily: arabicFont }}>{full.sourceTitle}</bdi></> : null}</p>
           {full.status !== 'fragment' && <div className="mt-2"><SourceText text={full.text} tall /></div>}
           {full.takhrij && (
-            <p className="mt-2 text-[12px] leading-6 text-[#f4ead5]/75">Təxric · <span dir="rtl" style={{ fontFamily: arabicFont }}>التخريج</span>: <bdi dir="rtl" className="text-[14px]" style={{ fontFamily: arabicFont }}>{full.takhrij}</bdi></p>
+            <p className="mt-2 text-[12px] leading-6 text-[#f4ead5]/75">{t('aiTakhrij' as MessageKey)} · <span dir="rtl" style={{ fontFamily: arabicFont }}>التخريج</span>: <bdi dir="rtl" className="text-[14px]" style={{ fontFamily: arabicFont }}>{full.takhrij}</bdi></p>
           )}
-          <p className="mt-2 text-[11px] leading-5 text-[#f4ead5]/60">{status.note}</p>
-          <div className="mt-1.5"><SourceLink href={fullUrl} label={full.status === 'shamela' ? 'Mənbə: Şamilə' : 'Mənbə: الدرر السنية'} /></div>
+          <p className="mt-2 text-[11px] leading-5 text-[#f4ead5]/60">{t(status.note)}</p>
+          <div className="mt-1.5"><SourceLink href={fullUrl} label={full.status === 'shamela' ? `${t('source')}: ${t('targetShamela')}` : `${t('source')}: الدرر السنية`} /></div>
         </section>
       )}
       {error && <p className="mt-2 text-xs text-red-200">{error}</p>}
       <dl className="mt-3 grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
-        {DORAR_FIELDS.map(([key, label, arabic]) => item[key] ? (
+        {DORAR_FIELDS.map(([key, labelKey, arabic]) => item[key] ? (
           <div key={key} className={key === 'grading' ? 'sm:col-span-2 rounded-xl border border-[#e3c27a]/30 bg-[#e3c27a]/[.07] px-3 py-2' : ''}>
-            <dt className="text-[11px] text-[#f4ead5]/50">{label} · <span dir="rtl" style={{ fontFamily: arabicFont }}>{arabic}</span></dt>
+            <dt className="text-[11px] text-[#f4ead5]/50">{t(labelKey)} · <span dir="rtl" style={{ fontFamily: arabicFont }}>{arabic}</span></dt>
             <dd dir="auto" className={`${key === 'grading' ? 'font-semibold text-[#f3dca6]' : 'text-[#f4ead5]'} text-[15px] leading-7`} style={{ fontFamily: arabicFont }}>{item[key]}</dd>
           </div>
         ) : null)}
       </dl>
       <footer className="mt-3">
         <button type="button" onClick={() => void toggle()} disabled={loading} className="inline-flex items-center gap-1 rounded-full border border-[#e3c27a]/50 bg-[#e3c27a]/10 px-3 py-1 text-[11px] font-bold text-[#f3dca6] transition hover:bg-[#e3c27a]/20 disabled:opacity-50" data-testid="button-dorar-full">
-          {loading ? <Loader2 size={12} className="animate-spin" /> : expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />} {loading ? 'Axtarılır…' : expanded ? 'Qısalt' : 'Davamı'}
+          {loading ? <Loader2 size={12} className="animate-spin" /> : expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />} {loading ? t('aiSearchingNow' as MessageKey) : expanded ? t('shortenText') : t('moreText')}
         </button>
       </footer>
     </article>
@@ -405,6 +407,8 @@ function DorarCard({ item, sourceUrl, query, getToken, fullEndpoint }: { item: D
 }
 
 function LibraryResults({ sources, getToken }: { sources: Extract<ResearchSources, { kind: 'library' }>; getToken: GetToken }) {
+  const { t } = useI18n();
+  const moreLabels = { more: t('pgMore' as MessageKey), moreCount: (n: number) => t('pgMoreCount' as MessageKey).replace('{n}', String(n)) };
   const [items, setItems] = useState<LibrarySearchItem[]>(sources.items);
   const [shown, setShown] = useState(() => initialShown(sources.items.length));
   const [loadingMore, setLoadingMore] = useState(false);
@@ -413,7 +417,7 @@ function LibraryResults({ sources, getToken }: { sources: Extract<ResearchSource
   const total = typeof sources.total === 'number' ? sources.total : sources.items.length;
   const didYouMean = Array.isArray(sources.didYouMean) ? sources.didYouMean : [];
   if (!items.length && !didYouMean.length) return null;
-  const pager = pagerState({ shown, loaded: items.length, total });
+  const pager = pagerState({ shown, loaded: items.length, total }, PAGE_STEP, moreLabels);
 
   async function showMore() {
     if (!pager.needsServer) {
@@ -431,7 +435,7 @@ function LibraryResults({ sources, getToken }: { sources: Extract<ResearchSource
         setShown(revealMore(pager.shown, merged.length));
       });
     } catch (error) {
-      setMoreError(error instanceof Error ? error.message : 'Axtarış alınmadı.');
+      setMoreError(error instanceof Error ? error.message : t('aiSearchFail' as MessageKey));
     } finally {
       setLoadingMore(false);
     }
@@ -450,19 +454,21 @@ function LibraryResults({ sources, getToken }: { sources: Extract<ResearchSource
       <DidYouMean suggestions={didYouMean} tone="dark" />
       {items.length > 0 && pager.canShowMore && <MoreButton label={pager.label} onClick={() => void showMore()} loading={loadingMore} testId="button-ai-library-more" />}
       {moreError && <p className="text-xs text-red-200">{moreError}</p>}
-      <p className="text-[11px] text-[#f4ead5]/45">Axtarış skan mətninə (OCR) əsaslanır — kiçik xətalar ola bilər; dəqiq mətni kitabın özündə yoxlayın.</p>
+      <p className="text-[11px] text-[#f4ead5]/45">{t('aiOcrNote' as MessageKey)}</p>
     </div>
   );
 }
 
 function ShamelaResults({ sources, getToken, pageEndpoint, moreEndpoint }: { sources: Extract<ResearchSources, { kind: 'shamela' }>; getToken: GetToken; pageEndpoint: string; moreEndpoint: string }) {
+  const { t } = useI18n();
+  const moreLabels = { more: t('pgMore' as MessageKey), moreCount: (n: number) => t('pgMoreCount' as MessageKey).replace('{n}', String(n)) };
   const [items, setItems] = useState<ShamelaItem[]>(sources.items);
   const [shown, setShown] = useState(() => initialShown(sources.items.length));
   const [server, setServer] = useState<{ hasMore: boolean; cursor: string | null }>({ hasMore: sources.hasMore === true, cursor: typeof sources.cursor === 'string' ? sources.cursor : null });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wrapper = useRef<HTMLDivElement>(null);
-  const pager = pagerState({ shown, loaded: items.length, serverHasMore: server.hasMore });
+  const pager = pagerState({ shown, loaded: items.length, serverHasMore: server.hasMore }, PAGE_STEP, moreLabels);
 
   async function showMore() {
     if (!pager.needsServer) {
@@ -480,7 +486,7 @@ function ShamelaResults({ sources, getToken, pageEndpoint, moreEndpoint }: { sou
         cache: 'no-store',
       });
       const data = await response.json().catch(() => null) as { items?: ShamelaItem[]; hasMore?: boolean; cursor?: string | null; error?: string } | null;
-      if (!response.ok || !data || !Array.isArray(data.items)) throw new Error(data?.error || 'Şamilə hal-hazırda cavab vermir. Bir az sonra yenidən cəhd edin.');
+      if (!response.ok || !data || !Array.isArray(data.items)) throw new Error(data?.error || t('aiShamelaDown' as MessageKey));
       const fresh = data.items.filter((item) => item && typeof item.text === 'string' && !items.some((existing) => existing.bookId === item.bookId));
       keepAnchor(wrapper.current, () => {
         setItems((current) => [...current, ...fresh]);
@@ -488,7 +494,7 @@ function ShamelaResults({ sources, getToken, pageEndpoint, moreEndpoint }: { sou
         setServer({ hasMore: data.hasMore === true && fresh.length > 0, cursor: typeof data.cursor === 'string' ? data.cursor : null });
       });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Daha çox nəticə yükləmək olmadı.');
+      setError(caught instanceof Error ? caught.message : t('aiMoreFail' as MessageKey));
     } finally {
       setLoading(false);
     }
@@ -499,28 +505,29 @@ function ShamelaResults({ sources, getToken, pageEndpoint, moreEndpoint }: { sou
       {items.slice(0, pager.shown).map((item) => <ShamelaCard key={`${item.bookId}-${item.pageId}`} item={item} getToken={getToken} pageEndpoint={pageEndpoint} />)}
       {pager.canShowMore && <MoreButton label={pager.label} onClick={() => void showMore()} loading={loading} testId="button-ai-shamela-more" />}
       {error && <p className="text-xs text-red-200">{error}</p>}
-      <p className="text-[11px] text-[#f4ead5]/45">Mətnlər canlı olaraq <SourceLink href="https://shamela.ws" label="المكتبة الشاملة (shamela.ws)" /> saytından götürülür; saytımızda saxlanmır.</p>
+      <p className="text-[11px] text-[#f4ead5]/45">{t('aiLivePrefix' as MessageKey)} <SourceLink href="https://shamela.ws" label="المكتبة الشاملة (shamela.ws)" /> {t('aiLiveSuffix' as MessageKey)}</p>
     </div>
   );
 }
 
 // Dərs kitabları: hər fənn üçün kitab(lar) və oxuyucunu seçilmiş fəsil/səhifədə açan «Oxu».
 function CourseBooksResults({ items }: { items: CourseBooksAnswerItem[] }) {
+  const { t } = useI18n();
   return (
     <div className="mt-3 space-y-3" data-testid="ai-course-books">
       {items.map((item) => (
         <div key={`${item.courseId}-${item.termNumber}`} className="rounded-2xl border border-[#e3c27a]/20 bg-white/[.03] p-3">
-          <p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#e3c27a]">{item.courseTitle} · {courseTermLabel(item.termNumber)}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#e3c27a]">{item.courseTitle} · {t('gcTerm').replace('{n}', String(item.termNumber))}</p>
           <ul className="mt-2 space-y-2">
             {item.books.filter((book) => book.available && LIBRARY_SLUG.test(book.slug)).map((book, index) => {
-              const range = courseBookRange(book);
+              const range = courseBookRange(book, t('aiPageAbbr' as MessageKey));
               return (
                 <li key={`${book.slug}-${index}`} className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-[#f4ead5]">{book.bookShortTitle}</p>
                     {(book.chapterTitle || range || book.note) && <p className="text-xs text-[#f4ead5]/60">{book.chapterTitle && <span dir="rtl" style={{ fontFamily: arabicFont }}>{book.chapterTitle}</span>}{book.chapterTitle && range && ' · '}{range}{book.note && <>{(book.chapterTitle || range) && ' · '}{book.note}</>}</p>}
                   </div>
-                  <Link href={libraryReaderHref(book.slug, book.openPage)} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#e3c27a] px-3 py-1.5 text-xs font-bold text-[#17130c] hover:bg-[#f3dca6]" data-testid={`button-ai-course-book-read-${book.slug}`}><BookOpen size={13} /> Oxu</Link>
+                  <Link href={libraryReaderHref(book.slug, book.openPage)} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#e3c27a] px-3 py-1.5 text-xs font-bold text-[#17130c] hover:bg-[#f3dca6]" data-testid={`button-ai-course-book-read-${book.slug}`}><BookOpen size={13} /> {t('readBook')}</Link>
                 </li>
               );
             })}
@@ -534,6 +541,7 @@ function CourseBooksResults({ items }: { items: CourseBooksAnswerItem[] }) {
 type Endpoints = { page: string; shamelaMore: string; dorarFull: string };
 
 function ResearchResults({ sources, getToken, heading, endpoints }: { sources: ResearchSources; getToken: GetToken; heading?: boolean; endpoints: Endpoints }) {
+  const { t } = useI18n();
   if (sources.kind === 'course-books') return <CourseBooksResults items={sources.items} />;
   if (sources.kind === 'library' && !heading) return <LibraryResults sources={sources} getToken={getToken} />;
   if (!sources.items.length) return null;
@@ -542,7 +550,7 @@ function ResearchResults({ sources, getToken, heading, endpoints }: { sources: R
       <section className="mt-4">
         <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.18em] text-[#e3c27a]">
           {sources.kind === 'shamela' ? <BookText size={13} /> : sources.kind === 'library' ? <LibraryBig size={13} /> : <ScrollText size={13} />}
-          {sources.kind === 'shamela' ? 'Şamilə' : sources.kind === 'library' ? 'Kitabxana' : 'Hədis (Dorar)'} · {sources.items.length}
+          {sources.kind === 'shamela' ? t('targetShamela') : sources.kind === 'library' ? t('aiLibrary') : t('targetDorar')} · {sources.items.length}
         </h3>
         <ResearchResults sources={sources} getToken={getToken} endpoints={endpoints} />
       </section>
@@ -554,7 +562,7 @@ function ResearchResults({ sources, getToken, heading, endpoints }: { sources: R
   return (
     <div className="mt-3 space-y-3">
       <PagedList items={sources.items} render={(item, index) => <DorarCard key={index} item={item} sourceUrl={sourceUrl} query={sources.query} getToken={getToken} fullEndpoint={endpoints.dorarFull} />} testId="ai-dorar-list" />
-      <p className="text-[11px] text-[#f4ead5]/45"><SourceLink href={sourceUrl} label="Mənbə: الدرر السنية (dorar.net)" /> — canlı axtarış, saytımızda saxlanmır.</p>
+      <p className="text-[11px] text-[#f4ead5]/45"><SourceLink href={sourceUrl} label={`${t('source')}: الدرر السنية (dorar.net)`} /> — {t('aiLiveNotStored' as MessageKey)}</p>
     </div>
   );
 }
@@ -759,13 +767,13 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
   const chipRow = 'flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
   return (
-    <section className="relative mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden text-[#f4ead5]" data-testid={`section-ai-assistant-${mode}`} aria-label="Mədinə AI">
+    <section className="relative mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden text-[#f4ead5]" data-testid={`section-ai-assistant-${mode}`} aria-label={`${t('academyShort')} AI`}>
       <header className="relative z-20 shrink-0 px-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:px-5 sm:pt-5 md:px-7">
         <div className="flex items-center justify-between gap-2 sm:gap-3">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <BrandTile size="sm" />
             <div className="min-w-0">
-              <p className="font-serif text-lg leading-none text-[#f4ead5]">Mədinə <span style={{ color: gold }}>AI</span></p>
+              <p className="font-serif text-lg leading-none text-[#f4ead5]">{t('academyShort')} <span style={{ color: gold }}>AI</span></p>
               <p className="mt-1 truncate text-[10px] uppercase tracking-[.14em] text-[#f4ead5]/55 sm:tracking-[.18em]">{isStaff ? t('aiAdmin') : t('aiStudent')} · {external ? t('aiExternal') : t('aiInternal')}</p>
             </div>
           </div>
@@ -822,7 +830,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
           <div className="relative mx-auto mt-1 flex max-w-md flex-col items-center rounded-t-[999px] border border-b-0 border-[#e3c27a]/45 bg-[linear-gradient(180deg,rgba(227,194,122,.08),rgba(0,0,0,0)_70%)] px-5 pb-5 pt-8 text-center shadow-[inset_0_0_60px_rgba(227,194,122,.06)] sm:mt-2 sm:px-6 sm:pb-8 sm:pt-14">
             {isStaff && <p className="absolute right-4 top-6 hidden max-w-[9rem] text-right font-serif text-xs italic text-[#f4ead5]/70 sm:block">“{t('aiVerse')}”<span className="mt-1 block text-[10px] not-italic text-[#f4ead5]/45">— {t('aiVerseRef')}</span></p>}
             <BrandTile />
-            <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight text-[#f4ead5] sm:mt-6 sm:text-4xl">Mədinə <span style={{ color: gold }}>AI</span></h2>
+            <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight text-[#f4ead5] sm:mt-6 sm:text-4xl">{t('academyShort')} <span style={{ color: gold }}>AI</span></h2>
             {!isStaff && <p dir="rtl" className="mt-3 max-w-xs text-[15px] font-semibold leading-8 sm:text-base" style={{ color: gold, fontFamily: arabicFont }} data-testid="text-student-hadith">مَنْ يُرِدِ اللَّهُ بِهِ خَيْرًا يُفَقِّهْهُ فِي الدِّينِ</p>}
             <img src={`${import.meta.env.BASE_URL}student-ai-books.png`} alt="" className="mt-3 h-32 w-auto sm:h-40" data-testid="img-ai-books" />
             <div className="mt-4 hidden w-full items-center gap-3 text-xs text-[#f4ead5]/80 sm:mt-5 sm:flex">
@@ -925,10 +933,11 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
 }
 
 export function AiAssistantLauncher({ href = '/ai' }: { href?: string }) {
+  const { t } = useI18n();
   return (
     <Link href={href} className="fixed bottom-5 right-5 z-[60] inline-flex items-center gap-2.5 rounded-full border border-[#e3c27a]/60 bg-[#121010] py-2 pl-2 pr-4 text-sm font-semibold text-[#f4ead5] shadow-[0_12px_40px_rgba(0,0,0,.35)] transition hover:-translate-y-0.5 hover:border-[#e3c27a]" data-testid="link-open-ai-assistant">
       <BrandTile size="sm" />
-      <span>Mədinə <span style={{ color: gold }}>AI</span></span>
+      <span>{t('academyShort')} <span style={{ color: gold }}>AI</span></span>
     </Link>
   );
 }

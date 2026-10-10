@@ -790,6 +790,7 @@ function AdminRoute() {
 // - təsdiqlənmiş tələbə → tələbə rejimi, geri düyməsi /user-portal-a.
 // Server tərəfində eyni yoxlamalar yenidən aparılır (requireAiStaff / requireApprovedStudent).
 function MedineAiRoute() {
+  const { t } = useI18n();
   const { user, isLoaded } = useUser();
   const signedIn = isLoaded && Boolean(user);
   const accountProfileQuery = useGetOwnUserProfile({ query: { enabled: signedIn, queryKey: getGetOwnUserProfileQueryKey(), ...accountProfileQueryRetry, staleTime: 60_000 } });
@@ -810,14 +811,14 @@ function MedineAiRoute() {
     const userEmail = user?.primaryEmailAddress?.emailAddress?.trim().toLowerCase();
     const canReadLms = profile.role === 'owner' || isOwnerMetadata(user) || Boolean(ownerEmail && userEmail === ownerEmail)
       || (profile.rolePermissions ?? []).includes('students');
-    return <AiAssistantPage mode="admin" backHref="/admin" backLabel="Admin panelə qayıt" canReadLms={canReadLms} />;
+    return <AiAssistantPage mode="admin" backHref="/admin" backLabel={t('backAdmin')} canReadLms={canReadLms} />;
   }
 
   const accessPending = !scheduleAccessQuery.data && (scheduleAccessQuery.isLoading || scheduleAccessQuery.isFetching);
   if (accessPending) return <AccountGateLoading />;
   if (scheduleAccessQuery.data?.onboardingRequired && !scheduleAccessQuery.data.approved) return <Redirect to="/admission-exam" />;
   if (scheduleAccessQuery.isError || !scheduleAccessQuery.data) return <Redirect to="/user-portal" />;
-  return <AiAssistantPage mode="student" backHref="/user-portal" backLabel="Kabinetə qayıt" />;
+  return <AiAssistantPage mode="student" backHref="/user-portal" backLabel={t('backHome')} />;
 }
 
 // Kitab oxuyucusu (/kitabxana/:slug). Giriş icazəsini server yoxlayır (təsdiqlənmiş tələbə və ya heyət);

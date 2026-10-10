@@ -18,8 +18,9 @@ export function hiddenCount(shown: number, total: number) {
 }
 
 /** Düymənin yazısı: «Daha çox göstər (N)»; N məlum deyilsə (server kursoru) — «Daha çox göstər». */
-export function moreLabel(hidden: number | null) {
-  return hidden && hidden > 0 ? `Daha çox göstər (${hidden})` : 'Daha çox göstər';
+export function moreLabel(hidden: number | null, labels?: { more: string; moreCount: (n: number) => string }) {
+  if (hidden && hidden > 0) return labels ? labels.moreCount(hidden) : `Daha çox göstər (${hidden})`;
+  return labels?.more ?? 'Daha çox göstər';
 }
 
 export function pageSlice<T>(items: readonly T[], shown: number): T[] {
@@ -30,7 +31,7 @@ export function pageSlice<T>(items: readonly T[], shown: number): T[] {
  * Siyahı vəziyyəti: yerli nəticələr (`loaded`) və serverdə ümumi say (`total`, məlum deyilsə null).
  * `needsServer` — növbəti 5-i göstərmək üçün serverdən yükləmək lazımdırmı.
  */
-export function pagerState(input: { shown: number; loaded: number; total?: number | null; serverHasMore?: boolean }, step = PAGE_STEP) {
+export function pagerState(input: { shown: number; loaded: number; total?: number | null; serverHasMore?: boolean }, step = PAGE_STEP, labels?: { more: string; moreCount: (n: number) => string }) {
   const shown = Math.min(input.shown, input.loaded);
   const knownTotal = typeof input.total === 'number' ? Math.max(input.total, input.loaded) : null;
   const hidden = knownTotal !== null ? hiddenCount(shown, knownTotal) : hiddenCount(shown, input.loaded);
@@ -41,7 +42,7 @@ export function pagerState(input: { shown: number; loaded: number; total?: numbe
     hidden: knownTotal === null && serverMore ? null : hidden,
     canShowMore,
     needsServer: shown + step > input.loaded && serverMore,
-    label: moreLabel(knownTotal === null && serverMore ? null : hidden),
+    label: moreLabel(knownTotal === null && serverMore ? null : hidden, labels),
   };
 }
 

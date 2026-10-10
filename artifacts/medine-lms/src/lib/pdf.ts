@@ -35,7 +35,7 @@ export async function openPdf(source: { data: ArrayBuffer } | { url: string }): 
 }
 
 /** Səhifəni JPEG-ə çəkir; targetHeight — piksel hündürlüyü. */
-export async function renderPdfPage(doc: PdfDocument, pageNumber: number, targetHeight: number, quality = 0.85): Promise<{ blob: Blob; aspect: number }> {
+export async function renderPdfPage(doc: PdfDocument, pageNumber: number, targetHeight: number, quality = 0.85, labels?: { canvas?: string; image?: string }): Promise<{ blob: Blob; aspect: number }> {
   const page = await doc.getPage(pageNumber);
   const base = page.getViewport({ scale: 1 });
   const scale = Math.max(0.2, Math.min(4, targetHeight / base.height));
@@ -44,12 +44,12 @@ export async function renderPdfPage(doc: PdfDocument, pageNumber: number, target
   canvas.width = Math.ceil(viewport.width);
   canvas.height = Math.ceil(viewport.height);
   const context = canvas.getContext('2d');
-  if (!context) throw new Error('Canvas dəstəklənmir.');
+  if (!context) throw new Error(labels?.canvas ?? 'Canvas dəstəklənmir.');
   context.fillStyle = '#ffffff';
   context.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvas, canvasContext: context, viewport }).promise;
   page.cleanup();
-  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => (value ? resolve(value) : reject(new Error('Şəkil yaradılmadı.'))), 'image/jpeg', quality));
+  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => (value ? resolve(value) : reject(new Error(labels?.image ?? 'Şəkil yaradılmadı.'))), 'image/jpeg', quality));
   canvas.width = 0;
   canvas.height = 0;
   return { blob, aspect: base.width / base.height };

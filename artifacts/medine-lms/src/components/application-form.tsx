@@ -3,7 +3,7 @@ import { CheckCircle2, Eye, EyeOff, FileText, LoaderCircle, Send, ShieldCheck, U
 import { useClerk } from '@clerk/react';
 import { useSignUp } from '@clerk/react/legacy';
 import { HomeLink } from '@/components/home-link';
-import { LanguageSwitch, useI18n } from '@/lib/i18n';
+import { LanguageSwitch, useI18n, type MessageKey } from '@/lib/i18n';
 import { Link } from 'wouter';
 
 type FormValues = {
@@ -49,6 +49,7 @@ function apiUrl(path: string) {
 }
 
 const applicationRouteUrl = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/sign-up`;
+const ux = (t: (key: MessageKey) => string, key: string) => t(key as MessageKey);
 
 function generateApplicationPassword() {
   const alphabet = 'abcdefghijkmnopqrstuvwxyz23456789';
@@ -57,7 +58,7 @@ function generateApplicationPassword() {
   return Array.from(values, (value) => alphabet[value % alphabet.length]).join('');
 }
 
-function clerkErrorMessage(error: unknown) {
+function clerkErrorMessage(error: unknown, t: (key: MessageKey) => string) {
   const firstError = (error as {
     errors?: Array<{ code?: string; longMessage?: string; message?: string }>;
   })?.errors?.[0];
@@ -67,37 +68,37 @@ function clerkErrorMessage(error: unknown) {
   console.error('Qeydiyyat xətası:', { code, status: (error as { status?: number })?.status });
 
   if (code === 'form_identifier_exists' || englishMessage.includes('already exists') || englishMessage.includes('already registered')) {
-    return 'Bu email artıq qeydiyyatdan keçib. Giriş səhifəsindən hesabınıza daxil olun.';
+    return ux(t, 'uxEmailExists');
   }
   if (code === 'form_password_pwned' || code === 'form_password_compromised') {
-    return 'Bu şifrə təhlükəsiz deyil. Başqa şifrə seçin.';
+    return ux(t, 'uxPasswordUnsafe');
   }
   if (code === 'form_password_length_too_short') {
     const minimumLength = `${firstError?.longMessage ?? ''} ${firstError?.message ?? ''}`.match(/(?:at least|minimum(?: of)?|ən azı)\s*(\d+)/i)?.[1];
     return minimumLength
-      ? `Şifrə ən azı ${minimumLength} simvoldan ibarət olmalıdır.`
-      : 'Clerk hesabında minimum şifrə uzunluğu 8 simvoldan çox təyin edilib. Sistem sahibi Clerk ayarlarında minimumu 8 simvol etməlidir.';
+      ? ux(t, 'uxPasswordMin').replace('{n}', minimumLength)
+      : ux(t, 'uxClerkMinPassword');
   }
   if (englishMessage.includes('password') || code.includes('password')) {
-    return 'Şifrə qəbul edilmədi. Ən azı 8 simvol yazın və asanlıqla yadda qalan, əvvəllər istifadə etmədiyiniz bir şifrə seçin.';
+    return ux(t, 'uxPasswordRejected');
   }
   if (code === 'form_param_unknown') {
-    return 'Clerk qeydiyyat ayarlarında email və şifrə ilə qeydiyyat aktiv deyil. Sistem sahibi Clerk ayarlarından Email və Password qeydiyyatını aktiv etməlidir.';
+    return ux(t, 'uxClerkEmailPasswordOff');
   }
   if (code === 'form_param_nil') {
-    return 'Bütün tələb olunan məlumatları doldurun.';
+    return ux(t, 'uxFillRequired');
   }
   if (code === 'form_param_format_invalid' || englishMessage.includes('invalid email') || englishMessage.includes('valid email')) {
-    return 'Email ünvanını düzgün formatda yazın.';
+    return ux(t, 'uxEmailFormat');
   }
   if (code === 'too_many_requests' || code === 'rate_limit_exceeded') {
-    return 'Çoxsaylı cəhd edildi. Bir neçə dəqiqə gözləyib yenidən cəhd edin.';
+    return ux(t, 'uxTooManyAttempts');
   }
   if (code === 'captcha_invalid' || code === 'captcha_missing') {
-    return 'Təhlükəsizlik yoxlaması tamamlanmadı. Səhifəni yeniləyib yenidən cəhd edin.';
+    return ux(t, 'uxCaptchaFail');
   }
-  if (code) return `Hesab yaratmaq mümkün olmadı. Məlumatları yoxlayıb yenidən cəhd edin. Xəta kodu: ${code}`;
-  return 'Hesab yaratmaq mümkün olmadı. Email və şifrəni yoxlayıb yenidən cəhd edin.';
+  if (code) return ux(t, 'uxAccountCreateFailCode').replace('{code}', code);
+  return ux(t, 'uxAccountCreateFail');
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -148,7 +149,7 @@ export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
   }, []);
 
   const formatWindowDate = (value: string | null) => value
-    ? new Intl.DateTimeFormat('az-AZ', { dateStyle: 'full', timeStyle: 'short', timeZone: azerbaijanTimeZone }).format(new Date(value))
+    ? new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'az-AZ', { dateStyle: 'full', timeStyle: 'short', timeZone: azerbaijanTimeZone }).format(new Date(value))
     : '';
 
   const uploadLetter = async (file: File) => {
@@ -161,16 +162,16 @@ export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
     if (!request.ok || !upload.uploadURL || !upload.objectPath) {
       const providerError = (upload.error || '').toLowerCase();
       if (request.status === 429 || providerError.includes('limit') || providerError.includes('quota') || providerError.includes('too many')) {
-        throw new Error('Fayl yükləmə limiti müvəqqəti dolub. Bir neçə dəqiqə gözləyib yenidən cəhd edin.');
+        throw new Error(ux(t, 'uxUploadQuota'));
       }
-      throw new Error('Fayl yükləməyə hazırlana bilmədi. Faylın ölçüsünü və növünü yoxlayın.');
+      throw new Error(ux(t, 'uxUploadPrepFail'));
     }
     const uploaded = await fetch(upload.uploadURL, {
       method: 'PUT',
       headers: { 'Content-Type': file.type || 'application/pdf' },
       body: file,
     });
-    if (!uploaded.ok) throw new Error('Fayl yüklənə bilmədi.');
+    if (!uploaded.ok) throw new Error(ux(t, 'uxFileUploadFail'));
     return upload.objectPath;
   };
 
@@ -190,7 +191,7 @@ export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
       }),
     });
     const result = await application.json() as { error?: string };
-    if (!application.ok) throw new Error(result.error || 'Müraciət qəbul edilə bilmədi.');
+    if (!application.ok) throw new Error(result.error || ux(t, 'uxApplicationRejected'));
   };
 
   const submit = async (event: FormEvent) => {
@@ -237,7 +238,7 @@ export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
       setNotice(t('needVerifyCode'));
     } catch (error) {
       setIsError(true);
-      setNotice(clerkErrorMessage(error));
+      setNotice(clerkErrorMessage(error, t));
     } finally {
       setIsSubmitting(false);
     }

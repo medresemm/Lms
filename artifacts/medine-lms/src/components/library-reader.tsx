@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { ArrowLeft, ArrowRight, ChevronLeft, ListTree, Loader2, RotateCcw, Search, X } from 'lucide-react';
 import { PdfDownloadLink } from '@/components/medrese-library';
 import { Link, useSearch } from 'wouter';
-import { LanguageSwitch } from '@/lib/i18n';
+import { LanguageSwitch, useI18n, type MessageKey } from '@/lib/i18n';
 import { useAuth, useUser } from '@clerk/react';
 import { DidYouMean, LibraryHitList } from '@/components/library-search-results';
 import {
@@ -19,8 +19,11 @@ import {
   type LibrarySearchResponse,
 } from '@/lib/library';
 
+const ux = (t: (key: MessageKey) => string, key: string) => t(key as MessageKey);
+
 /** Açıq kitab daxilində axtarış paneli (nəticəyə klik → həmin səhifə). */
 function ReaderSearchPanel({ book, onClose, onOpenPage }: { book: LibraryBook; onClose: () => void; onOpenPage: (page: number) => void }) {
+  const { t } = useI18n();
   const { getToken } = useAuth();
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<LibrarySearchResponse | null>(null);
@@ -36,29 +39,29 @@ function ReaderSearchPanel({ book, onClose, onOpenPage }: { book: LibraryBook; o
     setLoading(true);
     setError(null);
     try {
-      const data = await searchLibraryApi(getToken, { query: text, offset, book: book.slug });
+      const data = await searchLibraryApi(getToken, { query: text, offset, book: book.slug }, ux(t, 'uxSearchFailedRetry'));
       setResult((current) => (offset && current ? { ...data, items: [...current.items, ...data.items] } : data));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Axtarış alınmadı.');
+      setError(caught instanceof Error ? caught.message : ux(t, 'uxSearchFailed'));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Kitabda axtarış">
-      <button type="button" className="absolute inset-0 bg-black/50" onClick={onClose} aria-label="Bağla" />
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={ux(t, 'uxSearchInBook')}>
+      <button type="button" className="absolute inset-0 bg-black/50" onClick={onClose} aria-label={t('close')} />
       <aside className="relative flex h-full w-full max-w-md flex-col bg-[#f7eedb] text-[#3a2a17] shadow-2xl">
         <div className="flex items-center justify-between border-b border-[#3a2a17]/15 px-4 py-3">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#3a2a17]/60">Kitabda axtarış</p>
+            <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#3a2a17]/60">{ux(t, 'uxSearchInBook')}</p>
             <p className="text-sm font-semibold">{book.shortTitle}</p>
           </div>
-          <button type="button" onClick={onClose} className="focus-ring rounded-full p-2 hover:bg-black/5" aria-label="Bağla"><X size={18} /></button>
+          <button type="button" onClick={onClose} className="focus-ring rounded-full p-2 hover:bg-black/5" aria-label={t('close')}><X size={18} /></button>
         </div>
         {!searchable && (
           <p className="m-4 rounded-lg border border-[#3a2a17]/15 bg-white/60 px-3 py-3 text-sm leading-6" data-testid="reader-search-unavailable">
-            Bu kitab skan PDF-dir (mətn qatı yoxdur), ona görə bu kitabda axtarış mümkün deyil. Mündəricat və səhifə keçidindən istifadə edin.
+            {ux(t, 'uxScanNoSearch')}
           </p>
         )}
         {searchable && <>
@@ -68,12 +71,12 @@ function ReaderSearchPanel({ book, onClose, onOpenPage }: { book: LibraryBook; o
             value={query}
             onChange={(event) => setQuery(event.target.value.slice(0, 200))}
             dir="auto"
-            placeholder="Ərəbcə söz və ya mövzu (məs. الوضوء, fail)"
+            placeholder={ux(t, 'uxSearchPlaceholder')}
             className="min-w-0 flex-1 rounded-lg border border-[#3a2a17]/20 bg-white/70 px-3 py-2 text-sm outline-none focus:border-[#b98d3e]"
             data-testid="input-reader-search"
           />
           <button type="submit" disabled={loading || query.trim().length < 2} className="inline-flex items-center gap-1.5 rounded-lg bg-[#3a2a17] px-3 py-2 text-xs font-bold text-[#f7eedb] disabled:opacity-40" data-testid="button-reader-search">
-            {loading && !result ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Axtar
+            {loading && !result ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} {t('search')}
           </button>
         </form>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
@@ -81,20 +84,20 @@ function ReaderSearchPanel({ book, onClose, onOpenPage }: { book: LibraryBook; o
           {result && (
             <>
               <p className="text-xs text-[#3a2a17]/70">
-                {result.total ? `${result.total} nəticə` : 'Nəticə tapılmadı.'}
-                {result.expanded.length > 0 && <> · axtarılan: <span dir="rtl" lang="ar" style={{ fontFamily: arabicBookFont }}>{result.expanded.join('، ')}</span></>}
+                {result.total ? ux(t, 'uxResultCount').replace('{n}', String(result.total)) : ux(t, 'uxNoResults')}
+                {result.expanded.length > 0 && <> · {ux(t, 'uxSearched')}: <span dir="rtl" lang="ar" style={{ fontFamily: arabicBookFont }}>{result.expanded.join('، ')}</span></>}
               </p>
               <LibraryHitList items={result.items} tone="paper" groupHeadings={false} onOpen={(item) => onOpenPage(item.page)} />
               <DidYouMean suggestions={result.didYouMean} tone="paper" onOpen={(item) => onOpenPage(item.page)} />
               {result.items.length < result.total && (
                 <button type="button" onClick={() => void run(result.items.length)} disabled={loading} className="w-full rounded-lg border border-[#3a2a17]/20 py-2 text-xs font-semibold hover:bg-black/5 disabled:opacity-50" data-testid="button-reader-search-more">
-                  {loading ? 'Yüklənir…' : `Daha çox (${result.items.length}/${result.total})`}
+                  {loading ? ux(t, 'uxLoadingEllipsis') : ux(t, 'uxLoadMore').replace('{shown}', String(result.items.length)).replace('{total}', String(result.total))}
                 </button>
               )}
             </>
           )}
-          {!result && !error && <p className="text-xs leading-5 text-[#3a2a17]/60">Ərəbcə söz/ifadə yazın (hərəkəsiz də olar) və ya mövzunu Azərbaycan/Türk dilində yazın: «dəstəmaz», «fail», «kana və bacıları».</p>}
-          <p className="text-[11px] text-[#3a2a17]/55">{isUploadedBook(book) ? 'Axtarış PDF-in mətn qatına əsaslanır.' : 'Axtarış skan mətninə (OCR) əsaslanır — kiçik xətalar ola bilər.'}</p>
+          {!result && !error && <p className="text-xs leading-5 text-[#3a2a17]/60">{ux(t, 'uxSearchHint')}</p>}
+          <p className="text-[11px] text-[#3a2a17]/55">{isUploadedBook(book) ? ux(t, 'uxSearchTextLayer') : ux(t, 'uxSearchOcr')}</p>
         </div>
         </>}
       </aside>
@@ -148,9 +151,9 @@ function useElementSize<T extends HTMLElement>() {
   return [ref, size] as const;
 }
 
-function printedLabel(book: LibraryBook, page: number) {
+function printedLabel(book: LibraryBook, page: number, coverLabel = 'üz qabığı') {
   const printed = page - book.pageOffset;
-  return printed >= 1 ? String(printed) : page === 1 ? 'üz qabığı' : '—';
+  return printed >= 1 ? String(printed) : page === 1 ? coverLabel : '—';
 }
 
 type PageSource = {
@@ -166,6 +169,7 @@ const PDF_CACHE_LIMIT = 24;
  * (HTTP Range ilə hissə-hissə) açılır və səhifələr növbə ilə JPEG-ə çəkilir (son 24 səhifə yaddaşda saxlanılır).
  */
 function usePageSource(book: LibraryBook | null, token: string | null, pixelHeight: number): PageSource {
+  const { t } = useI18n();
   const uploaded = book ? isUploadedBook(book) : false;
   const tokenRef = useRef(token);
   tokenRef.current = token;
@@ -189,12 +193,12 @@ function usePageSource(book: LibraryBook | null, token: string | null, pixelHeig
       if (!current) return;
       const response = await fetch(libraryFileUrl(book.slug, current, 'json'), { cache: 'no-store' });
       const data = await response.json().catch(() => null) as { url?: string; error?: string } | null;
-      if (!response.ok || !data?.url) throw new Error(data?.error || 'PDF açılmadı.');
+      if (!response.ok || !data?.url) throw new Error(data?.error || ux(t, 'uxPdfOpenFail'));
       const { openPdf } = await import('@/lib/pdf');
       opened = await openPdf({ url: data.url });
       if (cancelled) { void opened.destroy(); return; }
       setDoc(opened);
-    })().catch((caught) => { if (!cancelled) setError(caught instanceof Error && caught.message !== 'Failed to fetch' ? caught.message : 'PDF açılmadı. Şəbəkəni yoxlayıb yenidən cəhd edin.'); });
+    })().catch((caught) => { if (!cancelled) setError(caught instanceof Error && caught.message !== 'Failed to fetch' ? caught.message : ux(t, 'uxPdfNetwork')); });
     return () => {
       cancelled = true;
       setDoc(null);
@@ -203,7 +207,7 @@ function usePageSource(book: LibraryBook | null, token: string | null, pixelHeig
       urls.clear();
       queue.current = [];
     };
-  }, [book?.slug, uploaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [book?.slug, uploaded, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pump = useCallback(async () => {
     if (!doc || busy.current) return;
@@ -265,6 +269,7 @@ function PaperPage({ book, page, srcFor, spine, onImageError, onAspect }: {
   onImageError?: () => void;
   onAspect?: (aspect: number) => void;
 }) {
+  const { t } = useI18n();
   const shade = spine === 'left'
     ? 'linear-gradient(to right, rgba(70,45,15,.28), rgba(70,45,15,.08) 5%, transparent 12%)'
     : spine === 'right'
@@ -285,7 +290,7 @@ function PaperPage({ book, page, srcFor, spine, onImageError, onAspect }: {
         <>
           <img
             src={srcFor(page)!}
-            alt={`${book.shortTitle}, səhifə ${printedLabel(book, page)}`}
+            alt={ux(t, 'uxPageAlt').replace('{title}', book.shortTitle).replace('{page}', printedLabel(book, page, ux(t, 'uxCover')))}
             className="absolute inset-0 h-full w-full select-none object-contain"
             style={{ mixBlendMode: 'multiply' }}
             draggable={false}
@@ -303,10 +308,11 @@ function PaperPage({ book, page, srcFor, spine, onImageError, onAspect }: {
 }
 
 export function LibraryReader({ slug, backHref }: { slug: string; backHref: string }) {
+  const { t } = useI18n();
   const { user } = useUser();
   const userId = user?.id ?? null;
   const search = useSearch();
-  const { books, token, error, loading, reload } = useLibraryCatalog();
+  const { books, token, error, loading, reload } = useLibraryCatalog(true, ux(t, 'uxLibraryLoadFail'));
   const book = useMemo(() => books?.find((item) => item.slug === slug) ?? null, [books, slug]);
   const reducedMotion = usePrefersReducedMotion();
   const [stageRef, stage] = useElementSize<HTMLDivElement>();
@@ -425,8 +431,8 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
 
   useEffect(() => {
     if (current === null || !book) return;
-    setJumpValue(printedLabel(book, current).replace(/\D/g, ''));
-  }, [current, book]);
+    setJumpValue(printedLabel(book, current, ux(t, 'uxCover')).replace(/\D/g, ''));
+  }, [current, book, t]);
 
   useEffect(() => { retriedImage.current = false; }, [token]);
 
@@ -536,8 +542,8 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
 
   const pageInfo = book && current !== null
     ? spreadMode && current > 1 && current + 1 <= total
-      ? `${printedLabel(book, current)}–${printedLabel(book, current + 1)}`
-      : printedLabel(book, current)
+      ? `${printedLabel(book, current, ux(t, 'uxCover'))}–${printedLabel(book, current + 1, ux(t, 'uxCover'))}`
+      : printedLabel(book, current, ux(t, 'uxCover'))
     : '';
 
   return (
@@ -548,7 +554,7 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
     >
       <header className="relative z-20 flex items-center gap-2 border-b border-white/10 bg-[#22190f]/95 px-3 py-2 backdrop-blur sm:px-5">
         <Link href={backHref} className="focus-ring inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-semibold text-[#f3e7cf]/85 hover:bg-white/10" data-testid="link-library-back">
-          <ChevronLeft size={16} /> <span className="hidden sm:inline">Kitabxana</span>
+          <ChevronLeft size={16} /> <span className="hidden sm:inline">{t('library')}</span>
         </Link>
         <div className="min-w-0 flex-1 text-center">
           <p dir="rtl" lang="ar" className="truncate text-base leading-7 sm:text-lg" style={{ fontFamily: arabicBookFont }}>{book?.title ?? ''}</p>
@@ -564,9 +570,9 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
           disabled={!book}
           className="focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10 disabled:opacity-40"
           data-testid="button-library-search"
-          aria-label="Kitabda axtar"
+          aria-label={ux(t, 'uxSearchInBookShort')}
         >
-          <Search size={15} /> <span className="hidden sm:inline">Axtar</span>
+          <Search size={15} /> <span className="hidden sm:inline">{t('search')}</span>
         </button>
         <button
           type="button"
@@ -575,7 +581,7 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
           className="focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10 disabled:opacity-40"
           data-testid="button-library-contents"
         >
-          <ListTree size={15} /> <span className="hidden sm:inline">Mündəricat</span>
+          <ListTree size={15} /> <span className="hidden sm:inline">{ux(t, 'uxContents')}</span>
         </button>
       </header>
 
@@ -588,11 +594,11 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
           onPointerCancel={() => { pointerStart.current = null; }}
         >
           {!book && (loading
-            ? <p className="flex items-center gap-2 text-sm text-[#f3e7cf]/75"><Loader2 size={16} className="animate-spin" /> Kitab yüklənir…</p>
+            ? <p className="flex items-center gap-2 text-sm text-[#f3e7cf]/75"><Loader2 size={16} className="animate-spin" /> {ux(t, 'uxBookLoading')}</p>
             : (
               <div className="max-w-sm rounded-xl bg-black/30 px-5 py-4 text-center text-sm">
-                <p>{error ?? 'Kitab tapılmadı.'}</p>
-                {error && <button type="button" onClick={() => void reload()} className="mt-2 inline-flex items-center gap-1 font-semibold underline"><RotateCcw size={13} /> Yenidən</button>}
+                <p>{error ?? ux(t, 'uxBookNotFound')}</p>
+                {error && <button type="button" onClick={() => void reload()} className="mt-2 inline-flex items-center gap-1 font-semibold underline"><RotateCcw size={13} /> {ux(t, 'uxAgain')}</button>}
               </div>
             ))}
           {book && sourceError && (
@@ -614,29 +620,29 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
             value={current}
             onChange={(event) => jumpTo(Number(event.target.value))}
             className="mb-2 h-1.5 w-full cursor-pointer accent-[#d9b26a]"
-            aria-label="Səhifə sürüşdürücüsü"
+            aria-label={ux(t, 'uxPageSlider')}
           />
         )}
         <div className="flex items-center justify-between gap-2">
-          <button type="button" onClick={() => go('next')} disabled={!canNext || !!flip} className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-[#d9b26a] px-3.5 py-2 text-xs font-bold text-[#2b1f15] transition hover:brightness-105 disabled:opacity-35" data-testid="button-library-next" aria-label="Növbəti səhifə">
-            <ArrowLeft size={15} /> <span className="hidden sm:inline">Növbəti</span>
+          <button type="button" onClick={() => go('next')} disabled={!canNext || !!flip} className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-[#d9b26a] px-3.5 py-2 text-xs font-bold text-[#2b1f15] transition hover:brightness-105 disabled:opacity-35" data-testid="button-library-next" aria-label={ux(t, 'uxNextPage')}>
+            <ArrowLeft size={15} /> <span className="hidden sm:inline">{ux(t, 'uxNext')}</span>
           </button>
           <form onSubmit={onJump} className="flex items-center gap-1.5 text-xs text-[#f3e7cf]/80">
-            <label htmlFor="library-page-jump" className="hidden sm:inline">Səhifə</label>
+            <label htmlFor="library-page-jump" className="hidden sm:inline">{ux(t, 'uxPage')}</label>
             <input
               id="library-page-jump"
               inputMode="numeric"
               value={jumpValue}
               onChange={(event) => setJumpValue(event.target.value.replace(/[^\d]/g, '').slice(0, 4))}
               className="w-14 rounded-md border border-white/20 bg-black/30 px-2 py-1 text-center text-sm text-[#f3e7cf] outline-none focus:border-[#d9b26a]"
-              aria-label="Səhifəyə keç (kitabdakı nömrə)"
+              aria-label={ux(t, 'uxJumpAria')}
               data-testid="input-library-page"
             />
-            <button type="submit" className="rounded-md border border-white/20 px-2 py-1 font-semibold hover:bg-white/10">Keç</button>
-            <span className="ml-1 whitespace-nowrap text-[#f3e7cf]/60">s. {pageInfo} · {current ?? '–'}/{total || '–'}</span>
+            <button type="submit" className="rounded-md border border-white/20 px-2 py-1 font-semibold hover:bg-white/10">{ux(t, 'uxGo')}</button>
+            <span className="ml-1 whitespace-nowrap text-[#f3e7cf]/60">{ux(t, 'uxPageAbbrev')} {pageInfo} · {current ?? '–'}/{total || '–'}</span>
           </form>
-          <button type="button" onClick={() => go('prev')} disabled={!canPrev || !!flip} className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-white/20 px-3.5 py-2 text-xs font-bold transition hover:bg-white/10 disabled:opacity-35" data-testid="button-library-prev" aria-label="Əvvəlki səhifə">
-            <span className="hidden sm:inline">Əvvəlki</span> <ArrowRight size={15} />
+          <button type="button" onClick={() => go('prev')} disabled={!canPrev || !!flip} className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-white/20 px-3.5 py-2 text-xs font-bold transition hover:bg-white/10 disabled:opacity-35" data-testid="button-library-prev" aria-label={ux(t, 'uxPrevPage')}>
+            <span className="hidden sm:inline">{ux(t, 'uxPrev')}</span> <ArrowRight size={15} />
           </button>
         </div>
       </footer>
@@ -644,15 +650,15 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
       {searchOpen && book && <ReaderSearchPanel book={book} onClose={() => setSearchOpen(false)} onOpenPage={(target) => { jumpTo(target); setSearchOpen(false); }} />}
 
       {drawerOpen && book && (
-        <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Mündəricat">
-          <button type="button" className="absolute inset-0 bg-black/50" onClick={() => setDrawerOpen(false)} aria-label="Bağla" />
+        <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={ux(t, 'uxContents')}>
+          <button type="button" className="absolute inset-0 bg-black/50" onClick={() => setDrawerOpen(false)} aria-label={t('close')} />
           <aside className="relative flex h-full w-full max-w-md flex-col bg-[#f7eedb] text-[#3a2a17] shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#3a2a17]/15 px-4 py-3">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#3a2a17]/60">Mündəricat</p>
-                <p className="text-sm font-semibold">{book.shortTitle} · {book.chapters.length} bölmə</p>
+                <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#3a2a17]/60">{ux(t, 'uxContents')}</p>
+                <p className="text-sm font-semibold">{book.shortTitle} · {book.chapters.length} {t('chapterWord')}</p>
               </div>
-              <button type="button" onClick={() => setDrawerOpen(false)} className="focus-ring rounded-full p-2 hover:bg-black/5" aria-label="Bağla"><X size={18} /></button>
+              <button type="button" onClick={() => setDrawerOpen(false)} className="focus-ring rounded-full p-2 hover:bg-black/5" aria-label={t('close')}><X size={18} /></button>
             </div>
             <ol className="min-h-0 flex-1 overflow-y-auto px-2 py-2" dir="rtl" lang="ar">
               {book.chapters.map((chapter, index) => {

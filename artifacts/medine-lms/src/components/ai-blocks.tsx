@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { safeBlockHref, type AiBadge, type AiBlock, type AiFrame, type AiFrameIcon, type AiItem, type AiTone } from '@/lib/ai-blocks';
+import { useI18n, type MessageKey } from '@/lib/i18n';
 import { anchorCorrection, initialShown, PAGE_STEP, pagerState, revealMore } from '@/lib/paginate';
 
 // Mədinə AI — daxili cavabların kartları (Şamilə/Dorar kartları ilə eyni üslub) və ümumi «Daha çox göstər».
@@ -42,9 +43,11 @@ export function MoreButton({ label, onClick, loading = false, testId = 'button-a
 
 /** Yerli siyahı: əvvəlcə 5, sonra hər basışda daha 5. */
 export function PagedList<T>({ items, render, className = 'space-y-3', testId }: { items: readonly T[]; render: (item: T, index: number) => ReactNode; className?: string; testId?: string }) {
+  const { t } = useI18n();
   const [shown, setShown] = useState(() => initialShown(items.length));
   const wrapper = useRef<HTMLDivElement>(null);
-  const state = pagerState({ shown: Math.max(shown, initialShown(items.length)), loaded: items.length });
+  const moreLabels = { more: t('pgMore' as MessageKey), moreCount: (n: number) => t('pgMoreCount' as MessageKey).replace('{n}', String(n)) };
+  const state = pagerState({ shown: Math.max(shown, initialShown(items.length)), loaded: items.length }, PAGE_STEP, moreLabels);
   return (
     <div ref={wrapper} className={className} data-testid={testId}>
       {items.slice(0, state.shown).map(render)}
@@ -224,12 +227,67 @@ export const FRAME_ICON: Record<AiFrameIcon, LucideIcon> = {
   question: MessageCircleQuestion, excuse: FileCheck, search: Search, help: Sparkles, info: Info, warn: TriangleAlert,
 };
 
+/** Display-only. frame.title stays the server/AZ string so firstSame can still match block.title. */
+const FRAME_TITLE_KEY: Record<string, MessageKey> = {
+  'Tələbə məlumatı': 'aiFtStudent' as MessageKey,
+  'Tələbələr': 'stepStudents',
+  'Müəllimlər': 'teachersLabel',
+  'Heyət': 'aiFtStaff' as MessageKey,
+  'Statistika': 'tileStatistics',
+  'Dərslər': 'aiFtCourses' as MessageKey,
+  'Dərs cədvəli': 'aiFtSchedule' as MessageKey,
+  'Qiymətlər': 'aiFtGrades' as MessageKey,
+  'Davamiyyət': 'attendance',
+  'Tapşırıqlar': 'aiFtTasks' as MessageKey,
+  'İmtahan və testlər': 'navExams',
+  'Müraciətlər': 'aiApps',
+  'Elan və bildirişlər': 'aiFtNotices' as MessageKey,
+  'Dərs materialları': 'aiFtMaterials' as MessageKey,
+  'Kitabxana': 'aiLibrary',
+  'Dərs kitabları': 'aiFtBooks' as MessageKey,
+  'Saytdan istifadə': 'aiHow',
+  'Sual-cavab': 'navQa',
+  'Üzrlər': 'aiFtExcuses' as MessageKey,
+  'Axtarış nəticələri': 'aiFtSearch' as MessageKey,
+  'Mədinə AI': 'aiFtHelp' as MessageKey,
+  'Məlumat': 'kindInfo',
+  'Diqqət': 'aiFtWarn' as MessageKey,
+  'Bunu nəzərdə tuturdunuz?': 'meantThis',
+  'Nəticə tapılmadı': 'aiFtNone' as MessageKey,
+  'İcazə yoxdur': 'aiFtDenied' as MessageKey,
+  'Cavab alınmadı': 'aiFtNoAnswer' as MessageKey,
+  'Kitabxanada axtarış': 'aiFtLibSearch' as MessageKey,
+  'Test yadda saxlanıldı': 'aiFtTestSaved' as MessageKey,
+  'Mədinə AI nə bacarır': 'aiFtCanDo' as MessageKey,
+  'Məxfi məlumat': 'aiFtSecret' as MessageKey,
+  'Profilim': 'navProfile',
+  'Fənn məlumatı': 'aiFtSubject' as MessageKey,
+  'Fənlərim': 'aiFtMySubjects' as MessageKey,
+  'Sualı tam başa düşmədim': 'aiFtUnclear' as MessageKey,
+  'Müəllim cədvəli': 'aiFtTeacherSched' as MessageKey,
+  'Ümumi statistika': 'aiStats',
+  'Bölmə açıq deyil': 'aiFtClosed' as MessageKey,
+  'Xarici mənbə sorğusu': 'aiFtExternal' as MessageKey,
+};
+
+function localizeBadge(text: string, t: (key: MessageKey) => string) {
+  if (text === 'nəticə yoxdur') return t('aiNoResults' as MessageKey);
+  if (text === 'qaralama') return t('aiDraft' as MessageKey);
+  const count = text.match(/^(\d+) nəticə$/);
+  if (count) return t('aiResultCount' as MessageKey).replace('{n}', count[1]);
+  return text;
+}
+
 export function AiAnswerCard({ frame, blocks, children, footer, testId = 'ai-answer-card' }: { frame: AiFrame; blocks?: AiBlock[]; children?: ReactNode; footer?: ReactNode; testId?: string }) {
+  const { t } = useI18n();
   const Icon = FRAME_ICON[frame.icon] ?? Info;
   const warn = frame.tone === 'warn';
   // Kartın öz başlığı ilə eyni olan ilk bölmə başlığı təkrarlanmasın.
   const firstSame = (blocks ?? []).findIndex((block) => block.type !== 'text' && Boolean(block.title) && (block.title === frame.title || (Boolean(frame.subtitle) && block.title!.startsWith(frame.subtitle!))));
   const list = (blocks ?? []).map((block, index) => (index === firstSame && block.type !== 'text' ? { ...block, title: undefined } : block));
+  const titleKey = FRAME_TITLE_KEY[frame.title];
+  const title = titleKey ? t(titleKey) : frame.title;
+  const badge = frame.badge ? { ...frame.badge, text: localizeBadge(frame.badge.text, t) } : null;
   return (
     <article
       className={`w-full max-w-full overflow-hidden rounded-2xl border shadow-[0_8px_30px_rgba(0,0,0,.18)] sm:max-w-[94%] ${warn ? 'border-amber-300/35 bg-amber-300/[.04]' : 'border-[#e3c27a]/30 bg-[linear-gradient(180deg,rgba(227,194,122,.07),rgba(255,255,255,.025)_55%)]'}`}
@@ -241,10 +299,10 @@ export function AiAnswerCard({ frame, blocks, children, footer, testId = 'ai-ans
           <Icon size={16} />
         </span>
         <div className="min-w-0 flex-1">
-          <Txt text={frame.title} className={`text-[15px] font-semibold leading-6 ${warn ? 'text-amber-50' : 'text-[#f3dca6]'}`} />
+          <Txt text={title} className={`text-[15px] font-semibold leading-6 ${warn ? 'text-amber-50' : 'text-[#f3dca6]'}`} />
           {frame.subtitle && <Txt text={frame.subtitle} className="text-xs leading-5 text-[#f4ead5]/60" />}
         </div>
-        {frame.badge && <Badge badge={frame.badge} />}
+        {badge && <Badge badge={badge} />}
       </header>
       <div className="space-y-3 px-4 py-3">
         {list.map((block, index) => renderBlock(block, index, true))}

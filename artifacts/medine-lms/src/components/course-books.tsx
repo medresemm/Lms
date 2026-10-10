@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import { useAuth } from '@clerk/react';
 import { BookMarked, BookOpen, Loader2, Plus, Trash2 } from 'lucide-react';
+import { useI18n, type MessageKey } from '@/lib/i18n';
 import { libraryReaderHref, useLibraryCatalog, type LibraryBook } from '@/lib/library';
 import { matchResourceBook, type ResourceBookMatch } from '@/lib/resource-books';
 import {
@@ -14,19 +15,23 @@ import {
   type CourseBookView,
 } from '@/lib/course-books';
 
+const ux = (t: (key: MessageKey) => string, key: string) => t(key as MessageKey);
+
 const termSuffixes: Record<number, string> = { 1: 'ci', 2: 'ci', 3: 'cü', 4: 'cü', 5: 'ci', 6: 'cı', 7: 'ci', 8: 'ci' };
-export const courseTermLabel = (term: number) => `${term}-${termSuffixes[term] ?? 'ci'} semestr`;
+export const courseTermLabel = (term: number, locale: 'az' | 'ar' = 'az') => (locale === 'ar' ? `الفصل ${term}` : `${term}-${termSuffixes[term] ?? 'ci'} semestr`);
 
 const fieldClass = 'rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm outline-none focus:border-[hsl(var(--primary))] focus:ring-2 focus:ring-[hsl(var(--primary)/.15)]';
 
 /** Kitab siyahısı — hər kitab üçün «Oxu» seçilmiş fəsil/səhifədə açır. */
 export function CourseBooksList({ books, compact = false, testId }: { books: CourseBookView[]; compact?: boolean; testId?: string }) {
+  const { t } = useI18n();
   const visible = books.filter((book) => book.available);
   if (!visible.length) return null;
+  const pagePrefix = ux(t, 'uxPageAbbrev');
   return (
     <ul className={compact ? 'space-y-1.5' : 'space-y-2'} data-testid={testId}>
       {visible.map((book, index) => {
-        const range = courseBookRange(book);
+        const range = courseBookRange(book, pagePrefix);
         return (
           <li key={`${book.slug}-${index}`} className={`flex items-center justify-between gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] ${compact ? 'px-3 py-2' : 'px-3.5 py-2.5'}`}>
             <div className="min-w-0">
@@ -41,7 +46,7 @@ export function CourseBooksList({ books, compact = false, testId }: { books: Cou
               )}
             </div>
             <Link href={libraryReaderHref(book.slug, book.openPage)} className="focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[hsl(var(--primary))] px-3 py-1.5 text-xs font-bold text-[hsl(var(--primary-foreground))] hover:opacity-90" data-testid={`button-course-book-read-${book.slug}`}>
-              <BookOpen size={13} /> Oxu
+              <BookOpen size={13} /> {t('read')}
             </Link>
           </li>
         );
@@ -62,8 +67,10 @@ export function useResourceBookMatcher(enabled: boolean) {
 
 /** Resurs kartındakı kitab sətri + «Oxu» (/kitabxana/<slug>?page=<n>, fəsildə açılır). */
 export function ResourceBookRead({ match }: { match: ResourceBookMatch }) {
+  const { t } = useI18n();
+  const pagePrefix = ux(t, 'uxPageAbbrev');
   const range = match.printedFrom !== null
-    ? match.printedTo !== null && match.printedTo !== match.printedFrom ? `s. ${match.printedFrom}–${match.printedTo}` : `s. ${match.printedFrom}`
+    ? match.printedTo !== null && match.printedTo !== match.printedFrom ? `${pagePrefix} ${match.printedFrom}–${match.printedTo}` : `${pagePrefix} ${match.printedFrom}`
     : null;
   return (
     <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2" data-testid={`resource-book-${match.slug}`}>
@@ -72,7 +79,7 @@ export function ResourceBookRead({ match }: { match: ResourceBookMatch }) {
         {(match.chapterTitle || range) && <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">{match.chapterTitle && <span dir="rtl" className="font-[Amiri,serif] text-[13px]">{match.chapterTitle}</span>}{match.chapterTitle && range && ' · '}{range}</p>}
       </div>
       <Link href={libraryReaderHref(match.slug, match.openPage)} className="focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[hsl(var(--primary))] px-3 py-1.5 text-xs font-bold text-[hsl(var(--primary-foreground))] hover:opacity-90" data-testid={`button-resource-book-read-${match.slug}`}>
-        <BookOpen size={13} /> Oxu
+        <BookOpen size={13} /> {t('read')}
       </Link>
     </div>
   );
@@ -80,15 +87,16 @@ export function ResourceBookRead({ match }: { match: ResourceBookMatch }) {
 
 /** Tələbənin fənn pəncərəsi üçün: fənnin bütün semestrləri üzrə kitablar. */
 export function CourseBooksSection({ courseId }: { courseId: number }) {
+  const { t, locale } = useI18n();
   const { items, loading } = useCourseBooks(courseId);
   const rows = items.filter((item) => item.courseId === courseId && item.books.some((book) => book.available));
   if (loading || !rows.length) return null;
   return (
     <section className="space-y-2" data-testid="section-course-books">
-      <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Dərs kitabları</p>
+      <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{ux(t, 'uxCourseBooks')}</p>
       {rows.map((row) => (
         <div key={row.termNumber} className="space-y-1.5">
-          {rows.length > 1 && <p className="text-xs font-bold text-[hsl(var(--secondary-foreground))]">{courseTermLabel(row.termNumber)}</p>}
+          {rows.length > 1 && <p className="text-xs font-bold text-[hsl(var(--secondary-foreground))]">{courseTermLabel(row.termNumber, locale)}</p>}
           <CourseBooksList books={row.books} />
         </div>
       ))}
@@ -112,9 +120,9 @@ export function courseBookDraftToEntry(draft: Draft, book: LibraryBook | undefin
 }
 
 /** Qaralamaları serverə göndəriləcək siyahıya çevirir (silinmiş kitablar atılır). Səhv səhifədə xəta atır. */
-export function courseBookEntriesFromDrafts(drafts: readonly Draft[], bookBySlug: ReadonlyMap<string, LibraryBook>) {
+export function courseBookEntriesFromDrafts(drafts: readonly Draft[], bookBySlug: ReadonlyMap<string, LibraryBook>, invalidPage = 'Səhifə nömrəsi yalnız rəqəm ola bilər.') {
   for (const draft of drafts) {
-    if ((draft.from && !/^\d+$/.test(draft.from)) || (draft.to && !/^\d+$/.test(draft.to))) throw new Error('Səhifə nömrəsi yalnız rəqəm ola bilər.');
+    if ((draft.from && !/^\d+$/.test(draft.from)) || (draft.to && !/^\d+$/.test(draft.to))) throw new Error(invalidPage);
   }
   const kept = drafts.filter((draft) => bookBySlug.has(draft.slug));
   return { entries: kept.map((draft) => courseBookDraftToEntry(draft, bookBySlug.get(draft.slug))), dropped: drafts.length - kept.length };
@@ -141,6 +149,7 @@ export function CourseBookDraftsFields({ drafts, onChange, books, courseTitle, t
   courseTitle?: string;
   testIdPrefix?: string;
 }) {
+  const { t } = useI18n();
   const bookBySlug = useMemo(() => new Map(books.map((book) => [book.slug, book])), [books]);
   const ordered = useMemo(() => orderedLibraryBooks(books, courseTitle), [books, courseTitle]);
   const update = (index: number, patch: Partial<Draft>) => onChange(drafts.map((row, position) => (position === index ? { ...row, ...patch } : row)));
@@ -156,45 +165,46 @@ export function CourseBookDraftsFields({ drafts, onChange, books, courseTitle, t
         return (
           <div key={index} className="space-y-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3" data-testid={`row-${testIdPrefix}-${index}`}>
             <div className="flex gap-2">
-              <select aria-label="Kitab" className={`${fieldClass} min-w-0 flex-1`} value={draft.slug} onChange={(event) => update(index, { slug: event.target.value, chapter: '', from: '', to: '' })} data-testid={`select-${testIdPrefix}-${index}`}>
-                {!book && <option value={draft.slug}>Kitab artıq Kitabxanada yoxdur</option>}
+              <select aria-label={t('bookLabel')} className={`${fieldClass} min-w-0 flex-1`} value={draft.slug} onChange={(event) => update(index, { slug: event.target.value, chapter: '', from: '', to: '' })} data-testid={`select-${testIdPrefix}-${index}`}>
+                {!book && <option value={draft.slug}>{ux(t, 'uxBookGone')}</option>}
                 {ordered.map((option) => <option key={option.slug} value={option.slug}>{option.shortTitle} · {option.subject}</option>)}
               </select>
-              <button type="button" onClick={() => onChange(drafts.filter((_, position) => position !== index))} className="focus-ring shrink-0 rounded-lg px-2.5 text-[hsl(var(--destructive))] hover:bg-[hsl(var(--muted))]" aria-label="Kitabı çıxar" data-testid={`button-remove-${testIdPrefix}-${index}`}><Trash2 size={15} /></button>
+              <button type="button" onClick={() => onChange(drafts.filter((_, position) => position !== index))} className="focus-ring shrink-0 rounded-lg px-2.5 text-[hsl(var(--destructive))] hover:bg-[hsl(var(--muted))]" aria-label={ux(t, 'uxRemoveBook')} data-testid={`button-remove-${testIdPrefix}-${index}`}><Trash2 size={15} /></button>
             </div>
-            {!book && <p className="text-xs font-semibold text-amber-800">Bu kitab Kitabxanadan silinib — yadda saxlayanda siyahıdan çıxarılacaq.</p>}
+            {!book && <p className="text-xs font-semibold text-amber-800">{ux(t, 'uxBookRemovedOnSave')}</p>}
             {book && book.chapters.length > 0 && (
-              <select aria-label="Bab (fəsil)" className={`${fieldClass} w-full`} dir="auto" value={draft.chapter} onChange={(event) => {
+              <select aria-label={ux(t, 'uxChapterBab')} className={`${fieldClass} w-full`} dir="auto" value={draft.chapter} onChange={(event) => {
                 const value = event.target.value;
                 const chapter = value === '' ? null : book.chapters[Number(value)];
                 const next = chapter ? book.chapters.slice(Number(value) + 1).find((item) => item.level <= chapter.level) : undefined;
                 update(index, { chapter: value, from: chapter ? String(chapter.printedPage) : draft.from, to: chapter ? (next && next.printedPage > chapter.printedPage ? String(next.printedPage - 1) : '') : draft.to });
               }} data-testid={`select-${testIdPrefix}-chapter-${index}`}>
-                <option value="">Bab seçilməyib (bütün kitab və ya səhifə aralığı)</option>
-                {book.chapters.map((chapter, chapterIndex) => <option key={chapterIndex} value={chapterIndex}>{chapter.level === 2 ? '  — ' : ''}{chapter.title} (s. {chapter.printedPage})</option>)}
+                <option value="">{ux(t, 'uxNoChapter')}</option>
+                {book.chapters.map((chapter, chapterIndex) => <option key={chapterIndex} value={chapterIndex}>{chapter.level === 2 ? '  — ' : ''}{chapter.title} ({ux(t, 'uxPageAbbrev')} {chapter.printedPage})</option>)}
               </select>
             )}
             <div className="flex flex-wrap items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
-              <span>Səhifə</span>
-              <input inputMode="numeric" aria-label="Başlanğıc səhifə" placeholder="dən" className={`${fieldClass} w-20 text-center`} value={draft.from} onChange={(event) => update(index, { from: event.target.value.replace(/\D/g, '').slice(0, 5) })} data-testid={`input-${testIdPrefix}-from-${index}`} />
+              <span>{ux(t, 'uxPage')}</span>
+              <input inputMode="numeric" aria-label={ux(t, 'uxPageFrom')} placeholder={ux(t, 'uxFromPh')} className={`${fieldClass} w-20 text-center`} value={draft.from} onChange={(event) => update(index, { from: event.target.value.replace(/\D/g, '').slice(0, 5) })} data-testid={`input-${testIdPrefix}-from-${index}`} />
               <span>–</span>
-              <input inputMode="numeric" aria-label="Son səhifə" placeholder="dək" className={`${fieldClass} w-20 text-center`} value={draft.to} onChange={(event) => update(index, { to: event.target.value.replace(/\D/g, '').slice(0, 5) })} data-testid={`input-${testIdPrefix}-to-${index}`} />
-              <span className="text-[11px]">(kitabdakı çap nömrəsi; boş qalsa — bütün kitab)</span>
+              <input inputMode="numeric" aria-label={ux(t, 'uxPageTo')} placeholder={ux(t, 'uxToPh')} className={`${fieldClass} w-20 text-center`} value={draft.to} onChange={(event) => update(index, { to: event.target.value.replace(/\D/g, '').slice(0, 5) })} data-testid={`input-${testIdPrefix}-to-${index}`} />
+              <span className="text-[11px]">{ux(t, 'uxPrintedHint')}</span>
             </div>
-            <input aria-label="Qeyd" placeholder="Qeyd (məs.: 1–4-cü həftələr)" maxLength={200} className={`${fieldClass} w-full`} value={draft.note} onChange={(event) => update(index, { note: event.target.value })} data-testid={`input-${testIdPrefix}-note-${index}`} />
+            <input aria-label={ux(t, 'uxNote')} placeholder={ux(t, 'uxNotePh')} maxLength={200} className={`${fieldClass} w-full`} value={draft.note} onChange={(event) => update(index, { note: event.target.value })} data-testid={`input-${testIdPrefix}-note-${index}`} />
           </div>
         );
       })}
-      <button type="button" onClick={add} disabled={drafts.length >= MAX_BOOKS_PER_LESSON || !books.length} className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] disabled:opacity-50" data-testid={`button-add-${testIdPrefix}`}><Plus size={14} /> Kitab əlavə et</button>
+      <button type="button" onClick={add} disabled={drafts.length >= MAX_BOOKS_PER_LESSON || !books.length} className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] disabled:opacity-50" data-testid={`button-add-${testIdPrefix}`}><Plus size={14} /> {ux(t, 'uxAddBook')}</button>
     </div>
   );
 }
 
 /** Müəllim / admin: dərsə Kitabxanadan kitab(lar) bağlamaq. Server icazəni yoxlayır. */
 export function CourseBooksEditor({ courseId, termNumber, courseTitle }: { courseId: number; termNumber: number; courseTitle?: string }) {
+  const { t } = useI18n();
   const { getToken } = useAuth();
-  const catalog = useLibraryCatalog();
-  const current = useCourseBooks(courseId);
+  const catalog = useLibraryCatalog(true, ux(t, 'uxLibraryLoadFail'));
+  const current = useCourseBooks(courseId, ux(t, 'uxCourseBooksLoadFail'));
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
@@ -209,10 +219,10 @@ export function CourseBooksEditor({ courseId, termNumber, courseTitle }: { cours
   }, [current.loading, catalog.loading, termNumber]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!current.available) {
-    return <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900" data-testid="text-course-books-unavailable">{current.message ?? 'Dərs kitabları hələ aktiv deyil.'}{current.detail && <span className="mt-1 block font-normal opacity-80" data-testid="text-course-books-unavailable-detail">Yoxlama: {current.detail}</span>}</p>;
+    return <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900" data-testid="text-course-books-unavailable">{current.message ?? t('booksUnavailable')}{current.detail && <span className="mt-1 block font-normal opacity-80" data-testid="text-course-books-unavailable-detail">{ux(t, 'uxCheckDetail').replace('{detail}', current.detail)}</span>}</p>;
   }
   if (current.loading || catalog.loading || drafts === null) {
-    return <p className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]"><Loader2 size={13} className="animate-spin" /> Kitablar yüklənir…</p>;
+    return <p className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]"><Loader2 size={13} className="animate-spin" /> {t('booksLoading')}</p>;
   }
   if (current.error || catalog.error) {
     return <p className="text-xs font-semibold text-[hsl(var(--destructive))]">{current.error || catalog.error}</p>;
@@ -223,14 +233,14 @@ export function CourseBooksEditor({ courseId, termNumber, courseTitle }: { cours
     setNotice(null);
     try {
       // Kitabxanadan silinmiş kitablar avtomatik çıxarılır.
-      const { entries, dropped } = courseBookEntriesFromDrafts(drafts, bookBySlug);
-      const result = await saveCourseBooksApi(getToken, courseId, termNumber, entries);
+      const { entries, dropped } = courseBookEntriesFromDrafts(drafts, bookBySlug, ux(t, 'uxInvalidPage'));
+      const result = await saveCourseBooksApi(getToken, courseId, termNumber, entries, ux(t, 'uxCourseBooksSaveFail'));
       setDrafts(result.map((view) => courseBookDraftFromView(view, bookBySlug.get(view.slug))));
       await current.reload();
-      const base = result.length ? 'Dərs kitabları yadda saxlanıldı. Tələbələr «Oxu» düyməsi ilə açacaq.' : 'Dərsdən kitablar çıxarıldı.';
-      setNotice({ text: dropped ? `${base} Kitabxanadan silinmiş ${dropped} kitab siyahıdan çıxarıldı.` : base, error: false });
+      const base = result.length ? ux(t, 'uxCourseBooksSaved') : ux(t, 'uxCourseBooksCleared');
+      setNotice({ text: dropped ? `${base} ${ux(t, 'uxCourseBooksDropped').replace('{n}', String(dropped))}` : base, error: false });
     } catch (error) {
-      setNotice({ text: error instanceof Error ? error.message : 'Dərs kitabları yadda saxlanılmadı.', error: true });
+      setNotice({ text: error instanceof Error ? error.message : ux(t, 'uxCourseBooksSaveFail'), error: true });
     } finally {
       setSaving(false);
     }
@@ -238,11 +248,11 @@ export function CourseBooksEditor({ courseId, termNumber, courseTitle }: { cours
 
   return (
     <div className="space-y-3" data-testid={`editor-course-books-${courseId}-${termNumber}`}>
-      {drafts.length === 0 && <p className="text-xs text-[hsl(var(--muted-foreground))]">Bu dərsə hələ kitab bağlanmayıb.</p>}
+      {drafts.length === 0 && <p className="text-xs text-[hsl(var(--muted-foreground))]">{ux(t, 'uxNoCourseBook')}</p>}
       <CourseBookDraftsFields drafts={drafts} onChange={setDrafts} books={books} courseTitle={courseTitle} />
       {notice && <p className={`rounded-lg px-3 py-2 text-xs font-semibold ${notice.error ? 'bg-red-50 text-red-800' : 'bg-emerald-50 text-emerald-800'}`} data-testid="text-course-books-notice">{notice.text}</p>}
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => void save()} disabled={saving} className="focus-ring inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] hover:opacity-90 disabled:opacity-50" data-testid="button-save-course-books">{saving && <Loader2 size={13} className="animate-spin" />} Kitabları yadda saxla</button>
+        <button type="button" onClick={() => void save()} disabled={saving} className="focus-ring inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] hover:opacity-90 disabled:opacity-50" data-testid="button-save-course-books">{saving && <Loader2 size={13} className="animate-spin" />} {ux(t, 'uxSaveCourseBooks')}</button>
       </div>
     </div>
   );

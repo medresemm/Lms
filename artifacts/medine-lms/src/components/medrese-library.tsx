@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { BookOpen, Download, FileText, Library, Loader2, Pencil, Plus, RotateCcw, SearchX, Trash2 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useAuth, useUser } from '@clerk/react';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type MessageKey } from '@/lib/i18n';
 import { LibraryBookForm } from '@/components/library-book-form';
 import {
   arabicBookFont,
@@ -18,15 +18,18 @@ import {
 } from '@/lib/library';
 import { deleteUploadedBook } from '@/lib/library-admin';
 
+const ux = (t: (key: MessageKey) => string, key: string) => t(key as MessageKey);
+
 /** PDF endirmə: server qısa ömürlü imzalı ünvana yönləndirir (Content-Disposition: attachment). */
 export function PdfDownloadLink({ book, token, tone = 'card' }: { book: LibraryBook; token: string; tone?: 'card' | 'reader' }) {
+  const { t } = useI18n();
   if (book.hasPdf === false) return null;
   const className = tone === 'reader'
     ? 'focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10'
     : 'focus-ring inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--border))] px-3 py-2 text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]';
   return (
-    <a href={libraryFileUrl(book.slug, token, 'download')} className={className} rel="noopener" data-testid={`button-pdf-download-${book.slug}`} aria-label={`${book.shortTitle} — PDF endir`}>
-      <Download size={tone === 'reader' ? 15 : 14} /> <span className={tone === 'reader' ? 'hidden sm:inline' : undefined}>PDF endir</span>
+    <a href={libraryFileUrl(book.slug, token, 'download')} className={className} rel="noopener" data-testid={`button-pdf-download-${book.slug}`} aria-label={ux(t, 'uxPdfDownloadAria').replace('{title}', book.shortTitle)}>
+      <Download size={tone === 'reader' ? 15 : 14} /> <span className={tone === 'reader' ? 'hidden sm:inline' : undefined}>{ux(t, 'uxPdfDownload')}</span>
       {tone === 'card' && book.fileSize ? <span className="font-normal text-[hsl(var(--muted-foreground))]">· {formatBytes(book.fileSize)}</span> : null}
     </a>
   );
@@ -64,7 +67,7 @@ function BookCard({ book, token, userId, manage, onEdit, onDeleted }: {
     setDeleting(true);
     setDeleteError(null);
     try {
-      await deleteUploadedBook(getToken, book.slug);
+      await deleteUploadedBook(getToken, book.slug, ux(t, 'uxActionFailed'));
       onDeleted();
     } catch (caught) {
       setDeleteError(caught instanceof Error ? caught.message : t('notDeleted'));
@@ -89,9 +92,9 @@ function BookCard({ book, token, userId, manage, onEdit, onDeleted }: {
         </p>
         <h4 dir="auto" lang="ar" className="mt-1 text-start text-xl leading-9 text-[hsl(var(--primary))]" style={{ fontFamily: arabicBookFont }}>{book.title}</h4>
         <dl dir="auto" lang="ar" className="mt-1 space-y-0.5 text-start text-[15px] leading-7 text-[hsl(var(--foreground)/.8)]" style={{ fontFamily: arabicBookFont }}>
-          <div><dt className="sr-only">Müəllif</dt><dd>{book.author}</dd></div>
-          {book.commentator && <div><dt className="sr-only">Şərh edən</dt><dd>شرح: {book.commentator}</dd></div>}
-          {(book.publisher || book.year) && <div className="text-[hsl(var(--muted-foreground))]"><dt className="sr-only">Nəşriyyat</dt><dd>{[book.publisher, book.year].filter(Boolean).join(' · ')}</dd></div>}
+          <div><dt className="sr-only">{t('artAuthor')}</dt><dd>{book.author}</dd></div>
+          {book.commentator && <div><dt className="sr-only">{ux(t, 'uxCommentator')}</dt><dd>شرح: {book.commentator}</dd></div>}
+          {(book.publisher || book.year) && <div className="text-[hsl(var(--muted-foreground))]"><dt className="sr-only">{ux(t, 'uxPublisher')}</dt><dd>{[book.publisher, book.year].filter(Boolean).join(' · ')}</dd></div>}
         </dl>
         <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{book.pageCount} {t('pageWord')} · {book.chapters.length} {t('chapterWord')}</p>
         <div className="mt-auto flex flex-wrap gap-2 pt-3">
@@ -127,11 +130,12 @@ function BookCard({ book, token, userId, manage, onEdit, onDeleted }: {
 }
 
 function UploadsNotice({ uploads }: { uploads: LibraryUploadsInfo }) {
+  const { t } = useI18n();
   if (uploads.available) return null;
   return (
     <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900" data-testid="library-uploads-unavailable">
       {uploads.message}
-      {uploads.detail && <span className="mt-1 block opacity-80" data-testid="library-uploads-unavailable-detail">Yoxlama: {uploads.detail}</span>}
+      {uploads.detail && <span className="mt-1 block opacity-80" data-testid="library-uploads-unavailable-detail">{ux(t, 'uxCheckDetail').replace('{detail}', uploads.detail)}</span>}
     </div>
   );
 }
@@ -139,7 +143,7 @@ function UploadsNotice({ uploads }: { uploads: LibraryUploadsInfo }) {
 export function MedreseLibrary({ canManage = false }: { canManage?: boolean }) {
   const { t } = useI18n();
   const { user } = useUser();
-  const { books, token, error, loading, reload, canManage: serverCanManage, uploads } = useLibraryCatalog();
+  const { books, token, error, loading, reload, canManage: serverCanManage, uploads } = useLibraryCatalog(true, ux(t, 'uxLibraryLoadFail'));
   const manage = canManage && serverCanManage && uploads !== null;
   const [form, setForm] = useState<{ mode: 'create' } | { mode: 'edit'; book: LibraryBook } | null>(null);
   return (

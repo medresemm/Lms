@@ -98,7 +98,7 @@ export function saveReadingPage(userId: string | null | undefined, slug: string,
 }
 
 /** Kataloqu yükləyir və şəkil açarını vaxtı bitməzdən əvvəl yeniləyir. */
-export function useLibraryCatalog(enabled = true) {
+export function useLibraryCatalog(enabled = true, loadFailed = 'Kitabxananı yükləmək mümkün olmadı.') {
   const { getToken } = useAuth();
   const [state, setState] = useState<CatalogState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +112,7 @@ export function useLibraryCatalog(enabled = true) {
       const response = await fetch(`${siteBase}/api/library/books`, { headers: token ? { authorization: `Bearer ${token}` } : {}, cache: 'no-store' });
       const data = await response.json().catch(() => null) as { books?: LibraryBook[]; pageToken?: string; pageTokenExpiresAt?: string; canManage?: boolean; uploads?: LibraryUploadsInfo | null; error?: string } | null;
       if (!response.ok || !data || !Array.isArray(data.books) || typeof data.pageToken !== 'string') {
-        throw new Error(data?.error || 'Kitabxananı yükləmək mümkün olmadı.');
+        throw new Error(data?.error || loadFailed);
       }
       setState({
         books: data.books,
@@ -122,11 +122,11 @@ export function useLibraryCatalog(enabled = true) {
         uploads: data.uploads ?? null,
       });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Kitabxananı yükləmək mümkün olmadı.');
+      setError(caught instanceof Error ? caught.message : loadFailed);
     } finally {
       setLoading(false);
     }
-  }, [getToken]);
+  }, [getToken, loadFailed]);
 
   useEffect(() => { if (enabled) void load(); }, [load, enabled]);
 
@@ -171,7 +171,7 @@ export type LibrarySearchResponse = {
 
 export const LIBRARY_SLUG = /^[a-z0-9-]{1,80}$/;
 
-export async function searchLibraryApi(getToken: () => Promise<string | null>, input: { query: string; offset?: number; book?: string | null }) {
+export async function searchLibraryApi(getToken: () => Promise<string | null>, input: { query: string; offset?: number; book?: string | null }, failed = 'Axtarış alınmadı. Bir az sonra yenidən cəhd edin.') {
   const token = await getToken().catch(() => null);
   const response = await fetch(`${siteBase}/api/library/search`, {
     method: 'POST',
@@ -180,12 +180,12 @@ export async function searchLibraryApi(getToken: () => Promise<string | null>, i
     cache: 'no-store',
   });
   const data = await response.json().catch(() => null) as (LibrarySearchResponse & { error?: string }) | null;
-  if (!response.ok || !data || !Array.isArray(data.items)) throw new Error(data?.error || 'Axtarış alınmadı. Bir az sonra yenidən cəhd edin.');
+  if (!response.ok || !data || !Array.isArray(data.items)) throw new Error(data?.error || failed);
   return data;
 }
 
 /** «Davamı»: axtarış nəticəsinin bütün səhifə mətni (yalnız düymə ilə). */
-export async function libraryPageTextApi(getToken: () => Promise<string | null>, input: { slug: string; page: number; query: string }) {
+export async function libraryPageTextApi(getToken: () => Promise<string | null>, input: { slug: string; page: number; query: string }, failed = 'Səhifə mətnini açmaq olmadı.') {
   const token = await getToken().catch(() => null);
   const response = await fetch(`${siteBase}/api/library/page-text`, {
     method: 'POST',
@@ -194,7 +194,7 @@ export async function libraryPageTextApi(getToken: () => Promise<string | null>,
     cache: 'no-store',
   });
   const data = await response.json().catch(() => null) as { text?: string; parts?: Array<{ text: string; hit?: boolean }>; truncated?: boolean; error?: string } | null;
-  if (!response.ok || !data || typeof data.text !== 'string') throw new Error(data?.error || 'Səhifə mətnini açmaq olmadı.');
+  if (!response.ok || !data || typeof data.text !== 'string') throw new Error(data?.error || failed);
   return { text: data.text, parts: Array.isArray(data.parts) ? data.parts.filter((part) => part && typeof part.text === 'string').slice(0, 4000) : undefined, truncated: data.truncated === true };
 }
 

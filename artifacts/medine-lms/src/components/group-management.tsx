@@ -25,6 +25,7 @@ import {
 export type GroupsView = 'students' | 'teachers';
 
 const apiUrl = (path: string) => `${import.meta.env.BASE_URL.replace(/\/$/, '')}/api${path}`;
+const ux = (t: (key: MessageKey) => string, key: string) => t(key as MessageKey);
 const termSuffixes: Record<number, string> = { 1: 'ci', 2: 'ci', 3: 'cü', 4: 'cü', 5: 'ci', 6: 'cı', 7: 'ci', 8: 'ci' };
 const termLabel = (term: number) => `${term}-${termSuffixes[term] ?? 'ci'} semestr`;
 const selectClass = 'focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2.5 text-sm text-[hsl(var(--foreground))] outline-none';
@@ -98,7 +99,7 @@ function Badge({ tone, children }: { tone: 'warn' | 'ok' | 'muted'; children: Re
 }
 
 function groupTeacherText(group: GroupView, t: (key: MessageKey) => string) {
-  return groupHasTeacher(group) ? `${isCoTaught(group) ? t('teachersLabel') : t('roleTeacher')}: ${resourceTeacherLabel(group)}` : t('noTeacherAssigned');
+  return groupHasTeacher(group) ? `${isCoTaught(group) ? t('teachersLabel') : t('roleTeacher')}: ${resourceTeacherLabel(group, ux(t, 'uxTeacherUnset'))}` : t('noTeacherAssigned');
 }
 
 function scheduleText(group: { lessonDays: string[]; lessonTime?: string | null }, t: (key: MessageKey) => string) {
@@ -140,14 +141,14 @@ export function GroupManagementSection({ view: controlledView, onViewChange, onO
     try {
       const response = await authFetch(apiUrl('/admin/groups'), { cache: 'no-store' });
       const result = await readJson<GroupsResponse>(response);
-      if (!response.ok || !Array.isArray(result.groups)) throw new Error(result.error || 'Qruplar yüklənmədi.');
+      if (!response.ok || !Array.isArray(result.groups)) throw new Error(result.error || ux(t, 'uxGroupsLoadFail'));
       setData(result);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Qruplar yüklənmədi.');
+      setLoadError(error instanceof Error ? error.message : ux(t, 'uxGroupsLoadFail'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
   useEffect(() => { void load(); }, [load]);
 
   const refreshAll = useCallback(async () => {
@@ -177,10 +178,10 @@ export function GroupManagementSection({ view: controlledView, onViewChange, onO
     for (const teacher of teachersQuery.data ?? []) map.set(teacher.clerkUserId, teacher.displayName);
     for (const group of groups) {
       const ids = resourceTeacherIds(group);
-      ids.forEach((id, index) => { if (!map.has(id)) map.set(id, group.teacherNames?.[index] || 'Müəllim'); });
+      ids.forEach((id, index) => { if (!map.has(id)) map.set(id, group.teacherNames?.[index] || t('roleTeacher')); });
     }
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], 'az'));
-  }, [groups, teachersQuery.data]);
+  }, [groups, teachersQuery.data, t]);
   const visibleGroups = filterGroups(groups, { termNumber, courseId, teacherId, search });
   const groupFilterActive = Boolean(teacherId) || Boolean(search.trim());
   const searchFold = search.trim().toLocaleLowerCase('az');
@@ -255,7 +256,7 @@ export function GroupManagementSection({ view: controlledView, onViewChange, onO
           <Badge tone="muted">{termLessons.length} {t('lessonsWord')} · {termGroups.length} {t('groupsWord')}</Badge>
           {lessonsWithoutGroup > 0 ? <Badge tone="warn">{lessonsWithoutGroup} {t('lessonsWithoutGroup')}</Badge> : <Badge tone="ok">{t('everyLessonHasGroup')}</Badge>}
           {groupsWithoutStudents > 0 && <Badge tone="warn">{groupsWithoutStudents} {t('groupsWithoutStudents')}</Badge>}
-          {termGroups.length > 0 && <Badge tone={teacherSummary.complete ? 'ok' : 'warn'}>{teacherSummary.text}</Badge>}
+          {termGroups.length > 0 && <Badge tone={teacherSummary.complete ? 'ok' : 'warn'}>{!termGroups.length ? t('createGroupsFirst') : teacherSummary.missing ? `${teacherSummary.missing} ${t('noTeacherInGroup')}` : t('allHaveTeacher')}</Badge>}
           {lessonsWithoutDays > 0 && <Badge tone="warn">{lessonsWithoutDays} {t('lessonsWithoutDays')}</Badge>}
         </div>
       )}
@@ -346,7 +347,7 @@ function CreateGroupForm({ lesson, mode, teachers, onCancel, onCreated }: {
   onCancel: () => void;
   onCreated: (text: string) => Promise<void>;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
@@ -361,16 +362,16 @@ function CreateGroupForm({ lesson, mode, teachers, onCancel, onCreated }: {
     void authFetch(apiUrl(`/admin/groups/candidates?courseId=${lesson.courseId}&termNumber=${lesson.termNumber}`), { cache: 'no-store' })
       .then(async (response) => {
         const result = await readJson<{ candidates?: Candidate[] }>(response);
-        if (!response.ok || !Array.isArray(result.candidates)) throw new Error(result.error || 'Tələbələr yüklənmədi.');
+        if (!response.ok || !Array.isArray(result.candidates)) throw new Error(result.error || ux(t, 'uxStudentsLoadFail'));
         if (!cancelled) setCandidates(result.candidates);
       })
-      .catch((caught: unknown) => { if (!cancelled) setLoadError(caught instanceof Error ? caught.message : 'Tələbələr yüklənmədi.'); });
+      .catch((caught: unknown) => { if (!cancelled) setLoadError(caught instanceof Error ? caught.message : ux(t, 'uxStudentsLoadFail')); });
     return () => { cancelled = true; };
-  }, [lesson.courseId, lesson.termNumber]);
+  }, [lesson.courseId, lesson.termNumber, t]);
 
   const rows = (candidates ?? []).filter((candidate) => matchesStudentSearch(candidate, search));
   const create = async () => {
-    if (mode === 'withTeacher' && !mainTeacher) { setError('Müəllimi seçin.'); return; }
+    if (mode === 'withTeacher' && !mainTeacher) { setError(ux(t, 'uxChooseTeacherRequired')); return; }
     setBusy(true);
     setError('');
     try {
@@ -380,11 +381,13 @@ function CreateGroupForm({ lesson, mode, teachers, onCancel, onCreated }: {
         body: JSON.stringify({ courseId: lesson.courseId, termNumber: lesson.termNumber, teacherClerkUserIds: mode === 'withTeacher' ? [mainTeacher] : [], profileIds: picked, studentCapacity: capacity }),
       });
       const result = await readJson<{ added?: number[] }>(response);
-      if (!response.ok) throw new Error(result.error || 'Qrup yaradılmadı.');
-      const base = `${lesson.courseTitle} (${termLabel(lesson.termNumber)}) üçün qrup yaradıldı: ${result.added?.length ?? 0} tələbə.`;
-      await onCreated(mode === 'teacherless' ? `${base} Növbəti addım: «3 Müəllim» — qrupa müəllim təyin edin (o vaxta qədər qrup tələbələrə görünmür).` : mode === 'self' ? `${base} Siz qrupun əsas müəllimisiniz.` : base);
+      if (!response.ok) throw new Error(result.error || ux(t, 'uxGroupCreateFail'));
+      const termText = locale === 'ar' ? `الفصل ${lesson.termNumber}` : termLabel(lesson.termNumber);
+      const base = ux(t, 'uxGroupCreated').replace('{course}', lesson.courseTitle).replace('{term}', termText).replace('{n}', String(result.added?.length ?? 0));
+      const extra = mode === 'teacherless' ? ` ${ux(t, 'uxGroupCreatedNext')}` : mode === 'self' ? ` ${ux(t, 'uxGroupCreatedSelf')}` : '';
+      await onCreated(`${base}${extra}`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Qrup yaradılmadı.');
+      setError(caught instanceof Error ? caught.message : ux(t, 'uxGroupCreateFail'));
     } finally {
       setBusy(false);
     }
@@ -498,11 +501,11 @@ function TeacherAssignmentRow({ group, teachers, onSaved }: { group: GroupView; 
         body: JSON.stringify({ teacherClerkUserIds: ordered }),
       });
       const result = await readJson<object>(response);
-      if (!response.ok) throw new Error(result.error || 'Qrupun müəllimləri yadda saxlanıla bilmədi.');
+      if (!response.ok) throw new Error(result.error || ux(t, 'uxTeachersSaveFail'));
       setOpen(false);
       await onSaved(`${group.courseTitle} (${group.termNumber}. ${t('termLabel')}): ${ordered.length > 1 ? `${ordered.length} ${t('coTeachSaved')}` : t('teacherAssigned')}.${hasTeacher ? '' : ` ${t('groupVisibleNow')}`}`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Qrupun müəllimləri yadda saxlanıla bilmədi.');
+      setError(caught instanceof Error ? caught.message : ux(t, 'uxTeachersSaveFail'));
     } finally {
       setBusy(false);
     }
@@ -566,12 +569,12 @@ function CourseLinksEditor({ courseId, courseTitle, onClose, onSaved }: { course
     void authFetch(apiUrl(`/admin/courses/${courseId}`), { cache: 'no-store' })
       .then(async (response) => {
         const result = await readJson<Partial<Record<LinkKey, string | null>>>(response);
-        if (!response.ok) throw new Error(result.error || 'Linklər yüklənmədi.');
+        if (!response.ok) throw new Error(result.error || ux(t, 'uxLinksLoadFail'));
         if (!cancelled) setLinks(Object.fromEntries(LINK_FIELDS.map(([key]) => [key, result[key] ?? ''])) as Record<LinkKey, string>);
       })
-      .catch((caught: unknown) => { if (!cancelled) setError(caught instanceof Error ? caught.message : 'Linklər yüklənmədi.'); });
+      .catch((caught: unknown) => { if (!cancelled) setError(caught instanceof Error ? caught.message : ux(t, 'uxLinksLoadFail')); });
     return () => { cancelled = true; };
-  }, [courseId]);
+  }, [courseId, t]);
   const save = async () => {
     if (!links) return;
     const bad = LINK_FIELDS.find(([key]) => links[key].trim() && !/^https:\/\/\S+$/i.test(links[key].trim()));
@@ -585,11 +588,11 @@ function CourseLinksEditor({ courseId, courseTitle, onClose, onSaved }: { course
         body: JSON.stringify(Object.fromEntries(LINK_FIELDS.map(([key]) => [key, links[key].trim() || null]))),
       });
       const result = await readJson<object>(response);
-      if (!response.ok) throw new Error(result.error || 'Linklər yadda saxlanılmadı.');
-      onSaved(`${courseTitle}: dərs linkləri yadda saxlanıldı.`);
+      if (!response.ok) throw new Error(result.error || ux(t, 'uxLinksSaveFail'));
+      onSaved(ux(t, 'uxLinksSaved').replace('{course}', courseTitle));
       onClose();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Linklər yadda saxlanılmadı.');
+      setError(caught instanceof Error ? caught.message : ux(t, 'uxLinksSaveFail'));
     } finally {
       setBusy(false);
     }
@@ -684,12 +687,12 @@ function GroupDetail({ group, onAssignTeacher, onChanged, onNotice, onDeleted }:
     try {
       const response = await authFetch(apiUrl(`/admin/groups/${group.id}/students`), { cache: 'no-store' });
       const result = await readJson<RosterResponse>(response);
-      if (!response.ok || !Array.isArray(result.members)) throw new Error(result.error || 'Qrupun tələbələri yüklənmədi.');
+      if (!response.ok || !Array.isArray(result.members)) throw new Error(result.error || ux(t, 'uxRosterLoadFail'));
       setRoster(result);
     } catch (error) {
-      setRosterError(error instanceof Error ? error.message : 'Qrupun tələbələri yüklənmədi.');
+      setRosterError(error instanceof Error ? error.message : ux(t, 'uxRosterLoadFail'));
     }
-  }, [group.id]);
+  }, [group.id, t]);
   useEffect(() => { void loadRoster(); }, [loadRoster]);
 
   const removeStudent = async (student: Student) => {
@@ -698,12 +701,12 @@ function GroupDetail({ group, onAssignTeacher, onChanged, onNotice, onDeleted }:
     try {
       const response = await authFetch(apiUrl(`/admin/groups/${group.id}/students/${student.profileId}`), { method: 'DELETE' });
       const result = await readJson<{ removed?: number }>(response);
-      if (!response.ok) throw new Error(result.error || 'Tələbə qrupdan çıxarılmadı.');
+      if (!response.ok) throw new Error(result.error || ux(t, 'uxStudentRemoveFail'));
       setConfirmRemoveId(null);
-      setNotice({ text: `${student.firstName} ${student.lastName} qrupdan çıxarıldı.`, error: false });
+      setNotice({ text: ux(t, 'uxStudentRemoved').replace('{name}', `${student.firstName} ${student.lastName}`), error: false });
       await Promise.all([loadRoster(), onChanged()]);
     } catch (error) {
-      setNotice({ text: error instanceof Error ? error.message : 'Tələbə qrupdan çıxarılmadı.', error: true });
+      setNotice({ text: error instanceof Error ? error.message : ux(t, 'uxStudentRemoveFail'), error: true });
     } finally {
       setBusy(false);
     }
@@ -720,15 +723,15 @@ function GroupDetail({ group, onAssignTeacher, onChanged, onNotice, onDeleted }:
         body: JSON.stringify({ profileIds: picked }),
       });
       const result = await readJson<{ added?: number[] }>(response);
-      if (!response.ok) throw new Error(result.error || 'Tələbələr qrupa əlavə edilmədi.');
+      if (!response.ok) throw new Error(result.error || ux(t, 'uxStudentsAddFail'));
       const count = result.added?.length ?? 0;
       setPicked([]);
       setPickerOpen(false);
       setPickerSearch('');
-      setNotice({ text: count ? `${count} tələbə qrupa əlavə edildi.` : 'Seçilən tələbələr artıq bu qrupdadır.', error: false });
+      setNotice({ text: count ? ux(t, 'uxStudentsAdded').replace('{n}', String(count)) : ux(t, 'uxStudentsAlreadyIn'), error: false });
       await Promise.all([loadRoster(), onChanged()]);
     } catch (error) {
-      setNotice({ text: error instanceof Error ? error.message : 'Tələbələr qrupa əlavə edilmədi.', error: true });
+      setNotice({ text: error instanceof Error ? error.message : ux(t, 'uxStudentsAddFail'), error: true });
     } finally {
       setBusy(false);
     }
@@ -742,20 +745,20 @@ function GroupDetail({ group, onAssignTeacher, onChanged, onNotice, onDeleted }:
       let response = await authFetch(apiUrl(`/admin/resources/${group.id}`), { method: 'DELETE' });
       if (response.status === 409) {
         const conflict = await readJson<{ summary?: string[]; requiresConfirmation?: boolean }>(response);
-        if (!conflict.requiresConfirmation) throw new Error(conflict.error || 'Qrup silinə bilmədi.');
-        const details = conflict.summary?.length ? conflict.summary.join(', ') : 'tələbə və qiymət məlumatları';
-        const ok = window.confirm(`Diqqət! Bu qrupda məlumat var: ${details}.\n\nQrup silinsə, tələbələrin bu qrupa təyinatı, qrupun tapşırıqları, testləri, cavablar, qiymətlər və dərsə qoşulma qeydləri birdəfəlik silinəcək. Bu əməliyyat geri qaytarılmır.\n\nYenə də silmək istəyirsiniz?`);
+        if (!conflict.requiresConfirmation) throw new Error(conflict.error || ux(t, 'uxGroupDeleteFail'));
+        const details = conflict.summary?.length ? conflict.summary.join(', ') : ux(t, 'uxGroupDataFallback');
+        const ok = window.confirm(ux(t, 'uxGroupDeleteConfirm').replace('{details}', details));
         if (!ok) { setDeleteStep(false); return; }
         response = await authFetch(apiUrl(`/admin/resources/${group.id}?confirm=1`), { method: 'DELETE' });
       }
       if (!response.ok) {
         const result = await readJson<object>(response);
-        throw new Error(result.error || 'Qrup silinə bilmədi.');
+        throw new Error(result.error || ux(t, 'uxGroupDeleteFail'));
       }
-      onNotice({ error: false, text: `${group.courseTitle} · ${groupHasTeacher(group) ? resourceTeacherLabel(group) : t('noTeacherAssigned')} (${group.termNumber}. ${t('termLabel')})` });
+      onNotice({ error: false, text: `${group.courseTitle} · ${groupHasTeacher(group) ? resourceTeacherLabel(group, ux(t, 'uxTeacherUnset')) : t('noTeacherAssigned')} (${group.termNumber}. ${t('termLabel')})` });
       await onDeleted();
     } catch (error) {
-      setNotice({ text: error instanceof Error ? error.message : 'Qrup silinə bilmədi.', error: true });
+      setNotice({ text: error instanceof Error ? error.message : ux(t, 'uxGroupDeleteFail'), error: true });
       setDeleteStep(false);
     } finally {
       setBusy(false);
@@ -776,7 +779,7 @@ function GroupDetail({ group, onAssignTeacher, onChanged, onNotice, onDeleted }:
       </div>
       {deleteStep && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-900" data-testid={`confirm-group-delete-${group.id}`}>
-          <span className="min-w-0 flex-1">{group.courseTitle} · {groupHasTeacher(group) ? resourceTeacherLabel(group) : t('noTeacherAssigned')} ({group.termNumber}. {t('termLabel')}) {t('confirmDeleteGroup')}</span>
+          <span className="min-w-0 flex-1">{group.courseTitle} · {groupHasTeacher(group) ? resourceTeacherLabel(group, ux(t, 'uxTeacherUnset')) : t('noTeacherAssigned')} ({group.termNumber}. {t('termLabel')}) {t('confirmDeleteGroup')}</span>
           <button type="button" className="focus-ring rounded-lg px-3 py-1.5 font-bold text-[hsl(var(--muted-foreground))]" onClick={() => setDeleteStep(false)} disabled={busy}>{t('cancel')}</button>
           <button type="button" className="focus-ring rounded-lg bg-red-700 px-3 py-1.5 font-bold text-white disabled:opacity-50" onClick={() => void deleteGroup()} disabled={busy} data-testid={`button-group-delete-confirm-${group.id}`}>{t('yesDelete')}</button>
         </div>
@@ -858,12 +861,12 @@ export function GroupRosterReadOnly({ resourceId, onOpenGroups }: { resourceId: 
     void authFetch(apiUrl(`/admin/groups/${resourceId}/students`), { cache: 'no-store' })
       .then(async (response) => {
         const result = await readJson<RosterResponse>(response);
-        if (!response.ok || !Array.isArray(result.members)) throw new Error(result.error || 'Tələbələr yüklənmədi.');
+        if (!response.ok || !Array.isArray(result.members)) throw new Error(result.error || ux(t, 'uxStudentsLoadFail'));
         if (!cancelled) setRoster(result);
       })
-      .catch((caught: unknown) => { if (!cancelled) setError(caught instanceof Error ? caught.message : 'Tələbələr yüklənmədi.'); });
+      .catch((caught: unknown) => { if (!cancelled) setError(caught instanceof Error ? caught.message : ux(t, 'uxStudentsLoadFail')); });
     return () => { cancelled = true; };
-  }, [resourceId]);
+  }, [resourceId, t]);
   return (
     <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.25)] p-3" data-testid={`section-teacher-lesson-roster-${resourceId}`}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

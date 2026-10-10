@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { BookOpen, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { Link } from 'wouter';
+import { useI18n } from '@/lib/i18n';
 import { arabicBookFont, groupLibraryItems, LIBRARY_SLUG, type LibraryChapterSuggestion, type LibrarySearchItem } from '@/lib/library';
 
 /** «Davamı»: nəticənin bütün səhifə mətni (vurğulanmış hissələrlə). */
@@ -50,6 +51,7 @@ export function HighlightedSnippet({ item, markClass }: { item: LibrarySearchIte
 }
 
 function ResultCard({ item, tone, onOpen, loadPage, keep }: { item: LibrarySearchItem; tone: Tone; onOpen?: (item: LibrarySearchItem) => void; loadPage?: LibraryPageLoader; keep?: AnchorKeeper }) {
+  const { t } = useI18n();
   const classes = toneClasses[tone];
   const card = useRef<HTMLElement>(null);
   const [full, setFull] = useState<{ parts: Array<{ text: string; hit?: boolean }>; truncated?: boolean } | null>(null);
@@ -78,7 +80,7 @@ function ResultCard({ item, tone, onOpen, loadPage, keep }: { item: LibrarySearc
         setExpanded(true);
       });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Səhifə mətnini açmaq olmadı.');
+      setError(caught instanceof Error ? caught.message : t('pageFail'));
     } finally {
       setLoading(false);
     }
@@ -88,7 +90,7 @@ function ResultCard({ item, tone, onOpen, loadPage, keep }: { item: LibrarySearc
   const path = Array.isArray(item.chapterPath) && item.chapterPath.length ? item.chapterPath : item.chapterTitle ? [item.chapterTitle] : [];
   const action = (
     <>
-      <BookOpen size={13} /> {tone === 'paper' ? 'Səhifəyə keç' : 'Kitabda aç'}
+      <BookOpen size={13} /> {tone === 'paper' ? t('goPage') : t('openBook')}
     </>
   );
   return (
@@ -96,8 +98,8 @@ function ResultCard({ item, tone, onOpen, loadPage, keep }: { item: LibrarySearc
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
           <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${classes.badge}`}>s. {item.printedPage ?? page}</span>
-          {item.match === 'chapter' && <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${classes.badgeChapter}`}>Fəsil başlığı</span>}
-          {item.partial && <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${classes.badgePartial}`} title="Sorğudakı bütün sözlər bu səhifədə tapılmadı">qismən uyğun</span>}
+          {item.match === 'chapter' && <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${classes.badgeChapter}`}>{t('chapterBadge')}</span>}
+          {item.partial && <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${classes.badgePartial}`} title={t('partialTip')}>{t('partialHit')}</span>}
         </div>
         {path.length > 0 && (
           <p dir="rtl" lang="ar" className={`min-w-0 flex-1 text-right text-sm leading-6 ${classes.path}`} style={{ fontFamily: arabicBookFont }}>
@@ -118,11 +120,11 @@ function ResultCard({ item, tone, onOpen, loadPage, keep }: { item: LibrarySearc
           </p>
         )
       )}
-      {expanded && full && <p className={`mt-1 text-[11px] opacity-60 ${classes.path}`}>Səhifənin tam mətni (skan mətni{full.truncated ? ', ilk hissə' : ''}).</p>}
+      {expanded && full && <p className={`mt-1 text-[11px] opacity-60 ${classes.path}`}>{t('fullScan')}{full.truncated ? ` · ${t('firstBit')}` : ''}.</p>}
       {error && <p className="mt-1 text-xs text-red-300">{error}</p>}
       {loadPage && cut && (
         <button type="button" onClick={() => void toggle()} disabled={loading} className={`mt-2 mr-2 inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold transition disabled:opacity-50 ${classes.badge}`} data-testid="button-library-result-more">
-          {loading ? <Loader2 size={12} className="animate-spin" /> : expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />} {expanded ? 'Qısalt' : 'Davamı'}
+          {loading ? <Loader2 size={12} className="animate-spin" /> : expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />} {expanded ? t('shortenText') : t('moreText')}
         </button>
       )}
       {onOpen ? (
@@ -154,11 +156,12 @@ export function LibraryHitList({ items, tone, onOpen, groupHeadings = true, load
 }
 
 export function DidYouMean({ suggestions, tone, onOpen }: { suggestions: LibraryChapterSuggestion[]; tone: Tone; onOpen?: (suggestion: LibraryChapterSuggestion) => void }) {
+  const { t } = useI18n();
   if (!suggestions.length) return null;
   const classes = toneClasses[tone];
   return (
     <div className={classes.card} data-testid="library-did-you-mean">
-      <p className={`text-xs font-semibold ${tone === 'dark' ? 'text-[#f4ead5]/80' : 'text-[#3a2a17]/80'}`}>Bunu nəzərdə tuturdunuz?</p>
+      <p className={`text-xs font-semibold ${tone === 'dark' ? 'text-[#f4ead5]/80' : 'text-[#3a2a17]/80'}`}>{t('meantThis')}</p>
       <ul className="mt-2 space-y-1.5">
         {suggestions.filter((item) => LIBRARY_SLUG.test(item.slug)).map((item) => {
           const label = (

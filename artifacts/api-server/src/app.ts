@@ -59,7 +59,7 @@ function supabaseProjectRef(url: string | undefined): string | null {
   if (!url) return null;
   const pooledUser = /^[a-z]+:\/\/postgres\.([a-z0-9]{20})[:@]/i.exec(url)?.[1];
   if (pooledUser) return pooledUser;
-  const host = /(?:^|[/@.])(?:db\.)?([a-z0-9]{20})\.supabase\.(?:co|in)/i.exec(url)?.[1];
+  const host = /(?:^|[/@.])(?:db\.)?([a-z0-9]{20})\.(?:storage\.)?supabase\.(?:co|in)/i.exec(url)?.[1];
   return host ?? null;
 }
 

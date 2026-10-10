@@ -838,23 +838,25 @@ function isOwnerMetadata(user: { publicMetadata?: unknown } | null | undefined) 
 }
 
 function AccountGateLoading() {
+  const { t } = useI18n();
   return (
     <main className="grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5">
       <div className="flex items-center gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-5 py-4 text-sm font-semibold text-[hsl(var(--primary))] shadow-[var(--shadow-xs)]">
         <LoaderCircle size={18} className="animate-spin text-[hsl(var(--accent))]" />
-        Hesab məlumatları yüklənir...
+        {t('apAccountLoading')}
       </div>
     </main>
   );
 }
 
 function AccountGateError({ onRetry }: { onRetry: () => void }) {
+  const { t } = useI18n();
   return (
     <main className="grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5">
       <section className="w-full max-w-md rounded-2xl border border-[hsl(var(--destructive)/.22)] bg-[hsl(var(--card))] p-6 text-center shadow-[var(--shadow-xs)]">
-        <h1 className="font-serif text-2xl text-[hsl(var(--primary))]">Hesab məlumatı yüklənmədi</h1>
-        <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">İdarə panelini açmaq üçün sessiya məlumatını yenidən yoxlamaq lazımdır.</p>
-        <button type="button" onClick={onRetry} className="mt-5 rounded-xl bg-[hsl(var(--primary))] px-4 py-2.5 text-sm font-bold text-[hsl(var(--primary-foreground))]">Yenidən yoxla</button>
+        <h1 className="font-serif text-2xl text-[hsl(var(--primary))]">{t('apAccountLoadFail')}</h1>
+        <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('apAccountRetryBody')}</p>
+        <button type="button" onClick={onRetry} className="mt-5 rounded-xl bg-[hsl(var(--primary))] px-4 py-2.5 text-sm font-bold text-[hsl(var(--primary-foreground))]">{t('retryCheck')}</button>
       </section>
     </main>
   );
@@ -979,14 +981,15 @@ function ClerkProviderWithRoutes() {
 }
 
 function MissingClerkConfiguration() {
+  const { t } = useI18n();
   return (
     <main className="grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5">
       <section className="w-full max-w-lg rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 text-center shadow-[var(--shadow-sm)]">
         <BrandMark />
-        <p className="mt-8 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--destructive))]">Deployment ayarı çatışmır</p>
-        <h1 className="mt-3 font-serif text-3xl text-[hsl(var(--primary))]">Giriş xidməti sazlanmayıb</h1>
+        <p className="mt-8 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--destructive))]">{t('apDeployMissing')}</p>
+        <h1 className="mt-3 font-serif text-3xl text-[hsl(var(--primary))]">{t('apAuthNotConfigured')}</h1>
         <p className="mt-3 text-sm leading-6 text-[hsl(var(--muted-foreground))]">
-          Vercel layihəsinin Environment Variables bölməsinə <strong>VITE_CLERK_PUBLISHABLE_KEY</strong> əlavə edin və yenidən deploy edin.
+          {t('apClerkEnvBefore')} <strong>VITE_CLERK_PUBLISHABLE_KEY</strong> {t('apClerkEnvAfter')}
         </p>
       </section>
     </main>

@@ -135,7 +135,7 @@ import { SchedulePdfButton } from '@/components/schedule-pdf-button';
 import { Link, useLocation } from 'wouter';
 import { AiAssistantLauncher } from '@/components/ai-assistant';
 import { ArticlesLink, HomeLink } from '@/components/home-link';
-import { LanguageSwitch, useI18n } from '@/lib/i18n';
+import { LanguageSwitch, useI18n, type MessageKey } from '@/lib/i18n';
 import { MessageCenter } from '@/components/message-center';
 import { loadUnansweredQuestionCount, QaCenter } from '@/components/qa-center';
 import { AdminExamsSection } from '@/components/exam-module';
@@ -188,6 +188,7 @@ function assignmentDraftFromItem(item: AdminAssignment): AssignmentDraft {
 }
 
 function AdminSubmissionRow({ assignment, submission, onRefresh }: { assignment: AdminAssignment; submission: AdminAssignmentSubmission; onRefresh: () => void }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const gradeMutation = useGradeAssignmentSubmission();
   const resubmissionMutation = useRequestAssignmentResubmission();
@@ -197,48 +198,50 @@ function AdminSubmissionRow({ assignment, submission, onRefresh }: { assignment:
   const [error, setError] = useState('');
   const saveGrade = async () => {
     const numericScore = Number(score);
-    if (!Number.isFinite(numericScore) || numericScore < 0 || numericScore > 1000) { setError('Bal 0 ilə 1000 arasında olmalıdır.'); return; }
+    if (!Number.isFinite(numericScore) || numericScore < 0 || numericScore > 1000) { setError(t('apScoreRange')); return; }
     setError('');
     try {
       await gradeMutation.mutateAsync({ assignmentId: assignment.id, submissionId: submission.id, data: { score: numericScore, feedback: feedback.trim() } });
       await queryClient.invalidateQueries({ queryKey: getGetAssignmentSubmissionsQueryKey(assignment.id) });
       await queryClient.invalidateQueries({ queryKey: getGetAdminAssignmentsQueryKey() });
-      setNotice('Qiymət yadda saxlanıldı.');
+      setNotice(t('apGradeSaved'));
       onRefresh();
-    } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : 'Qiyməti saxlamaq mümkün olmadı.'); }
+    } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t('apGradeSaveFail')); }
   };
   const requestResubmission = async () => {
-    if (!feedback.trim()) { setError('Yenidən təhvil tələbi üçün rəy yazın.'); return; }
+    if (!feedback.trim()) { setError(t('apResubmitNeed')); return; }
     setError('');
     try {
       await resubmissionMutation.mutateAsync({ assignmentId: assignment.id, submissionId: submission.id, data: { feedback: feedback.trim() } });
       await queryClient.invalidateQueries({ queryKey: getGetAssignmentSubmissionsQueryKey(assignment.id) });
       await queryClient.invalidateQueries({ queryKey: getGetAdminAssignmentsQueryKey() });
-      setNotice('Yenidən təhvil tələbi göndərildi.');
+      setNotice(t('apResubmitSent'));
       onRefresh();
-    } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : 'Tələb göndərilmədi.'); }
+    } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t('apRequestNotSent')); }
   };
   return <article className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`card-assignment-submission-${submission.id}`}>
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{submission.studentName}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Tələbə № {submission.studentNumber} · {submission.email}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${submission.status === 'graded' ? 'bg-emerald-100 text-emerald-800' : submission.status === 'resubmission_requested' ? 'bg-amber-100 text-amber-900' : 'bg-[hsl(var(--secondary)/.55)] text-[hsl(var(--secondary-foreground))]'}`}>{submission.status === 'graded' ? 'Qiymətləndirilib' : submission.status === 'resubmission_requested' ? 'Yenidən təhvil gözlənilir' : 'Yoxlanılmayıb'}</span></div>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{submission.studentName}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('apStudentNoShort')} {submission.studentNumber} · {submission.email}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${submission.status === 'graded' ? 'bg-emerald-100 text-emerald-800' : submission.status === 'resubmission_requested' ? 'bg-amber-100 text-amber-900' : 'bg-[hsl(var(--secondary)/.55)] text-[hsl(var(--secondary-foreground))]'}`}>{submission.status === 'graded' ? t('exGraded') : submission.status === 'resubmission_requested' ? t('apResubmitWait') : t('apNotReviewed')}</span></div>
     {submission.answerText && <p className="mt-4 whitespace-pre-wrap rounded-lg bg-[hsl(var(--muted)/.32)] p-3 text-sm leading-6" data-testid={`text-submission-answer-${submission.id}`}>{submission.answerText}</p>}
     <AdminAssignmentFileList attachments={submission.attachments} />
-    <div className="mt-4 grid gap-3 sm:grid-cols-[120px_1fr]"><label className="text-xs font-bold text-[hsl(var(--primary))]">Bal<input type="number" min="0" max="1000" value={score} onChange={(event) => setScore(event.target.value)} className={`${inputClass} mt-2`} data-testid={`input-submission-score-${submission.id}`} /></label><label className="text-xs font-bold text-[hsl(var(--primary))]">Rəy<textarea rows={2} maxLength={5000} value={feedback} onChange={(event) => setFeedback(event.target.value)} className={`${inputClass} mt-2 resize-y`} placeholder="Tələbəyə qısa rəy..." data-testid={`input-submission-feedback-${submission.id}`} /></label></div>
+    <div className="mt-4 grid gap-3 sm:grid-cols-[120px_1fr]"><label className="text-xs font-bold text-[hsl(var(--primary))]">{t('apScore')}<input type="number" min="0" max="1000" value={score} onChange={(event) => setScore(event.target.value)} className={`${inputClass} mt-2`} data-testid={`input-submission-score-${submission.id}`} /></label><label className="text-xs font-bold text-[hsl(var(--primary))]">{t('apFeedback')}<textarea rows={2} maxLength={5000} value={feedback} onChange={(event) => setFeedback(event.target.value)} className={`${inputClass} mt-2 resize-y`} placeholder={t('apFeedbackPh')} data-testid={`input-submission-feedback-${submission.id}`} /></label></div>
     {error && <p className="mt-3 text-xs font-semibold text-[hsl(var(--destructive))]" data-testid={`status-submission-error-${submission.id}`}>{error}</p>}
     {notice && <p className="mt-3 text-xs font-semibold text-emerald-700" data-testid={`status-submission-success-${submission.id}`}>{notice}</p>}
-    <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={gradeMutation.isPending} onClick={() => void saveGrade()} className={buttonClass} data-testid={`button-grade-submission-${submission.id}`}><ClipboardCheck size={15} /> {gradeMutation.isPending ? 'Saxlanır...' : 'Balı və rəyi saxla'}</button><button type="button" disabled={resubmissionMutation.isPending} onClick={() => void requestResubmission()} className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.14)] px-4 py-3 text-sm font-bold text-[hsl(var(--primary))] disabled:opacity-50" data-testid={`button-request-resubmission-${submission.id}`}>Yenidən təhvil tələb et</button></div>
+    <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={gradeMutation.isPending} onClick={() => void saveGrade()} className={buttonClass} data-testid={`button-grade-submission-${submission.id}`}><ClipboardCheck size={15} /> {gradeMutation.isPending ? t('apSavingShort') : t('apSaveScore')}</button><button type="button" disabled={resubmissionMutation.isPending} onClick={() => void requestResubmission()} className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.14)] px-4 py-3 text-sm font-bold text-[hsl(var(--primary))] disabled:opacity-50" data-testid={`button-request-resubmission-${submission.id}`}>{t('apRequestResubmit')}</button></div>
   </article>;
 }
 
 function AdminAssignmentSubmissions({ assignment, onClose }: { assignment: AdminAssignment; onClose: () => void }) {
+  const { t } = useI18n();
   const submissionsQuery = useGetAssignmentSubmissions(assignment.id, { query: { queryKey: getGetAssignmentSubmissionsQueryKey(assignment.id) } });
   return <div className="mt-5 rounded-2xl border border-[hsl(var(--accent)/.55)] bg-[hsl(var(--accent)/.08)] p-5" data-testid={`section-assignment-submissions-${assignment.id}`}>
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">Təhvil paneli</p><h4 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{assignment.title}</h4></div><button type="button" onClick={onClose} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Təhvil panelini bağla" data-testid="button-close-assignment-submissions"><X size={17} /></button></div>
-    <div className="mt-3 flex items-center gap-3 text-xs font-semibold text-[hsl(var(--muted-foreground))]"><span>{assignment.submissionCount} təhvil</span><span>{assignment.gradedCount} qiymətləndirilib</span><button type="button" onClick={() => void submissionsQuery.refetch()} className="focus-ring ml-auto inline-flex items-center gap-1 rounded-lg border border-[hsl(var(--border))] px-2.5 py-1.5 text-[hsl(var(--primary))]" data-testid="button-reload-assignment-submissions"><RefreshCw size={13} /> Yenilə</button></div>
-    {submissionsQuery.isLoading ? <div className="mt-4 space-y-3"><div className="skeleton h-28 rounded-xl" /><div className="skeleton h-28 rounded-xl" /></div> : submissionsQuery.isError ? <div className="mt-4 rounded-xl bg-[hsl(var(--destructive)/.08)] p-4 text-sm text-[hsl(var(--destructive))]">Təhvilləri yükləmək mümkün olmadı. <button type="button" onClick={() => void submissionsQuery.refetch()} className="font-bold underline" data-testid="button-retry-assignment-submissions">Yenidən yoxla</button></div> : !submissionsQuery.data?.length ? <p className="mt-4 rounded-xl border border-dashed border-[hsl(var(--border))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">Bu tapşırığa hələ təhvil göndərilməyib.</p> : <div className="mt-4 space-y-3">{submissionsQuery.data.map((submission) => <AdminSubmissionRow key={submission.id} assignment={assignment} submission={submission} onRefresh={() => void submissionsQuery.refetch()} />)}</div>}
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">{t('apSubmissionPanel')}</p><h4 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{assignment.title}</h4></div><button type="button" onClick={onClose} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={t('apCloseSubmissions')} data-testid="button-close-assignment-submissions"><X size={17} /></button></div>
+    <div className="mt-3 flex items-center gap-3 text-xs font-semibold text-[hsl(var(--muted-foreground))]"><span>{assignment.submissionCount} {t('apSubmissionWord')}</span><span>{assignment.gradedCount} {t('apGradedWord')}</span><button type="button" onClick={() => void submissionsQuery.refetch()} className="focus-ring ml-auto inline-flex items-center gap-1 rounded-lg border border-[hsl(var(--border))] px-2.5 py-1.5 text-[hsl(var(--primary))]" data-testid="button-reload-assignment-submissions"><RefreshCw size={13} /> {t('refresh')}</button></div>
+    {submissionsQuery.isLoading ? <div className="mt-4 space-y-3"><div className="skeleton h-28 rounded-xl" /><div className="skeleton h-28 rounded-xl" /></div> : submissionsQuery.isError ? <div className="mt-4 rounded-xl bg-[hsl(var(--destructive)/.08)] p-4 text-sm text-[hsl(var(--destructive))]">{t('apSubmissionsLoadFail')} <button type="button" onClick={() => void submissionsQuery.refetch()} className="font-bold underline" data-testid="button-retry-assignment-submissions">{t('retryCheck')}</button></div> : !submissionsQuery.data?.length ? <p className="mt-4 rounded-xl border border-dashed border-[hsl(var(--border))] p-6 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('apNoSubmissions')}</p> : <div className="mt-4 space-y-3">{submissionsQuery.data.map((submission) => <AdminSubmissionRow key={submission.id} assignment={assignment} submission={submission} onRefresh={() => void submissionsQuery.refetch()} />)}</div>}
   </div>;
 }
 
 function AdminAssignmentForm({ editing, resources, onCancel, onSaved }: { editing: AdminAssignment | null; resources: LearningResource[]; onCancel: () => void; onSaved: () => void }) {
+  const { t } = useI18n();
   const createMutation = useCreateAssignment();
   const updateMutation = useUpdateAssignment();
   const uploadMutation = useRequestAdminAssignmentUploadUrl();
@@ -255,43 +258,44 @@ function AdminAssignmentForm({ editing, resources, onCancel, onSaved }: { editin
   };
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!draft.resourceId || !draft.title.trim() || !draft.description.trim() || !draft.dueAt) { setError('Fənn qrupu, başlıq, izah və son tarix mütləqdir.'); return; }
-    if (new Date(draft.dueAt).getTime() <= Date.now() && !editing) { setError('Son tarix gələcək vaxt olmalıdır.'); return; }
-    if (files.length > 5) { setError('Bir tapşırığa ən çox 5 fayl əlavə edə bilərsiniz.'); return; }
+    if (!draft.resourceId || !draft.title.trim() || !draft.description.trim() || !draft.dueAt) { setError(t('apGroupRequired')); return; }
+    if (new Date(draft.dueAt).getTime() <= Date.now() && !editing) { setError(t('apDueFuture')); return; }
+    if (files.length > 5) { setError(t('apMaxFiles')); return; }
     setError('');
     try {
       const attachmentIntentIds: number[] = [];
       if (files.some((file) => !assignmentFileTypes.has(file.type) || file.size > 10 * 1024 * 1024)) {
-        throw new Error('Hər fayl PDF, DOC, DOCX, PNG, JPG və ya TXT olmalı və 10 MB-dan böyük olmamalıdır.');
+        throw new Error(t('sdFileRules'));
       }
       for (const file of files) {
         const contentType = file.type as AssignmentUploadInput['contentType'];
         const uploaded = await uploadMutation.mutateAsync({ data: { name: file.name, size: file.size, contentType } });
         const response = uploaded as typeof uploaded & { id?: number; intentId?: number };
         const putResponse = await fetch(uploaded.uploadURL, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-        if (!putResponse.ok) throw new Error('Faylı yükləmək mümkün olmadı.');
+        if (!putResponse.ok) throw new Error(t('sdFileUploadFailed'));
         const intentId = response.id ?? response.intentId;
-        if (!intentId) throw new Error('Fayl sessiyası üçün intent ID qaytarılmadı. Mətnlə davam edin və ya API müqaviləsini yeniləyin.');
+        if (!intentId) throw new Error(t('apIntentMissing'));
         attachmentIntentIds.push(intentId);
       }
       const common = { title: draft.title.trim(), description: draft.description.trim(), dueAt: new Date(draft.dueAt).toISOString(), maxScore: Number(draft.maxScore), ...(attachmentIntentIds.length ? { attachmentIntentIds } : {}) };
       if (editing) await updateMutation.mutateAsync({ assignmentId: editing.id, data: common as AssignmentUpdate });
       else await createMutation.mutateAsync({ data: { courseId: Number(draft.courseId), resourceId: Number(draft.resourceId), termNumber: Number(draft.termNumber), teacherClerkUserId: draft.teacherClerkUserId || undefined, ...common } as AssignmentInput });
       onSaved();
-    } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : 'Tapşırığı saxlamaq mümkün olmadı.'); }
+    } catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : t('apAssignmentSaveFail')); }
   };
-  return <form onSubmit={(event) => void save(event)} className="rounded-2xl border border-[hsl(var(--accent)/.6)] bg-[hsl(var(--accent)/.1)] p-5" data-testid="form-admin-assignment"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{editing ? 'Tapşırığı yenilə' : 'Yeni tapşırıq'}</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{editing ? editing.title : 'Qrup üçün ev tapşırığı yarat'}</h3></div><button type="button" onClick={onCancel} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Formu bağla" data-testid="button-cancel-assignment-form"><X size={17} /></button></div>
-    <div className="mt-5 grid gap-4 sm:grid-cols-2"><Field label="Müəllim qrupu"><select required disabled={Boolean(editing)} value={draft.resourceId} onChange={(event) => selectResource(event.target.value)} className={inputClass} data-testid="select-assignment-resource"><option value="">Qrup seçin</option>{resourceOptions.map((resource) => <option key={resource.id} value={resource.id}>{resource.title} · {resource.teacherName ?? 'Müəllim'} · {resource.termNumber}-ci semestr</option>)}</select></Field><Field label="Maksimum bal"><input required type="number" min="1" max="1000" value={draft.maxScore} onChange={(event) => setDraft({ ...draft, maxScore: event.target.value })} className={inputClass} data-testid="input-assignment-max-score" /></Field></div>
-     {selectedResource && <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Fənn: <strong className="text-[hsl(var(--primary))]">{selectedResource.title}</strong> · tələbələr yalnız bu müəllim qrupundan əlavə olunacaq.</p>}
-     {editing?.attachments.length ? <div className="mt-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-3"><p className="text-xs font-bold text-[hsl(var(--primary))]">Mövcud tapşırıq faylları</p><AdminAssignmentFileList attachments={editing.attachments} /></div> : null}
-    <div className="mt-4 space-y-4"><Field label="Başlıq"><input required maxLength={200} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} className={inputClass} placeholder="Məsələn: 4-cü mövzu üzrə yazı" data-testid="input-assignment-title" /></Field><Field label="Tapşırığın izahı"><textarea required maxLength={12000} rows={5} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} className={`${inputClass} resize-y`} placeholder="Tələbənin etməli olduğu işi aydın izah edin." data-testid="input-assignment-description" /></Field></div>
-     <div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Son tarix"><input required type="datetime-local" value={draft.dueAt} onChange={(event) => setDraft({ ...draft, dueAt: event.target.value })} className={inputClass} data-testid="input-assignment-due-at" /></Field><Field label="Tapşırıq faylları" hint="PDF, DOC, DOCX, PNG, JPG və TXT · ən çox 5 fayl, hər biri 10 MB-a qədər"><input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt" onChange={(event) => setFiles(Array.from(event.target.files ?? []))} className={`${inputClass} file:mr-2 file:rounded-lg file:border-0 file:bg-[hsl(var(--secondary))] file:px-2 file:py-1 file:text-xs`} data-testid="input-assignment-attachments" />{files.length > 0 && <div className="mt-2 space-y-1.5 rounded-xl bg-[hsl(var(--muted)/.28)] p-2.5">{files.map((file, index) => <div key={`${file.name}-${file.size}-${index}`} className="flex items-center gap-2 rounded-lg bg-[hsl(var(--card))] px-2.5 py-2 text-xs"><Paperclip size={14} className="shrink-0 text-[hsl(var(--secondary-foreground))]" /><span className="min-w-0 flex-1 truncate font-semibold">{file.name}</span><span className="shrink-0 text-[10px] text-[hsl(var(--muted-foreground))]">{Math.max(1, Math.round(file.size / 1024))} KB</span><button type="button" onClick={() => { setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index)); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="focus-ring rounded-md p-1 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={`${file.name} faylını sil`} data-testid={`button-remove-assignment-attachment-${index}`}><X size={14} /></button></div>)}</div>}</Field></div>
+  return <form onSubmit={(event) => void save(event)} className="rounded-2xl border border-[hsl(var(--accent)/.6)] bg-[hsl(var(--accent)/.1)] p-5" data-testid="form-admin-assignment"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{editing ? t('apUpdateAssignment') : t('apNewAssignment')}</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{editing ? editing.title : t('apCreateGroupHw')}</h3></div><button type="button" onClick={onCancel} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={t('apCloseForm')} data-testid="button-cancel-assignment-form"><X size={17} /></button></div>
+    <div className="mt-5 grid gap-4 sm:grid-cols-2"><Field label={t('apTeacherGroup')}><select required disabled={Boolean(editing)} value={draft.resourceId} onChange={(event) => selectResource(event.target.value)} className={inputClass} data-testid="select-assignment-resource"><option value="">{t('apChooseGroup')}</option>{resourceOptions.map((resource) => <option key={resource.id} value={resource.id}>{resource.title} · {resource.teacherName ?? t('roleTeacher')} · {t('gcTerm').replace('{n}', String(resource.termNumber))}</option>)}</select></Field><Field label={t('apMaxScoreLabel')}><input required type="number" min="1" max="1000" value={draft.maxScore} onChange={(event) => setDraft({ ...draft, maxScore: event.target.value })} className={inputClass} data-testid="input-assignment-max-score" /></Field></div>
+     {selectedResource && <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{t('subjectCol')}: <strong className="text-[hsl(var(--primary))]">{selectedResource.title}</strong> {t('apGroupOnly')}</p>}
+     {editing?.attachments.length ? <div className="mt-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-3"><p className="text-xs font-bold text-[hsl(var(--primary))]">{t('apExistingFiles')}</p><AdminAssignmentFileList attachments={editing.attachments} /></div> : null}
+    <div className="mt-4 space-y-4"><Field label={t('apTitle')}><input required maxLength={200} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} className={inputClass} placeholder={t('apTitlePh')} data-testid="input-assignment-title" /></Field><Field label={t('apExplain')}><textarea required maxLength={12000} rows={5} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} className={`${inputClass} resize-y`} placeholder={t('apExplainPh')} data-testid="input-assignment-description" /></Field></div>
+     <div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label={t('apDue')}><input required type="datetime-local" value={draft.dueAt} onChange={(event) => setDraft({ ...draft, dueAt: event.target.value })} className={inputClass} data-testid="input-assignment-due-at" /></Field><Field label={t('apFiles')} hint={t('apFileHint')}><input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt" onChange={(event) => setFiles(Array.from(event.target.files ?? []))} className={`${inputClass} file:mr-2 file:rounded-lg file:border-0 file:bg-[hsl(var(--secondary))] file:px-2 file:py-1 file:text-xs`} data-testid="input-assignment-attachments" />{files.length > 0 && <div className="mt-2 space-y-1.5 rounded-xl bg-[hsl(var(--muted)/.28)] p-2.5">{files.map((file, index) => <div key={`${file.name}-${file.size}-${index}`} className="flex items-center gap-2 rounded-lg bg-[hsl(var(--card))] px-2.5 py-2 text-xs"><Paperclip size={14} className="shrink-0 text-[hsl(var(--secondary-foreground))]" /><span className="min-w-0 flex-1 truncate font-semibold">{file.name}</span><span className="shrink-0 text-[10px] text-[hsl(var(--muted-foreground))]">{Math.max(1, Math.round(file.size / 1024))} KB</span><button type="button" onClick={() => { setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index)); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="focus-ring rounded-md p-1 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={`${file.name} ${t('apRemoveFile')}`} data-testid={`button-remove-assignment-attachment-${index}`}><X size={14} /></button></div>)}</div>}</Field></div>
     {error && <p className="mt-4 rounded-xl bg-[hsl(var(--destructive)/.08)] p-3 text-xs font-semibold text-[hsl(var(--destructive))]" data-testid="status-assignment-form-error">{error}</p>}
-    <div className="mt-5 flex flex-wrap gap-2"><button type="submit" disabled={isPending || !resourceOptions.length} className={buttonClass} data-testid="button-save-assignment"><FilePlus2 size={15} /> {isPending ? 'Yadda saxlanır...' : editing ? 'Dəyişiklikləri saxla' : 'Tapşırıq yarat'}</button><button type="button" onClick={onCancel} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary))]" data-testid="button-dismiss-assignment-form">Ləğv et</button></div>
+    <div className="mt-5 flex flex-wrap gap-2"><button type="submit" disabled={isPending || !resourceOptions.length} className={buttonClass} data-testid="button-save-assignment"><FilePlus2 size={15} /> {isPending ? t('exSaving') : editing ? t('saveChanges') : t('apCreateAssignment')}</button><button type="button" onClick={onCancel} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary))]" data-testid="button-dismiss-assignment-form">{t('cancel')}</button></div>
   </form>;
 }
 
 function AdminAssignmentsSection({ resources, teacherClerkUserId }: { resources: LearningResource[]; teacherClerkUserId?: string }) {
+  const { t, locale } = useI18n();
   const queryClient = useQueryClient();
   const assignmentsQuery = useGetAdminAssignments(undefined, { query: { queryKey: getGetAdminAssignmentsQueryKey() } });
   const updateMutation = useUpdateAssignment();
@@ -305,13 +309,13 @@ function AdminAssignmentsSection({ resources, teacherClerkUserId }: { resources:
     : resources;
   const refresh = async () => { await queryClient.invalidateQueries({ queryKey: getGetAdminAssignmentsQueryKey() }); };
   const closeAssignment = async (assignment: AdminAssignment) => {
-    if (!window.confirm('Bu tapşırığı bağlamaq istəyirsiniz? Tələbələr yeni təhvil göndərə bilməyəcək.')) return;
-    try { await updateMutation.mutateAsync({ assignmentId: assignment.id, data: { status: 'closed' } }); await refresh(); setNotice('Tapşırıq bağlandı.'); } catch (error) { setNotice(error instanceof Error ? error.message : 'Tapşırıq bağlanmadı.'); }
+    if (!window.confirm(t('apCloseConfirm'))) return;
+    try { await updateMutation.mutateAsync({ assignmentId: assignment.id, data: { status: 'closed' } }); await refresh(); setNotice(t('apAssignmentClosed')); } catch (error) { setNotice(error instanceof Error ? error.message : t('apAssignmentNotClosed')); }
   };
-  return <section className="space-y-5" data-testid="section-admin-assignments"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.17em] text-[hsl(var(--muted-foreground))]">Müəllim qrupları üzrə iş</p><h3 className="mt-1 font-serif text-3xl text-[hsl(var(--primary))]">Ev tapşırıqları</h3><p className="mt-2 max-w-xl text-xs leading-5 text-[hsl(var(--muted-foreground))]">Yalnız idarə etdiyiniz müəllim qruplarına tapşırıq verin, təhvil gələndə bal və rəy əlavə edin.</p></div><div className="flex gap-2"><button type="button" onClick={() => void assignmentsQuery.refetch()} className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-3 py-2.5 text-xs font-bold text-[hsl(var(--primary))]" data-testid="button-reload-admin-assignments"><RefreshCw size={14} /> Yenilə</button><button type="button" onClick={() => { setEditing(null); setShowForm(true); }} className={buttonClass} data-testid="button-create-assignment"><Plus size={15} /> Yeni tapşırıq</button></div></div>
+  return <section className="space-y-5" data-testid="section-admin-assignments"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.17em] text-[hsl(var(--muted-foreground))]">{t('apGroupWork')}</p><h3 className="mt-1 font-serif text-3xl text-[hsl(var(--primary))]">{t('homework')}</h3><p className="mt-2 max-w-xl text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('apGroupHwHint')}</p></div><div className="flex gap-2"><button type="button" onClick={() => void assignmentsQuery.refetch()} className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-3 py-2.5 text-xs font-bold text-[hsl(var(--primary))]" data-testid="button-reload-admin-assignments"><RefreshCw size={14} /> {t('refresh')}</button><button type="button" onClick={() => { setEditing(null); setShowForm(true); }} className={buttonClass} data-testid="button-create-assignment"><Plus size={15} /> {t('apNewAssignment')}</button></div></div>
     {notice && <p className="rounded-xl bg-[hsl(var(--secondary)/.35)] p-3 text-xs font-semibold text-[hsl(var(--secondary-foreground))]" data-testid="status-admin-assignment-notice">{notice}</p>}
-    {showForm && <AdminAssignmentForm editing={editing} resources={assignmentResources} onCancel={() => { setShowForm(false); setEditing(null); }} onSaved={() => { setShowForm(false); setEditing(null); void refresh(); setNotice(editing ? 'Tapşırıq yeniləndi.' : 'Tapşırıq yaradıldı.'); }} />}
-    {assignmentsQuery.isLoading ? <div className="space-y-3"><div className="skeleton h-32 rounded-xl" /><div className="skeleton h-32 rounded-xl" /></div> : assignmentsQuery.isError ? <div className="rounded-xl border border-[hsl(var(--destructive)/.22)] bg-[hsl(var(--destructive)/.06)] p-4 text-sm text-[hsl(var(--destructive))]" data-testid="state-admin-assignments-error">Tapşırıqları yükləmək mümkün olmadı. <button type="button" onClick={() => void assignmentsQuery.refetch()} className="font-bold underline" data-testid="button-retry-admin-assignments">Yenidən cəhd et</button></div> : !assignments.length ? <div className="rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.25)] px-5 py-10 text-center"><ClipboardCheck className="mx-auto text-[hsl(var(--secondary-foreground))]" /><p className="mt-3 text-sm font-bold text-[hsl(var(--primary))]">Hələ tapşırıq yoxdur</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">İlk tapşırığı yaradaraq qrupunuzun iş planını başladın.</p></div> : <div className="space-y-3">{assignments.map((assignment) => <div key={assignment.id} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.17)] p-4" data-testid={`card-admin-assignment-${assignment.id}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{assignment.courseTitle} · {assignment.teacherName} · {assignment.termNumber}-ci semestr</p><h4 className="mt-1 text-base font-bold text-[hsl(var(--primary))]">{assignment.title}</h4><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{assignmentDueLabel(assignment.dueAt, assignment.status)} · maksimum {assignment.maxScore} bal</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${assignment.status === 'closed' ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'}`}>{assignment.status === 'closed' ? 'Bağlanıb' : 'Açıq'}</span></div><div className="mt-4 flex flex-wrap items-center gap-2 text-xs"><span className="rounded-lg bg-[hsl(var(--card))] px-2.5 py-2 font-semibold text-[hsl(var(--primary))]">{assignment.submissionCount} təhvil</span><span className="rounded-lg bg-[hsl(var(--card))] px-2.5 py-2 font-semibold text-[hsl(var(--primary))]">{assignment.gradedCount} qiymət</span><button type="button" onClick={() => setSelected(selected === assignment.id ? null : assignment.id)} className="focus-ring ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] px-3 py-2 font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))]" data-testid={`button-open-submissions-${assignment.id}`}><ClipboardCheck size={14} /> Təhvillərə bax</button><button type="button" onClick={() => { setEditing(assignment); setShowForm(true); }} className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] px-3 py-2 font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))]" data-testid={`button-edit-assignment-${assignment.id}`}><Pencil size={14} /> Redaktə</button>{assignment.status !== 'closed' && <button type="button" onClick={() => void closeAssignment(assignment)} disabled={updateMutation.isPending} className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--destructive)/.25)] px-3 py-2 font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.06)]" data-testid={`button-close-assignment-${assignment.id}`}>Bağla</button>}</div>{selected === assignment.id && <AdminAssignmentSubmissions assignment={assignment} onClose={() => setSelected(null)} />}</div>)}</div>}
+    {showForm && <AdminAssignmentForm editing={editing} resources={assignmentResources} onCancel={() => { setShowForm(false); setEditing(null); }} onSaved={() => { setShowForm(false); setEditing(null); void refresh(); setNotice(editing ? t('apAssignmentUpdated') : t('apAssignmentCreated')); }} />}
+    {assignmentsQuery.isLoading ? <div className="space-y-3"><div className="skeleton h-32 rounded-xl" /><div className="skeleton h-32 rounded-xl" /></div> : assignmentsQuery.isError ? <div className="rounded-xl border border-[hsl(var(--destructive)/.22)] bg-[hsl(var(--destructive)/.06)] p-4 text-sm text-[hsl(var(--destructive))]" data-testid="state-admin-assignments-error">{t('apAssignmentsLoadFail')} <button type="button" onClick={() => void assignmentsQuery.refetch()} className="font-bold underline" data-testid="button-retry-admin-assignments">{t('tryAgain')}</button></div> : !assignments.length ? <div className="rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.25)] px-5 py-10 text-center"><ClipboardCheck className="mx-auto text-[hsl(var(--secondary-foreground))]" /><p className="mt-3 text-sm font-bold text-[hsl(var(--primary))]">{t('apNoAssignments')}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('apFirstAssignment')}</p></div> : <div className="space-y-3">{assignments.map((assignment) => <div key={assignment.id} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.17)] p-4" data-testid={`card-admin-assignment-${assignment.id}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{assignment.courseTitle} · {assignment.teacherName} · {t('gcTerm').replace('{n}', String(assignment.termNumber))}</p><h4 className="mt-1 text-base font-bold text-[hsl(var(--primary))]">{assignment.title}</h4><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{assignmentDueLabel(assignment.dueAt, assignment.status, locale === 'ar' ? 'ar' : 'az-AZ', t('apDue'), t('sdDueMissing'))} · {t('apMaxScoreInline').replace('{n}', String(assignment.maxScore))}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${assignment.status === 'closed' ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'}`}>{assignment.status === 'closed' ? t('exClosedBadge') : t('exOpenBadge')}</span></div><div className="mt-4 flex flex-wrap items-center gap-2 text-xs"><span className="rounded-lg bg-[hsl(var(--card))] px-2.5 py-2 font-semibold text-[hsl(var(--primary))]">{assignment.submissionCount} {t('apSubmissionWord')}</span><span className="rounded-lg bg-[hsl(var(--card))] px-2.5 py-2 font-semibold text-[hsl(var(--primary))]">{assignment.gradedCount} {t('apGradeNoun')}</span><button type="button" onClick={() => setSelected(selected === assignment.id ? null : assignment.id)} className="focus-ring ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] px-3 py-2 font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))]" data-testid={`button-open-submissions-${assignment.id}`}><ClipboardCheck size={14} /> {t('apViewSubmissions')}</button><button type="button" onClick={() => { setEditing(assignment); setShowForm(true); }} className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] px-3 py-2 font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))]" data-testid={`button-edit-assignment-${assignment.id}`}><Pencil size={14} /> {t('exEdit')}</button>{assignment.status !== 'closed' && <button type="button" onClick={() => void closeAssignment(assignment)} disabled={updateMutation.isPending} className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--destructive)/.25)] px-3 py-2 font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.06)]" data-testid={`button-close-assignment-${assignment.id}`}>{t('close')}</button>}</div>{selected === assignment.id && <AdminAssignmentSubmissions assignment={assignment} onClose={() => setSelected(null)} />}</div>)}</div>}
   </section>;
 }
 
@@ -334,11 +338,12 @@ function parseAzerbaijanDateTime(value: string) {
   return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour) - 4, Number(minute)));
 }
 
-function assignmentDueLabel(dueAt: string, status: string) {
+function assignmentDueLabel(dueAt: string, status: string, locale: string, dueWord: string, missing: string) {
   const date = new Date(dueAt);
-  if (Number.isNaN(date.getTime())) return 'Son tarix qeyd edilməyib';
-  const label = date.toLocaleString('az-AZ', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
-  return `${status === 'closed' || date.getTime() < Date.now() ? 'Son tarix' : 'Son tarix'}: ${label}`;
+  if (Number.isNaN(date.getTime())) return missing;
+  const label = date.toLocaleString(locale, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  const word = status === 'closed' || date.getTime() < Date.now() ? dueWord : dueWord;
+  return `${word}: ${label}`;
 }
 const lessonDayOptions = [
   ['monday', 'Bazar ertəsi'], ['tuesday', 'Çərşənbə axşamı'], ['wednesday', 'Çərşənbə'],
@@ -401,8 +406,8 @@ type LessonSessionDetail = LessonSessionItem & { rows: LessonSessionRow[] };
 
 const lessonStatusLabels: Record<LessonSessionStatus, string> = { present: 'İştirak', late: 'Gecikib', absent: 'Qayıb', excused: 'Üzrlü' };
 
-function formatBakuTime(value: string) {
-  return new Intl.DateTimeFormat('az-AZ', { timeZone: 'Asia/Baku', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+function formatBakuTime(value: string, locale = 'az-AZ') {
+  return new Intl.DateTimeFormat(locale, { timeZone: 'Asia/Baku', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 }
 
 function formatSessionDate(value: string) {
@@ -469,7 +474,7 @@ function RollCallAttendance() {
   const loadLessons = (keepSelection = true) => {
     setLessonsLoading(true); setLessonsError('');
     void fetch(apiUrl('/admin/attendance/roll-call/lessons'), { cache: 'no-store' })
-      .then(async (response) => { const data = await response.json().catch(() => null); if (!response.ok) throw new Error((data as { error?: string } | null)?.error ?? 'Dərslər yüklənmədi.'); return data as RollCallLesson[]; })
+      .then(async (response) => { const data = await response.json().catch(() => null); if (!response.ok) throw new Error((data as { error?: string } | null)?.error ?? t('apLessonsLoadFail')); return data as RollCallLesson[]; })
       .then((items) => {
         setLessons(items);
         if (keepSelection && resourceId && items.some((item) => String(item.resourceId) === resourceId)) return;
@@ -488,7 +493,7 @@ function RollCallAttendance() {
     let cancelled = false;
     setDetailLoading(true); setNotice(null); setHistoryOpen(null);
     void fetch(apiUrl(`/admin/attendance/roll-call/${resourceId}/${date}`), { cache: 'no-store' })
-      .then(async (response) => { const data = await response.json().catch(() => ({})) as RollCallDetail & { error?: string }; if (!response.ok) throw new Error(data.error ?? 'Tələbə siyahısı yüklənmədi.'); return data; })
+      .then(async (response) => { const data = await response.json().catch(() => ({})) as RollCallDetail & { error?: string }; if (!response.ok) throw new Error(data.error ?? t('apStudentListFail')); return data; })
       .then((data) => { if (cancelled) return; setDetail(data); setMarks(Object.fromEntries(data.rows.map((row) => [row.profileId, row.defaultStatus]))); })
       .catch((error: Error) => { if (cancelled) return; setDetail(null); setMarks({}); setNotice({ text: error.message, error: true }); })
       .finally(() => { if (!cancelled) setDetailLoading(false); });
@@ -570,12 +575,12 @@ function RollCallAttendance() {
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-[hsl(var(--primary))]">{row.studentName} <span className="text-[10px] font-semibold text-[hsl(var(--muted-foreground))]">T{String(row.studentNumber).padStart(4, '0')}</span></p>
                 <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px]">
-                  {row.joined && row.joinedAt ? <span className="font-semibold text-emerald-700">{t('joined')} {formatBakuTime(row.joinedAt)}{row.punctuality === 'late' ? ` (${t('lateMark')})` : ''}</span> : <span className="font-semibold text-red-700">{t('notJoined')}</span>}
+                  {row.joined && row.joinedAt ? <span className="font-semibold text-emerald-700">{t('joined')} {formatBakuTime(row.joinedAt, locale === 'ar' ? 'ar' : 'az-AZ')}{row.punctuality === 'late' ? ` (${t('lateMark')})` : ''}</span> : <span className="font-semibold text-red-700">{t('notJoined')}</span>}
                   {row.finalStatus && <span className="text-[hsl(var(--muted-foreground))]">· {t('savedAs')}: {statusLabel(row.finalStatus)}</span>}
                   <button type="button" onClick={() => setHistoryOpen((current) => current === row.profileId ? null : row.profileId)} className="font-semibold text-[hsl(var(--secondary-foreground))] underline-offset-2 hover:underline" aria-expanded={historyOpen === row.profileId} data-testid={`button-roll-call-history-${row.profileId}`}>{t('history')}{row.absenceCount ? ` · ${t('absence')} ${row.absenceCount}` : ''}</button>
                 </p>
               </div>
-              <div className="grid shrink-0 grid-cols-4 gap-1 sm:flex" role="radiogroup" aria-label={`${row.studentName} davamiyyəti`}>
+              <div className="grid shrink-0 grid-cols-4 gap-1 sm:flex" role="radiogroup" aria-label={t('apRollLabel').replace('{name}', row.studentName)}>
                 {rollCallStatusOptions.map((option) => <button key={option.value} type="button" role="radio" aria-checked={chosen === option.value} title={statusLabel(option.value)} onClick={() => setMarks((current) => ({ ...current, [row.profileId]: option.value }))} className={`focus-ring rounded-lg border px-2 py-1.5 text-[11px] font-bold leading-tight transition ${chosen === option.value ? option.active : 'border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`} data-testid={`button-roll-call-${option.value}-${row.profileId}`}>{chosen === option.value ? '✓ ' : ''}{statusShort(option.value)}</button>)}
               </div>
             </div>
@@ -632,6 +637,7 @@ function StatisticCircles({ statistics, compact = false }: { statistics: SystemS
 }
 
 function AnalyticsDashboard({ applications, profiles, resources, onRefresh }: { applications: Application[]; profiles: Array<Partial<AcademicProfile>>; resources: LearningResource[]; onRefresh: () => void }) {
+  const { t } = useI18n();
   const [detailedProfiles, setDetailedProfiles] = useState<AcademicProfile[]>([]);
   useEffect(() => {
     let active = true;
@@ -658,19 +664,19 @@ function AnalyticsDashboard({ applications, profiles, resources, onRefresh }: { 
   const attendanceAverage = attendance.length ? Math.round(attendance.reduce((sum, subject) => sum + (subject.attendancePercent ?? 0), 0) / attendance.length) : 0;
   const graded = subjects.filter((subject) => subject.grade !== null);
   const gradeAverage = graded.length ? (graded.reduce((sum, subject) => sum + (subject.grade ?? 0), 0) / graded.length).toFixed(2) : '—';
-  const statusCounts = ['pending', 'approved', 'rejected', 'graduated'].map((status) => ({ status, label: status === 'pending' ? 'Gözləyən' : status === 'approved' ? 'Qəbul edilən' : status === 'rejected' ? 'Rədd edilən' : 'Məzun', value: applications.filter((application) => application.status === status).length }));
+  const statusCounts = ['pending', 'approved', 'rejected', 'graduated'].map((status) => ({ status, label: status === 'pending' ? t('apPending') : status === 'approved' ? t('apAccepted') : status === 'rejected' ? t('apRejected') : t('apGraduated'), value: applications.filter((application) => application.status === status).length }));
   const courseLoads = Array.from(new Map(subjects.map((subject) => [subject.courseId, { title: subject.title, count: 0 }])).values());
   subjects.forEach((subject) => { const course = courseLoads.find((item) => item.title === subject.title); if (course) course.count += 1; });
   const maxLoad = Math.max(1, ...courseLoads.map((course) => course.count));
   const downloadCsv = () => {
     const rows = [
-      ['Göstərici', 'Dəyər'],
-      ['Cari semestr', String(selectedTerm)],
-      ['Aktiv tələbə', String(activeProfiles.length)],
-      ['Davamiyyət ortalaması (%)', String(attendanceAverage)],
-      ['Qiymət ortalaması (5)', String(gradeAverage)],
-      ...statusCounts.map((item) => [`Müraciət: ${item.label}`, String(item.value)]),
-      ...courseLoads.map((course) => [`Dərs yükü: ${course.title}`, String(course.count)]),
+      [t('apMetric'), t('apValue')],
+      [t('apCurrentTerm'), String(selectedTerm)],
+      [t('apActiveStudents'), String(activeProfiles.length)],
+      [t('apAttendAvg'), String(attendanceAverage)],
+      [t('apGradeAvg5'), String(gradeAverage)],
+      ...statusCounts.map((item) => [t('apAppPrefix').replace('{label}', item.label), String(item.value)]),
+      ...courseLoads.map((course) => [t('apLoadPrefix').replace('{title}', course.title), String(course.count)]),
     ];
     const csv = `\uFEFF${rows.map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(';')).join('\n')}`;
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -678,27 +684,28 @@ function AnalyticsDashboard({ applications, profiles, resources, onRefresh }: { 
   };
   return <section className="mb-6 space-y-5" data-testid="section-analytics-dashboard">
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">Analitik icmal</p><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Cari semestr üzrə akademik və qəbul göstəriciləri.</p></div>
+      <div><p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">{t('apAnalytics')}</p><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{t('apAnalyticsHint')}</p></div>
       <div className="flex flex-wrap gap-2">
-        <select value={term} onChange={(event) => setTerm(event.target.value === 'current' ? 'current' : Number(event.target.value))} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))]" aria-label="Analitika semestri">
-          <option value="current">Cari semestr ({currentTerm})</option>
-          {[1, 2, 3, 4, 5, 6, 7, 8].filter((item) => item !== currentTerm).map((item) => <option key={item} value={item}>{item}-ci semestr</option>)}
+        <select value={term} onChange={(event) => setTerm(event.target.value === 'current' ? 'current' : Number(event.target.value))} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))]" aria-label={t('apAnalyticsTerm')}>
+          <option value="current">{t('apCurrentTermN').replace('{n}', String(currentTerm))}</option>
+          {[1, 2, 3, 4, 5, 6, 7, 8].filter((item) => item !== currentTerm).map((item) => <option key={item} value={item}>{t('gcTerm').replace('{n}', String(item))}</option>)}
         </select>
-        <button type="button" onClick={onRefresh} className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))]"><RefreshCw size={14} /> Yenilə</button>
-        <button type="button" onClick={downloadCsv} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))]" data-testid="button-export-analytics"><Download size={14} /> CSV endir</button>
+        <button type="button" onClick={onRefresh} className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))]"><RefreshCw size={14} /> {t('refresh')}</button>
+        <button type="button" onClick={downloadCsv} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))]" data-testid="button-export-analytics"><Download size={14} /> {t('apDownloadCsv')}</button>
       </div>
     </div>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {[['Aktiv tələbə', activeProfiles.length, 'Cari semestrə daxil olan'], ['Davamiyyət', `${attendanceAverage}%`, 'Qeyd edilmiş fənlər üzrə'], ['Qiymət ortalaması', gradeAverage, '5 üzərindən'], ['Dərs qrupları', resources.filter((resource) => resource.termNumber === selectedTerm).length, 'Cari semestr']].map(([label, value, hint]) => <div key={String(label)} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-[var(--shadow-xs)]"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{label}</p><p className="mt-2 font-serif text-3xl font-bold text-[hsl(var(--primary))]">{value}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{hint}</p></div>)}
+      {[[t('apActiveStudents'), activeProfiles.length, t('apCurrentTermJoined')], [t('attendance'), `${attendanceAverage}%`, t('recordedSubjects')], [t('apGradeAverage'), gradeAverage, t('apOutOf5')], [t('apLessonGroups'), resources.filter((resource) => resource.termNumber === selectedTerm).length, t('apCurrentTerm')]].map(([label, value, hint]) => <div key={String(label)} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-[var(--shadow-xs)]"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{label}</p><p className="mt-2 font-serif text-3xl font-bold text-[hsl(var(--primary))]">{value}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{hint}</p></div>)}
     </div>
     <div className="grid gap-5 lg:grid-cols-2">
-      <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5"><h3 className="font-serif text-2xl text-[hsl(var(--primary))]">Müraciət statusları</h3><div className="mt-4 space-y-3">{statusCounts.map((item) => { const total = Math.max(1, applications.length); return <div key={item.status}><div className="mb-1 flex justify-between text-xs font-bold"><span>{item.label}</span><span>{item.value}</span></div><div className="h-2.5 overflow-hidden rounded-full bg-[hsl(var(--muted))]"><div className="h-full rounded-full bg-[hsl(var(--accent))]" style={{ width: `${Math.round(item.value / total * 100)}%` }} /></div></div>; })}</div></div>
-      <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5"><h3 className="font-serif text-2xl text-[hsl(var(--primary))]">Dərslər üzrə tələbə yükü</h3>{courseLoads.length ? <div className="mt-4 space-y-3">{courseLoads.slice(0, 8).map((course) => <div key={course.title}><div className="mb-1 flex justify-between gap-3 text-xs font-bold"><span className="truncate">{course.title}</span><span>{course.count}</span></div><div className="h-2.5 overflow-hidden rounded-full bg-[hsl(var(--muted))]"><div className="h-full rounded-full bg-[hsl(var(--primary))]" style={{ width: `${Math.round(course.count / maxLoad * 100)}%` }} /></div></div>)}</div> : <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">Bu semestr üçün dərs məlumatı yoxdur.</p>}</div>
+      <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5"><h3 className="font-serif text-2xl text-[hsl(var(--primary))]">{t('apAppStatuses')}</h3><div className="mt-4 space-y-3">{statusCounts.map((item) => { const total = Math.max(1, applications.length); return <div key={item.status}><div className="mb-1 flex justify-between text-xs font-bold"><span>{item.label}</span><span>{item.value}</span></div><div className="h-2.5 overflow-hidden rounded-full bg-[hsl(var(--muted))]"><div className="h-full rounded-full bg-[hsl(var(--accent))]" style={{ width: `${Math.round(item.value / total * 100)}%` }} /></div></div>; })}</div></div>
+      <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5"><h3 className="font-serif text-2xl text-[hsl(var(--primary))]">{t('apCourseLoad')}</h3>{courseLoads.length ? <div className="mt-4 space-y-3">{courseLoads.slice(0, 8).map((course) => <div key={course.title}><div className="mb-1 flex justify-between gap-3 text-xs font-bold"><span className="truncate">{course.title}</span><span>{course.count}</span></div><div className="h-2.5 overflow-hidden rounded-full bg-[hsl(var(--muted))]"><div className="h-full rounded-full bg-[hsl(var(--primary))]" style={{ width: `${Math.round(course.count / maxLoad * 100)}%` }} /></div></div>)}</div> : <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">{t('apNoTermLessons')}</p>}</div>
     </div>
   </section>;
 }
 
 function SystemStatisticsSettings() {
+  const { t } = useI18n();
   const [statistics, setStatistics] = useState<SystemStatistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -709,10 +716,10 @@ function SystemStatisticsSettings() {
     try {
       const response = await fetch(apiUrl('/admin/system-statistics'), { cache: 'no-store' });
       const result = await response.json() as SystemStatistics & { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Statistika yüklənə bilmədi.');
+      if (!response.ok) throw new Error(result.error || t('apStatsLoadFail'));
       setStatistics(result);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Statistika yüklənə bilmədi.');
+      setNotice(error instanceof Error ? error.message : t('apStatsLoadFail'));
     } finally {
       setLoading(false);
     }
@@ -730,11 +737,11 @@ function SystemStatisticsSettings() {
         body: JSON.stringify({ visible }),
       });
       const result = await response.json() as SystemStatistics & { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Görünürlük dəyişdirilə bilmədi.');
+      if (!response.ok) throw new Error(result.error || t('apVisibilityFail'));
       setStatistics(result);
-      setNotice(visible ? 'Statistika ana səhifədə göstərilir.' : 'Statistika ana səhifədən gizlədildi.');
+      setNotice(visible ? t('apStatsShown') : t('apStatsHidden'));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Görünürlük dəyişdirilə bilmədi.');
+      setNotice(error instanceof Error ? error.message : t('apVisibilityFail'));
     } finally {
       setSaving(false);
     }
@@ -742,10 +749,10 @@ function SystemStatisticsSettings() {
 
   return <section className="mb-6 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.22)] p-5" data-testid="section-system-statistics">
     <div className="flex flex-wrap items-start justify-between gap-4">
-      <div><p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">Statistika görünürlüğü</p><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Akademiyanın ümumi saylarını ana səhifədə göstər.</p></div>
-      {statistics && <button type="button" disabled={saving} onClick={() => void updateVisibility(!statistics.visible)} className={`focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50 ${statistics.visible ? 'bg-emerald-700' : 'bg-slate-600'}`} data-testid="button-toggle-system-statistics">{saving ? 'Yadda saxlanır...' : statistics.visible ? 'Ana səhifədə açıqdır' : 'Ana səhifədə bağlıdır'}</button>}
+      <div><p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">{t('apStatsVisibility')}</p><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{t('apStatsHint')}</p></div>
+      {statistics && <button type="button" disabled={saving} onClick={() => void updateVisibility(!statistics.visible)} className={`focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50 ${statistics.visible ? 'bg-emerald-700' : 'bg-slate-600'}`} data-testid="button-toggle-system-statistics">{saving ? t('exSaving') : statistics.visible ? t('apStatsVisible') : t('apStatsHiddenBtn')}</button>}
     </div>
-    {loading ? <p className="mt-6 text-sm text-[hsl(var(--muted-foreground))]">Statistika yüklənir...</p> : statistics && <div className="mt-6"><StatisticCircles statistics={statistics} /></div>}
+    {loading ? <p className="mt-6 text-sm text-[hsl(var(--muted-foreground))]">{t('apStatsLoading')}</p> : statistics && <div className="mt-6"><StatisticCircles statistics={statistics} /></div>}
     {notice && <p className="mt-4 text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}
   </section>;
 }
@@ -754,6 +761,7 @@ type StudentAiExternalSetting = { shamela: boolean; dorar: boolean };
 
 // Sistem sahibi: tələbələr üçün Mədinə AI «Xarici» axtarışı (Şamilə / Hədis). Standart: söndürülüb.
 function StudentAiExternalSettings() {
+  const { t } = useI18n();
   const [setting, setSetting] = useState<StudentAiExternalSetting | null>(null);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
@@ -763,10 +771,10 @@ function StudentAiExternalSettings() {
       try {
         const response = await fetch(apiUrl('/ai/admin/student-external'), { cache: 'no-store' });
         const result = await response.json() as StudentAiExternalSetting & { error?: string };
-        if (!response.ok) throw new Error(result.error || 'Ayar yüklənə bilmədi.');
+        if (!response.ok) throw new Error(result.error || t('apSettingLoadFail'));
         setSetting({ shamela: result.shamela === true, dorar: result.dorar === true });
       } catch (error) {
-        setNotice(error instanceof Error ? error.message : 'Ayar yüklənə bilmədi.');
+        setNotice(error instanceof Error ? error.message : t('apSettingLoadFail'));
       }
     })();
   }, []);
@@ -781,11 +789,11 @@ function StudentAiExternalSettings() {
         body: JSON.stringify(next),
       });
       const result = await response.json() as StudentAiExternalSetting & { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Ayar dəyişdirilə bilmədi.');
+      if (!response.ok) throw new Error(result.error || t('apSettingFail'));
       setSetting({ shamela: result.shamela === true, dorar: result.dorar === true });
-      setNotice(result.shamela || result.dorar ? 'Tələbələr Mədinə AI-da «Xarici» axtarışdan istifadə edə bilər.' : 'Tələbələr üçün «Xarici» axtarış söndürüldü.');
+      setNotice(result.shamela || result.dorar ? t('apExternalOn') : t('apExternalOff'));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Ayar dəyişdirilə bilmədi.');
+      setNotice(error instanceof Error ? error.message : t('apSettingFail'));
     } finally {
       setSaving(false);
     }
@@ -796,20 +804,20 @@ function StudentAiExternalSettings() {
   return <section className="mb-6 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.22)] p-5" data-testid="section-student-ai-external">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="max-w-xl">
-        <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">Tələbələr üçün Mədinə AI — Xarici axtarış (Şamilə / Hədis)</p>
-        <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Açıq olduqda tələbələr Mədinə AI-da «Daxili / Xarici» keçidini görür və Şamilə kitabxanasında və ya Dorar hədis bazasında axtarış edə bilir; mətnlər AI-ın içində göstərilir. «Daxili» rejim yenə yalnız tələbənin öz məlumatları ilə işləyir. Axtarışlar saxlanmır.</p>
+        <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">{t('apExternalTitle')}</p>
+        <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{t('apExternalBody')}</p>
       </div>
-      {setting && <button type="button" disabled={saving} onClick={() => void save(enabled ? { shamela: false, dorar: false } : { shamela: true, dorar: true })} className={toggleClass(enabled)} data-testid="button-toggle-student-ai-external">{saving ? 'Yadda saxlanır...' : enabled ? 'Tələbələr üçün açıqdır' : 'Tələbələr üçün bağlıdır'}</button>}
+      {setting && <button type="button" disabled={saving} onClick={() => void save(enabled ? { shamela: false, dorar: false } : { shamela: true, dorar: true })} className={toggleClass(enabled)} data-testid="button-toggle-student-ai-external">{saving ? t('exSaving') : enabled ? t('apExternalOpen') : t('apExternalClosed')}</button>}
     </div>
     {setting && enabled && <div className="mt-4 flex flex-wrap gap-2">
-      {([['shamela', 'Şamilə'], ['dorar', 'Hədis (Dorar)']] as const).map(([key, label]) => (
+      {([['shamela', t('targetShamela')], ['dorar', t('targetDorar')]] as const).map(([key, label]) => (
         <label key={key} className="inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-semibold text-[hsl(var(--primary))]">
           <input type="checkbox" checked={setting[key]} disabled={saving} onChange={(event) => void save({ ...setting, [key]: event.target.checked })} data-testid={`checkbox-student-ai-external-${key}`} />
           {label}
         </label>
       ))}
     </div>}
-    {!setting && !notice && <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">Ayar yüklənir...</p>}
+    {!setting && !notice && <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">{t('apSettingLoading')}</p>}
     {notice && <p className="mt-4 text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}
   </section>;
 }
@@ -828,187 +836,190 @@ type AuditHistoryEvent = {
 
 const unsafeAuditDetailKey = /(secret|password|token|credential|authorization|cookie|private|key)/i;
 
-const auditEventLabels: Record<string, string> = {
-  'application.submitted': 'Yeni tələbə müraciəti göndərildi',
-  'application.approved': 'Tələbə müraciəti təsdiqləndi',
-  'application.rejected': 'Tələbə müraciəti rədd edildi',
-  'course.created': 'Yeni dərs yaradıldı',
-  'course.updated': 'Dərs məlumatları yeniləndi',
-  'course.deleted': 'Dərs silindi',
-  'resource.created': 'Yeni dərs yaradıldı',
-  'resource.updated': 'Dərs məlumatları yeniləndi',
-  'resource.deleted': 'Dərs silindi',
-  'resource.student_added': 'Tələbə qrupa əlavə edildi',
-  'resource.student_removed': 'Tələbə qrupdan çıxarıldı',
-  'resource.teacher_added': 'Qrupa müəllim əlavə edildi',
-  'resource.teacher_removed': 'Qrupdan müəllim çıxarıldı',
-  'resource.main_teacher_changed': 'Qrupun əsas müəllimi dəyişdi',
-  'course.books.updated': 'Dərs kitabları yeniləndi',
-  'teacher.choice.created': 'Müəllim seçimi göndərildi',
-  'teacher.choice.approved': 'Müəllim seçimi təsdiqləndi',
-  'teacher.choice.rejected': 'Müəllim seçimi rədd edildi',
-  'student.graduated': 'Tələbə məzun edildi',
-  'user.role.updated': 'İstifadəçi rolu dəyişdirildi',
-  'user.profile.updated': 'İstifadəçi profili yeniləndi',
-  'message.created': 'Yeni mesaj göndərildi',
-  'message.reply.created': 'Mesaja cavab göndərildi',
-  'question.created': 'Yeni sual göndərildi',
-  'attendance.updated': 'Davamiyyət yeniləndi',
-  'attendance.roll_call.saved': 'Davamiyyət yoxlaması təsdiqləndi',
-  'attendance.lesson_session.confirmed': 'Onlayn dərs davamiyyəti təsdiqləndi',
-  'grades.updated': 'Tələbə qiymətləri yeniləndi',
-  'grade.updated': 'Qiymət yeniləndi',
-  'student.deleted': 'Tələbə hesabı silindi',
-  'teacher.assignment': 'Müəllim təyin edildi',
+const auditEventLabels: Record<string, MessageKey> = {
+  'application.submitted': 'apEvAppSubmitted',
+  'application.approved': 'apEvAppApproved',
+  'application.rejected': 'apEvAppRejected',
+  'course.created': 'apEvCourseCreated',
+  'course.updated': 'apEvCourseUpdated',
+  'course.deleted': 'apEvCourseDeleted',
+  'resource.created': 'apEvCourseCreated',
+  'resource.updated': 'apEvCourseUpdated',
+  'resource.deleted': 'apEvCourseDeleted',
+  'resource.student_added': 'apEvStudentAdded',
+  'resource.student_removed': 'apEvStudentRemoved',
+  'resource.teacher_added': 'apEvTeacherAdded',
+  'resource.teacher_removed': 'apEvTeacherRemoved',
+  'resource.main_teacher_changed': 'apEvMainTeacher',
+  'course.books.updated': 'apEvBooksUpdated',
+  'teacher.choice.created': 'apEvChoiceSent',
+  'teacher.choice.approved': 'apEvChoiceOk',
+  'teacher.choice.rejected': 'apEvChoiceNo',
+  'student.graduated': 'apEvGraduated',
+  'user.role.updated': 'apEvRole',
+  'user.profile.updated': 'apEvProfile',
+  'message.created': 'apEvMessage',
+  'message.reply.created': 'apEvReply',
+  'question.created': 'apEvQuestion',
+  'attendance.updated': 'apEvAttend',
+  'attendance.roll_call.saved': 'apEvRoll',
+  'attendance.lesson_session.confirmed': 'apEvSession',
+  'grades.updated': 'apEvGrades',
+  'grade.updated': 'apEvGrade',
+  'student.deleted': 'apEvDeleted',
+  'teacher.assignment': 'apEvAssigned',
 };
 
-const auditTargetLabels: Record<string, string> = {
-  application: 'Tələbə müraciəti',
-  course: 'Dərs',
-  resource: 'Dərs',
-  teacher_choice: 'Müəllim seçimi',
-  student: 'Tələbə',
-  user: 'İstifadəçi',
-  message: 'Mesaj',
-  question: 'Sual',
-  attendance: 'Davamiyyət',
-  grade: 'Qiymət',
+const auditTargetLabels: Record<string, MessageKey> = {
+  application: 'apAppNoun',
+  course: 'attLesson',
+  resource: 'attLesson',
+  teacher_choice: 'apTeacherChoice',
+  student: 'studentFallback',
+  user: 'apUser',
+  message: 'apMessage',
+  question: 'apQuestion',
+  attendance: 'attendance',
+  grade: 'gradeWord',
 };
 
-const auditDetailLabels: Record<string, string> = {
-  status: 'Status',
-  title: 'Başlıq',
-  name: 'Ad',
-  email: 'E-poçt',
-  courseId: 'Dərs nömrəsi',
-  resourceId: 'Dərs nömrəsi',
-  profileId: 'Tələbə nömrəsi',
-  studentId: 'Tələbə nömrəsi',
-  teacherClerkUserId: 'Müəllim hesabı',
-  termNumber: 'Semestr',
-  decision: 'Qərar',
-  reason: 'Səbəb',
-  recommendationCount: 'Tövsiyə olunan seçim sayı',
-  changedFields: 'Dəyişdirilən məlumatlar',
-  previousRole: 'Əvvəlki rol',
-  newRole: 'Yeni rol',
-  graduationTerm: 'Məzuniyyət semestri',
-  rejectionReason: 'İmtina səbəbi',
-  attendanceDate: 'Davamiyyət tarixi',
-  courseCount: 'Dərs sayı',
-  kind: 'Məlumat növü',
-  assignedUserId: 'Təyin olunan istifadəçi',
-  recipientClerkUserId: 'Alıcı hesabı',
-  parentMessageId: 'Əsas mesaj',
+const auditDetailLabels: Record<string, MessageKey> = {
+  status: 'apStatus',
+  title: 'apTitle',
+  name: 'firstName',
+  email: 'apEmail',
+  courseId: 'apCourseNumber',
+  resourceId: 'apCourseNumber',
+  profileId: 'studentNumber',
+  studentId: 'studentNumber',
+  teacherClerkUserId: 'apTeacherAccount',
+  termNumber: 'semester',
+  decision: 'apDecision',
+  reason: 'apReason',
+  recommendationCount: 'apRecommendCount',
+  changedFields: 'apChangedFields',
+  previousRole: 'apPrevRole',
+  newRole: 'apNewRole',
+  graduationTerm: 'apGradTerm',
+  rejectionReason: 'rejectionReason',
+  attendanceDate: 'attendanceDate',
+  courseCount: 'lessonTotal',
+  kind: 'apKind',
+  assignedUserId: 'apAssignedUser',
+  recipientClerkUserId: 'apRecipient',
+  parentMessageId: 'apParentMessage',
 };
 
-const auditValueLabels: Record<string, string> = {
-  pending: 'Gözləmədə',
-  approved: 'Təsdiqləndi',
-  rejected: 'Rədd edildi',
-  graduated: 'Məzun oldu',
-  teacher: 'Müəllim',
-  supervisor: 'Nəzarətçi',
-  owner: 'Sahib',
-  owner_assistant: 'İdarə heyəti',
-  admin: 'İdarəçi',
-  pdf: 'PDF',
-  telegram: 'Telegram',
-  material: 'Material',
-  text: 'Mətn',
-  present: 'İştirak edib',
-  absent: 'İştirak etməyib',
-  late: 'Gecikib',
+const auditValueLabels: Record<string, MessageKey> = {
+  pending: 'statusPending',
+  approved: 'apApprovedWord',
+  rejected: 'apRejectedWord',
+  graduated: 'apBecameGrad',
+  teacher: 'roleTeacher',
+  supervisor: 'roleSupervisor',
+  owner: 'apOwner',
+  owner_assistant: 'roleBoard',
+  admin: 'apLegacyAdmin',
+  pdf: 'apPdf',
+  telegram: 'apTelegram',
+  material: 'apMaterial',
+  text: 'announcementBody',
+  present: 'statusPresent',
+  absent: 'statusAbsent',
+  late: 'apLate',
 };
 
-const auditWordLabels: Record<string, string> = {
-  application: 'Müraciət',
-  applications: 'Müraciətlər',
-  course: 'Dərs',
-  courses: 'Dərslər',
-  resource: 'Dərs resursu',
-  resources: 'Dərs resursları',
-  student: 'Tələbə',
-  students: 'Tələbələr',
-  user: 'İstifadəçi',
-  profile: 'Profil',
-  teacher: 'Müəllim',
-  choice: 'seçimi',
-  assignment: 'təyinatı',
-  message: 'Mesaj',
-  reply: 'cavabı',
-  question: 'Sual',
-  attendance: 'Davamiyyət',
-  grade: 'Qiymət',
-  grades: 'Qiymətlər',
-  role: 'rolu',
-  notification: 'Bildiriş',
-  notifications: 'Bildirişlər',
-  article: 'Məqalə',
-  benefit: 'Günün faydası',
-  created: 'yaradıldı',
-  updated: 'yeniləndi',
-  deleted: 'silindi',
-  submitted: 'göndərildi',
-  approved: 'təsdiqləndi',
-  rejected: 'rədd edildi',
-  graduated: 'məzun edildi',
-  published: 'yayımlandı',
-  sent: 'göndərildi',
-  changed: 'dəyişdirildi',
-  decision: 'qərarı',
+const auditWordLabels: Record<string, MessageKey> = {
+  application: 'apApplication',
+  applications: 'tileApplications',
+  course: 'attLesson',
+  courses: 'aiFtCourses',
+  resource: 'apCourseResource',
+  resources: 'sdCourseResources',
+  student: 'studentFallback',
+  students: 'stepStudents',
+  user: 'apUser',
+  profile: 'apProfile',
+  teacher: 'roleTeacher',
+  choice: 'apChoiceWord',
+  assignment: 'apAssignmentWord',
+  message: 'apMessage',
+  reply: 'apReplyWord',
+  question: 'apQuestion',
+  attendance: 'attendance',
+  grade: 'gradeWord',
+  grades: 'aiFtGrades',
+  role: 'apRoleWord',
+  notification: 'apNoticeWord',
+  notifications: 'notifications',
+  article: 'tileArticle',
+  benefit: 'dailyBenefit',
+  created: 'apCreatedWord',
+  updated: 'apUpdated',
+  deleted: 'apDeletedWord',
+  submitted: 'apSubmittedWord',
+  approved: 'apApprovedLow',
+  rejected: 'apRejectedLow',
+  graduated: 'apGraduatedLow',
+  published: 'apPublishedWord',
+  sent: 'apSubmittedWord',
+  changed: 'apChangedWord',
+  decision: 'apDecisionWord',
 };
 
-function auditHumanizeKey(value: string) {
+function auditHumanizeKey(value: string, t: (key: MessageKey) => string) {
   const words = value.replace(/([a-z])([A-Z])/g, '$1 $2').replaceAll('_', ' ').split(/\s+/).filter(Boolean);
-  return words.map((word) => auditWordLabels[word.toLocaleLowerCase('en-US')] ?? word).join(' ').trim() || 'Əlavə məlumat';
+  return words.map((word) => {
+    const key = auditWordLabels[word.toLocaleLowerCase('en-US')];
+    return key ? t(key) : word;
+  }).join(' ').trim() || t('apExtraInfo');
 }
 
-const auditFieldLabels: Record<string, string> = {
-  title: 'Başlıq',
-  description: 'Təsvir',
-  instructor: 'Müəllim',
-  totalLessons: 'Dərs sayı',
-  pdfUrl: 'PDF linki',
-  telegramUrl: 'Telegram linki',
-  zoomUrl: 'Zoom linki',
-  googleMeetUrl: 'Google Meet linki',
-  lessonUrl: 'Dərs linki',
-  curriculum: 'Mövzular',
-};
-
-function auditEventLabel(eventType: string) {
-  if (auditEventLabels[eventType]) return auditEventLabels[eventType];
+function auditEventLabel(eventType: string, t: (key: MessageKey) => string) {
+  const direct = auditEventLabels[eventType];
+  if (direct) return t(direct);
   if (eventType.startsWith('teacher.choice.')) {
     const status = eventType.split('.').at(-1) ?? '';
-    return `Müəllim seçimi ${auditValueLabels[status] ? auditValueLabels[status].toLocaleLowerCase('az-AZ') : 'yeniləndi'}`;
+    const valKey = auditValueLabels[status];
+    const raw = valKey ? t(valKey) : t('apUpdated');
+    const bit = /[A-Za-zƏəĞğİıÖöÜüŞşÇç]/.test(raw) ? raw.toLocaleLowerCase('az-AZ') : raw;
+    return `${t('apTeacherChoice')} ${bit}`;
   }
   const parts = eventType.split('.').filter(Boolean);
   const action = parts.at(-1) ?? '';
-  const subject = parts.slice(0, -1).map((part) => auditWordLabels[part] ?? auditFieldLabels[part] ?? '').filter(Boolean).join(' ');
-  const translatedAction = auditWordLabels[action];
-  return subject && translatedAction ? `${subject} ${translatedAction}` : 'Sistem əməliyyatı';
+  const subject = parts.slice(0, -1).map((part) => {
+    const key = auditWordLabels[part] ?? auditFieldLabels[part];
+    return key ? t(key) : '';
+  }).filter(Boolean).join(' ');
+  const actionKey = auditWordLabels[action];
+  return subject && actionKey ? `${subject} ${t(actionKey)}` : t('apSystemAction');
 }
 
-function auditTargetLabel(targetType: string) {
-  return auditTargetLabels[targetType] ?? auditWordLabels[targetType] ?? 'Sistem obyekti';
+function auditTargetLabel(targetType: string, t: (key: MessageKey) => string) {
+  const key = auditTargetLabels[targetType] ?? auditWordLabels[targetType];
+  return key ? t(key) : t('apSystemObject');
 }
 
-function safeAuditDetails(details: unknown) {
+function safeAuditDetails(details: unknown, t: (key: MessageKey) => string) {
   if (!details || typeof details !== 'object' || Array.isArray(details)) return '';
   return Object.entries(details as Record<string, unknown>)
     .filter(([key]) => !unsafeAuditDetailKey.test(key))
     .slice(0, 6)
     .map(([key, value]) => {
-      const label = auditDetailLabels[key] ?? auditFieldLabels[key] ?? auditHumanizeKey(key);
+      const labelKey = auditDetailLabels[key] ?? auditFieldLabels[key];
+      const label = labelKey ? t(labelKey) : auditHumanizeKey(key, t);
       if (Array.isArray(value)) {
-        const readable = value.map((item) => auditFieldLabels[String(item)] ?? String(item)).join(', ');
-        return `${label}: ${readable || 'yoxdur'}`;
+        const readable = value.map((item) => {
+          const fieldKey = auditFieldLabels[String(item)];
+          return fieldKey ? t(fieldKey) : String(item);
+        }).join(', ');
+        return `${label}: ${readable || t('apNone')}`;
       }
       if (!['string', 'number', 'boolean'].includes(typeof value)) return '';
+      const valueKey = typeof value === 'string' || typeof value === 'number' ? auditValueLabels[String(value)] : undefined;
       const displayValue = typeof value === 'boolean'
-        ? (value ? 'Bəli' : 'Xeyr')
-        : auditValueLabels[String(value)] ?? String(value);
+        ? (value ? t('apYes') : t('apNo'))
+        : valueKey ? t(valueKey) : String(value);
       return `${label}: ${displayValue.slice(0, 120)}`;
     })
     .filter(Boolean)
@@ -1016,6 +1027,7 @@ function safeAuditDetails(details: unknown) {
 }
 
 function AuditHistory() {
+  const { t, locale } = useI18n();
   const [events, setEvents] = useState<AuditHistoryEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -1040,8 +1052,8 @@ function AuditHistory() {
     void fetch(`${apiUrl('/admin/audit-events')}?${params.toString()}`, { cache: 'no-store' })
       .then(async (response) => {
         const data = await response.json() as unknown;
-        if (!response.ok) throw new Error('Audit tarixçəsini yükləmək mümkün olmadı.');
-        if (!Array.isArray(data)) throw new Error('Audit tarixçəsi düzgün formatda deyil.');
+        if (!response.ok) throw new Error(t('apAuditLoadFail'));
+        if (!Array.isArray(data)) throw new Error(t('apAuditBad'));
         return data as AuditHistoryEvent[];
       })
       .then((data) => {
@@ -1051,7 +1063,7 @@ function AuditHistory() {
         setTargetTypes((current) => Array.from(new Set([...current, ...data.map((event) => event.targetType)])).sort());
       })
       .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : 'Audit tarixçəsini yükləmək mümkün olmadı.');
+        if (active) setError(reason instanceof Error ? reason.message : t('apAuditLoadFail'));
       })
       .finally(() => { if (active) setIsLoading(false); });
     return () => { active = false; };
@@ -1059,12 +1071,12 @@ function AuditHistory() {
 
   const filteredEvents = events;
   const downloadCsv = () => {
-    const rows = [['Tarix', 'Əməliyyat', 'Hədəf tipi', 'Hədəf ID', 'Təhlükəsiz detallar'], ...filteredEvents.map((event) => [
-      new Date(event.createdAt).toLocaleString('az-AZ'),
-      auditEventLabel(event.eventType),
-      auditTargetLabel(event.targetType),
+    const rows = [[t('announcementDate'), t('apOperation'), t('apTargetType'), t('apTargetId'), t('apSafeDetails')], ...filteredEvents.map((event) => [
+      new Date(event.createdAt).toLocaleString(locale === 'ar' ? 'ar' : 'az-AZ'),
+      auditEventLabel(event.eventType, t),
+      auditTargetLabel(event.targetType, t),
       event.targetId ?? '',
-      safeAuditDetails(event.details),
+      safeAuditDetails(event.details, t),
     ])];
     const csv = `\uFEFF${rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(';')).join('\n')}`;
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -1075,31 +1087,31 @@ function AuditHistory() {
     URL.revokeObjectURL(url);
   };
   const deleteEvent = async (id: number) => {
-    if (!window.confirm('Bu audit qeydini silmək istədiyinizə əminsiniz? Bu əməliyyat geri qaytarılmır.')) return;
+    if (!window.confirm(t('apAuditDeleteOne'))) return;
     setDeletingId(id);
     setError('');
     try {
       const response = await fetch(apiUrl(`/admin/audit-events/${id}`), { method: 'DELETE' });
       const result = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Audit qeydi silinə bilmədi.');
+      if (!response.ok) throw new Error(result.error || t('apAuditNotDeleted'));
       setEvents((current) => current.filter((event) => event.id !== id));
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : 'Audit qeydi silinə bilmədi.');
+      setError(reason instanceof Error ? reason.message : t('apAuditNotDeleted'));
     } finally {
       setDeletingId(null);
     }
   };
   const deleteAllEvents = async () => {
-    if (!filteredEvents.length || !window.confirm('Bütün audit qeydlərini silmək istədiyinizə əminsiniz? Bu əməliyyat geri qaytarılmır.')) return;
+    if (!filteredEvents.length || !window.confirm(t('apAuditDeleteAll'))) return;
     setIsDeletingAll(true);
     setError('');
     try {
       const response = await fetch(apiUrl('/admin/audit-events'), { method: 'DELETE' });
       const result = await response.json().catch(() => ({})) as { deletedCount?: number; error?: string };
-      if (!response.ok) throw new Error(result.error || 'Audit qeydləri silinə bilmədi.');
+      if (!response.ok) throw new Error(result.error || t('apAuditsNotDeleted'));
       setEvents([]);
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : 'Audit qeydləri silinə bilmədi.');
+      setError(reason instanceof Error ? reason.message : t('apAuditsNotDeleted'));
     } finally {
       setIsDeletingAll(false);
     }
@@ -1111,45 +1123,45 @@ function AuditHistory() {
         <div className="flex items-start gap-3">
         <ShieldCheck className="mt-0.5 text-[hsl(var(--secondary-foreground))]" size={20} />
         <div>
-          <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">Audit tarixçəsi</p>
-          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Sistem əməliyyatlarının qorunan, yalnız oxunan qeydləri.</p>
+          <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">{t('tileAudit')}</p>
+          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('apAuditHint')}</p>
         </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={downloadCsv} disabled={!filteredEvents.length || isDeletingAll} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-export-audit-csv"><Download size={14} /> CSV endir</button>
-          <button type="button" onClick={() => void deleteAllEvents()} disabled={!filteredEvents.length || isDeletingAll || deletingId !== null} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--destructive))] px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-delete-all-audit"><Trash2 size={14} /> {isDeletingAll ? 'Silinir...' : 'Hamısını sil'}</button>
+          <button type="button" onClick={downloadCsv} disabled={!filteredEvents.length || isDeletingAll} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-export-audit-csv"><Download size={14} /> {t('apDownloadCsv')}</button>
+          <button type="button" onClick={() => void deleteAllEvents()} disabled={!filteredEvents.length || isDeletingAll || deletingId !== null} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--destructive))] px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-delete-all-audit"><Trash2 size={14} /> {isDeletingAll ? t('apDeleting') : t('apDeleteAll')}</button>
         </div>
       </div>
       <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4" data-testid="audit-filters">
-        <select value={eventType} onChange={(event) => setEventType(event.target.value)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-semibold" aria-label="Əməliyyat növü">
-          <option value="all">Bütün əməliyyatlar</option>
-          {eventTypes.map((value) => <option key={value} value={value}>{auditEventLabel(value)}</option>)}
+        <select value={eventType} onChange={(event) => setEventType(event.target.value)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-semibold" aria-label={t('apEventKind')}>
+          <option value="all">{t('apAllEvents')}</option>
+          {eventTypes.map((value) => <option key={value} value={value}>{auditEventLabel(value, t)}</option>)}
         </select>
-        <select value={targetType} onChange={(event) => setTargetType(event.target.value)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-semibold" aria-label="Hədəf tipi">
-          <option value="all">Bütün hədəflər</option>
-          {targetTypes.map((value) => <option key={value} value={value}>{auditTargetLabel(value)}</option>)}
+        <select value={targetType} onChange={(event) => setTargetType(event.target.value)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-semibold" aria-label={t('apTargetType')}>
+          <option value="all">{t('apAllTargets')}</option>
+          {targetTypes.map((value) => <option key={value} value={value}>{auditTargetLabel(value, t)}</option>)}
         </select>
-        <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-semibold" aria-label="Başlanğıc tarixi" />
-        <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-semibold" aria-label="Son tarix" />
+        <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-semibold" aria-label={t('apFromDate')} />
+        <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-semibold" aria-label={t('apDue')} />
       </div>
-      {isLoading ? <p className="mt-5 text-sm text-[hsl(var(--muted-foreground))]">Audit tarixçəsi yüklənir...</p>
+      {isLoading ? <p className="mt-5 text-sm text-[hsl(var(--muted-foreground))]">{t('apAuditLoading')}</p>
         : error ? <p className="mt-5 rounded-xl bg-[hsl(var(--destructive)/.1)] p-3 text-sm text-[hsl(var(--destructive))]" role="alert">{error}</p>
-        : !filteredEvents.length ? <p className="mt-5 text-sm text-[hsl(var(--muted-foreground))]">{events.length ? 'Seçilmiş filterlərə uyğun audit qeydi yoxdur.' : 'Audit qeydi yoxdur.'}</p>
+        : !filteredEvents.length ? <p className="mt-5 text-sm text-[hsl(var(--muted-foreground))]">{events.length ? t('apNoAuditFilter') : t('apNoAudit')}</p>
         : <div className="mt-5 space-y-2">{filteredEvents.map((event) => {
-          const details = safeAuditDetails(event.details);
+          const details = safeAuditDetails(event.details, t);
            return <div key={event.id} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-               <p className="text-sm font-bold text-[hsl(var(--primary))]">{auditEventLabel(event.eventType)}</p>
+               <p className="text-sm font-bold text-[hsl(var(--primary))]">{auditEventLabel(event.eventType, t)}</p>
                <div className="flex items-center gap-2">
-                 <time className="text-xs text-[hsl(var(--muted-foreground))]" dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleString('az-AZ')}</time>
-                 <button type="button" onClick={() => void deleteEvent(event.id)} disabled={deletingId === event.id} className="focus-ring rounded-lg p-1.5 text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.1)] disabled:cursor-not-allowed disabled:opacity-50" aria-label="Audit qeydini sil" title="Audit qeydini sil" data-testid={`button-delete-audit-${event.id}`}><Trash2 size={15} /></button>
+                 <time className="text-xs text-[hsl(var(--muted-foreground))]" dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleString(locale === 'ar' ? 'ar' : 'az-AZ')}</time>
+                 <button type="button" onClick={() => void deleteEvent(event.id)} disabled={deletingId === event.id} className="focus-ring rounded-lg p-1.5 text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.1)] disabled:cursor-not-allowed disabled:opacity-50" aria-label={t('apDeleteAudit')} title={t('apDeleteAudit')} data-testid={`button-delete-audit-${event.id}`}><Trash2 size={15} /></button>
                </div>
             </div>
              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[hsl(var(--muted-foreground))]">
-               <span><strong className="text-[hsl(var(--foreground))]">Hədəf:</strong> {auditTargetLabel(event.targetType)}{event.targetName ? `: ${event.targetName}` : ''}{event.targetId ? ` · №${event.targetId}` : ''}</span>
-                <span><strong className="text-[hsl(var(--foreground))]">İcra edən:</strong> {event.actorName ?? 'Sistem istifadəçisi'}</span>
+               <span><strong className="text-[hsl(var(--foreground))]">{t('apTarget')}</strong> {auditTargetLabel(event.targetType, t)}{event.targetName ? `: ${event.targetName}` : ''}{event.targetId ? ` · №${event.targetId}` : ''}</span>
+                <span><strong className="text-[hsl(var(--foreground))]">{t('apActor')}</strong> {event.actorName ?? t('apSystemUser')}</span>
              </div>
-             {details && <p className="mt-3 break-words rounded-lg bg-[hsl(var(--muted)/.4)] px-3 py-2 text-xs leading-5 text-[hsl(var(--foreground))]"><strong>Əlavə məlumat:</strong> {details}</p>}
+             {details && <p className="mt-3 break-words rounded-lg bg-[hsl(var(--muted)/.4)] px-3 py-2 text-xs leading-5 text-[hsl(var(--foreground))]"><strong>{t('apDetails')}</strong> {details}</p>}
           </div>;
         })}</div>}
     </section>
@@ -1326,35 +1338,37 @@ function TeacherCourseLinksPortal({ links, onChange }: { links: TeacherCourseLin
 }
 
 function TeacherCourseLinksEditor({ links, onChange }: { links: TeacherCourseLinks; onChange: (key: keyof TeacherCourseLinks, value: string) => void }) {
+  const { t } = useI18n();
   const linkItems: Array<{ key: keyof TeacherCourseLinks; label: string }> = [
-    { key: 'telegramUrl', label: 'Telegram' },
-    { key: 'zoomUrl', label: 'Zoom' },
-    { key: 'googleMeetUrl', label: 'Google Meet' },
-    { key: 'lessonUrl', label: 'Dərs linki' },
+    { key: 'telegramUrl', label: t('apTelegram') },
+    { key: 'zoomUrl', label: t('apZoom') },
+    { key: 'googleMeetUrl', label: t('apMeet') },
+    { key: 'lessonUrl', label: t('linkLesson') },
   ];
   return (
     <section className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] p-4" data-testid="section-teacher-course-links">
-      <p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">Dərs keçid linkləri</p>
+      <p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{t('apCourseLinks')}</p>
       <div className="mt-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card)/.7)] p-3" data-testid="section-existing-teacher-course-links">
-        <p className="text-[11px] font-black uppercase tracking-[.1em] text-[hsl(var(--primary))]">Mövcud linklər</p>
+        <p className="text-[11px] font-black uppercase tracking-[.1em] text-[hsl(var(--primary))]">{t('apExistingLinks')}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {linkItems.map(({ key, label }) => links[key]
             ? <a key={key} href={links[key]} target="_blank" rel="noreferrer" className="focus-ring inline-flex max-w-full items-center gap-1.5 rounded-lg bg-[hsl(var(--secondary)/.65)] px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--secondary-foreground))] hover:underline" data-testid={`link-existing-${key}`}>{label}<span className="max-w-[180px] truncate opacity-70">{links[key]}</span></a>
-            : <span key={key} className="rounded-lg border border-dashed border-[hsl(var(--border))] px-2.5 py-1.5 text-xs text-[hsl(var(--muted-foreground))]">{label}: əlavə edilməyib</span>)}
+            : <span key={key} className="rounded-lg border border-dashed border-[hsl(var(--border))] px-2.5 py-1.5 text-xs text-[hsl(var(--muted-foreground))]">{t('apLinkMissing').replace('{label}', label)}</span>)}
         </div>
       </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <Field label="Telegram linki"><input type="url" className={inputClass} value={links.telegramUrl} onChange={(event) => onChange('telegramUrl', event.target.value)} placeholder="https://" /></Field>
-        <Field label="Zoom linki"><input type="url" className={inputClass} value={links.zoomUrl} onChange={(event) => onChange('zoomUrl', event.target.value)} placeholder="https://" /></Field>
-        <Field label="Google Meet linki"><input type="url" className={inputClass} value={links.googleMeetUrl} onChange={(event) => onChange('googleMeetUrl', event.target.value)} placeholder="https://" /></Field>
-        <Field label="Dərs linki"><input type="url" className={inputClass} value={links.lessonUrl} onChange={(event) => onChange('lessonUrl', event.target.value)} placeholder="https://" /></Field>
+        <Field label={t('apTelegramLink')}><input type="url" className={inputClass} value={links.telegramUrl} onChange={(event) => onChange('telegramUrl', event.target.value)} placeholder="https://" /></Field>
+        <Field label={t('apZoomLink')}><input type="url" className={inputClass} value={links.zoomUrl} onChange={(event) => onChange('zoomUrl', event.target.value)} placeholder="https://" /></Field>
+        <Field label={t('apMeetLink')}><input type="url" className={inputClass} value={links.googleMeetUrl} onChange={(event) => onChange('googleMeetUrl', event.target.value)} placeholder="https://" /></Field>
+        <Field label={t('linkLesson')}><input type="url" className={inputClass} value={links.lessonUrl} onChange={(event) => onChange('lessonUrl', event.target.value)} placeholder="https://" /></Field>
       </div>
-      <p className="mt-3 text-[11px] text-[hsl(var(--muted-foreground))]">Linkləri dəyişdikdən sonra yuxarıdakı “Yadda saxla” düyməsinə basın.</p>
+      <p className="mt-3 text-[11px] text-[hsl(var(--muted-foreground))]">{t('apSaveLinksHint')}</p>
     </section>
   );
 }
 
 function TeachersScheduleLinksAction({ onClick }: { onClick: () => void }) {
+  const { t } = useI18n();
   const [host, setHost] = useState<HTMLElement | null>(null);
   useEffect(() => {
     const editButton = document.querySelector('[data-testid="button-edit-teachers-lesson"]');
@@ -1369,7 +1383,7 @@ function TeachersScheduleLinksAction({ onClick }: { onClick: () => void }) {
     };
   }, []);
   return host ? createPortal(
-    <button type="button" onClick={onClick} className={`${buttonClass} bg-[hsl(var(--secondary-foreground))]`} data-testid="button-open-teachers-schedule-links"><Link2 size={15} /> Yalnız linklər</button>,
+    <button type="button" onClick={onClick} className={`${buttonClass} bg-[hsl(var(--secondary-foreground))]`} data-testid="button-open-teachers-schedule-links"><Link2 size={15} /> {t('apLinksOnly')}</button>,
     host,
   ) : null;
 }
@@ -1477,10 +1491,10 @@ function AnnouncementForm({ onSaved }: { onSaved: () => void }) {
         void queryClient.invalidateQueries({ queryKey: getGetAdminAnnouncementsQueryKey() });
         void queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
         setForm({ title: '', body: '', date: new Date().toISOString().slice(0, 10), type: AnnouncementInputType.info });
-        setNotice('Elan uğurla yayımlandı.');
+        setNotice(tr('apAnnounceOk'));
         onSaved();
       },
-      onError: () => setNotice('Elan yayımlanmadı. Məlumatları yoxlayın.'),
+      onError: () => setNotice(tr('apAnnounceFail')),
     });
   };
 
@@ -1503,7 +1517,7 @@ function AnnouncementForm({ onSaved }: { onSaved: () => void }) {
         </Field>
       </div>
       <div className="flex justify-end"><button type="submit" className={buttonClass} disabled={mutation.isPending} data-testid="button-create-announcement"><Megaphone size={16} /> {mutation.isPending ? tr('publishing') : tr('publishAnnouncement')}</button></div>
-      <FormNotice text={notice} error={notice.includes('yayımlanmadı')} />
+      <FormNotice text={notice} error={notice.includes('yayımlanmadı') || notice.includes(tr('apAnnounceFail'))} />
     </form>
   );
 }
@@ -1556,6 +1570,7 @@ function StudentNotificationForm() {
 }
 
 function AnnouncementList() {
+  const { t } = useI18n();
   const announcementsQuery = useGetAdminAnnouncements();
   const updateMutation = useUpdateAnnouncementById();
   const deleteMutation = useDeleteAnnouncement();
@@ -1583,43 +1598,43 @@ function AnnouncementList() {
       onSuccess: async () => {
         setEditingId(null);
         setForm(null);
-        setNotice('Yenilik yeniləndi.');
+        setNotice(t('apNewsUpdated'));
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: getGetAdminAnnouncementsQueryKey() }),
           queryClient.invalidateQueries({ queryKey: getGetAnnouncementsQueryKey() }),
           queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() }),
         ]);
       },
-      onError: () => setNotice('Yenilik yenilənmədi.'),
+      onError: () => setNotice(t('apNewsNotUpdated')),
     });
   };
   const remove = (id: number) => {
-    if (!window.confirm('Bu yeniliyi silmək istədiyinizə əminsiniz?')) return;
+    if (!window.confirm(t('apNewsDeleteConfirm'))) return;
     deleteMutation.mutate({ announcementId: id }, {
       onSuccess: async () => {
-        setNotice('Yenilik silindi.');
+        setNotice(t('apNewsDeleted'));
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: getGetAdminAnnouncementsQueryKey() }),
           queryClient.invalidateQueries({ queryKey: getGetAnnouncementsQueryKey() }),
           queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() }),
         ]);
       },
-      onError: () => setNotice('Yenilik silinmədi.'),
+      onError: () => setNotice(t('apNewsNotDeleted')),
     });
   };
 
   return (
     <div className="mt-8 border-t border-[hsl(var(--border))] pt-6">
-      <div className="mb-4 flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Əvvəl yayımlananlar</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Yeniliklər</h3></div><Megaphone className="text-[hsl(var(--secondary-foreground))]" size={20} /></div>
-      {announcementsQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Yeniliklər yüklənir...</p> : announcementsQuery.data?.length ? <div className="space-y-2">{announcementsQuery.data.map((announcement) => editingId === announcement.id && form ? (
+      <div className="mb-4 flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{t('apEarlier')}</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('news')}</h3></div><Megaphone className="text-[hsl(var(--secondary-foreground))]" size={20} /></div>
+      {announcementsQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('apNewsLoading')}</p> : announcementsQuery.data?.length ? <div className="space-y-2">{announcementsQuery.data.map((announcement) => editingId === announcement.id && form ? (
         <form key={announcement.id} onSubmit={saveEdit} className="space-y-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.55)] p-3">
-          <input required className={inputClass} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Başlıq" />
-          <textarea required rows={4} className={`${inputClass} resize-y`} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder="Mətn" />
-          <div className="grid gap-3 sm:grid-cols-2"><input required type="date" className={inputClass} value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /><select className={inputClass} value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as Announcement['type'] })}><option value={AnnouncementInputType.info}>Məlumat</option><option value={AnnouncementInputType.lesson}>Yeni dərs</option><option value={AnnouncementInputType.book}>Yeni Kitab</option><option value={AnnouncementInputType.announcement}>Elan</option><option value={AnnouncementInputType.important}>Vacib elan</option><option value={AnnouncementInputType.news}>Xəbər</option><option value={AnnouncementInputType.admission}>Tələbə qəbulu</option></select></div>
-          <div className="flex justify-end gap-2"><button type="button" onClick={() => { setEditingId(null); setForm(null); }} className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))]">Ləğv et</button><button type="submit" className={buttonClass} disabled={updateMutation.isPending}>Yadda saxla</button></div>
+          <input required className={inputClass} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder={t('apTitle')} />
+          <textarea required rows={4} className={`${inputClass} resize-y`} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder={t('announcementBody')} />
+          <div className="grid gap-3 sm:grid-cols-2"><input required type="date" className={inputClass} value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /><select className={inputClass} value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as Announcement['type'] })}><option value={AnnouncementInputType.info}>{t('kindInfo')}</option><option value={AnnouncementInputType.lesson}>{t('kindLesson')}</option><option value={AnnouncementInputType.book}>{t('kindBook')}</option><option value={AnnouncementInputType.announcement}>{t('kindAnnouncement')}</option><option value={AnnouncementInputType.important}>{t('kindImportant')}</option><option value={AnnouncementInputType.news}>{t('kindNews')}</option><option value={AnnouncementInputType.admission}>{t('kindAdmission')}</option></select></div>
+          <div className="flex justify-end gap-2"><button type="button" onClick={() => { setEditingId(null); setForm(null); }} className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))]">{t('cancel')}</button><button type="submit" className={buttonClass} disabled={updateMutation.isPending}>{t('save')}</button></div>
         </form>
-      ) : <div key={announcement.id} className="rounded-xl bg-[hsl(var(--muted)/.55)] p-3"><div className="flex items-start justify-between gap-2"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{announcement.title}</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{announcement.body}</p><p className="mt-2 text-[10px] font-bold uppercase tracking-[.1em] text-[hsl(var(--secondary-foreground))]">{announcement.date}</p></div><div className="flex shrink-0 gap-1"><button type="button" onClick={() => startEdit(announcement)} className="focus-ring rounded-lg px-2 py-1 text-[11px] font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))]">Redaktə et</button><button type="button" onClick={() => remove(announcement.id)} className="focus-ring rounded-lg px-2 py-1 text-[11px] font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--card))]" disabled={deleteMutation.isPending}>Sil</button></div></div></div>)}</div> : <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-5 text-center text-xs text-[hsl(var(--muted-foreground))]">Hələ yenilik əlavə edilməyib.</p>}
-      {notice && <FormNotice text={notice} error={notice.includes('yenilənmədi') || notice.includes('silinmədi')} />}
+      ) : <div key={announcement.id} className="rounded-xl bg-[hsl(var(--muted)/.55)] p-3"><div className="flex items-start justify-between gap-2"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{announcement.title}</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{announcement.body}</p><p className="mt-2 text-[10px] font-bold uppercase tracking-[.1em] text-[hsl(var(--secondary-foreground))]">{announcement.date}</p></div><div className="flex shrink-0 gap-1"><button type="button" onClick={() => startEdit(announcement)} className="focus-ring rounded-lg px-2 py-1 text-[11px] font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))]">{t('edit')}</button><button type="button" onClick={() => remove(announcement.id)} className="focus-ring rounded-lg px-2 py-1 text-[11px] font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--card))]" disabled={deleteMutation.isPending}>{t('delete')}</button></div></div></div>)}</div> : <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-5 text-center text-xs text-[hsl(var(--muted-foreground))]">{t('apNoNews')}</p>}
+      {notice && <FormNotice text={notice} error={notice.includes('yenilənmədi') || notice.includes('silinmədi') || notice.includes(t('apNewsNotUpdated')) || notice.includes(t('apNewsNotDeleted'))} />}
     </div>
   );
 }
@@ -1806,11 +1821,12 @@ function ArticleList({ articles }: { articles: Article[] }) {
 }
 
 function DailyBenefitList({ benefits }: { benefits: DailyBenefit[] }) {
+  const { t } = useI18n();
   const benefit = benefits[0];
   return (
     <div className="relative overflow-hidden rounded-2xl border border-[hsl(37_55%_72%/.45)] bg-[hsl(var(--accent)/.45)] px-5 py-4">
-      <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--primary))]"><Quote size={14} /> Günün faydası</p>
-      {benefit ? <div className="relative mt-2"><p className="font-serif text-lg leading-7 text-[hsl(var(--primary))]">“{benefit.body}”</p><p className="mt-2 text-xs font-bold text-[hsl(var(--secondary-foreground))]">— {benefit.source}</p></div> : <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Hələ günün faydası əlavə edilməyib.</p>}
+      <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--primary))]"><Quote size={14} /> {t('dailyBenefit')}</p>
+      {benefit ? <div className="relative mt-2"><p className="font-serif text-lg leading-7 text-[hsl(var(--primary))]">“{benefit.body}”</p><p className="mt-2 text-xs font-bold text-[hsl(var(--secondary-foreground))]">— {benefit.source}</p></div> : <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">{t('apNoBenefit')}</p>}
     </div>
   );
 }
@@ -1905,7 +1921,7 @@ function SchedulePrepSection({ onOpenStudents, onOpenTeachers }: { onOpenStudent
         setTopics((course.curriculum ?? []).join('\n'));
         setDetailsReady(true);
       })
-      .catch(() => setNotice('Dərsin mövzuları yüklənmədi; mövzular dəyişdirilməyəcək.'));
+      .catch(() => setNotice(tr('apTopicsFail')));
     setNotice('');
     // Kitablar «Kitablar» panelində dəyişmiş ola bilər — həmişə təzə siyahı yüklənir.
     setBookDrafts([]);
@@ -1927,17 +1943,17 @@ function SchedulePrepSection({ onOpenStudents, onOpenTeachers }: { onOpenStudent
     setNotice('');
     setIsSaving(true);
     try {
-      if (!title.trim()) throw new Error('Dərs adı mütləqdir.');
+      if (!title.trim()) throw new Error(tr('apLessonNameRequired'));
       const orderedDays = lessonDayOptions.map(([day]) => day as string).filter((day) => lessonDays.includes(day));
-      if (orderedDays.some((day) => !/^\d{2}:\d{2}$/.test(dayTimes[day] ?? ''))) throw new Error('Hər seçilmiş gün üçün dərs saatı yazın.');
+      if (orderedDays.some((day) => !/^\d{2}:\d{2}$/.test(dayTimes[day] ?? ''))) throw new Error(tr('apDayTimeRequired'));
       const scheduleChanged = editingId === null ? orderedDays.length > 0 : scheduleKey(orderedDays, dayTimes) !== initialSchedule;
       const schedulePayload = scheduleChanged ? { lessonDays: orderedDays, lessonDayTimes: Object.fromEntries(orderedDays.map((day) => [day, dayTimes[day]])) } : {};
       const trimmedPdf = pdfUrl.trim();
-      if (trimmedPdf && !/^https:\/\/\S+$/i.test(trimmedPdf) && !trimmedPdf.startsWith('/objects/')) throw new Error('PDF linki https:// ilə başlamalıdır.');
+      if (trimmedPdf && !/^https:\/\/\S+$/i.test(trimmedPdf) && !trimmedPdf.startsWith('/objects/')) throw new Error(tr('apPdfHttps'));
       const topicList = topics.split('\n').map((item) => item.trim()).filter(Boolean);
       // Redaktədə mövzular və PDF yalnız mövcud dəyərlər yükləndikdən sonra göndərilir.
       const detailsPayload = { totalLessons, isMandatory, ...(detailsReady ? { pdfUrl: trimmedPdf || null, curriculum: topicList } : {}) };
-      const { entries, dropped } = courseBookEntriesFromDrafts(bookDrafts, bookBySlug);
+      const { entries, dropped } = courseBookEntriesFromDrafts(bookDrafts, bookBySlug, tr('uxInvalidPage'));
       // Yeni dərsdə yalnız seçilən kitablar göndərilir; redaktədə siyahı tam yazılır (boş = kitablar çıxarılır).
       const sendBooks = booksAvailable && !booksLoading && bookDraftsReady && (editingId !== null || entries.length > 0);
       const response = await fetch(apiUrl(editingId === null ? '/admin/schedule-lessons' : `/admin/schedule-lessons/${editingId}`), {
@@ -1946,22 +1962,22 @@ function SchedulePrepSection({ onOpenStudents, onOpenTeachers }: { onOpenStudent
         body: JSON.stringify({ termNumber, title: title.trim(), ...schedulePayload, ...detailsPayload, ...(sendBooks ? { books: entries } : {}) }),
       });
       const result = await response.json().catch(() => ({})) as { error?: string; booksSaved?: boolean; booksError?: string | null };
-      if (!response.ok) throw new Error(result.error || 'Dərs yadda saxlanılmadı.');
+      if (!response.ok) throw new Error(result.error || tr('apLessonNotSaved'));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetAdminResourcesQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetCoursesQueryKey() }),
         sendBooks ? courseBooks.reload() : Promise.resolve(),
       ]);
-      const base = editingId === null ? 'Dərs əlavə edildi. Növbəti addım: «2 Tələbələr» — «Qruplar» bölməsində qrup yaradın.' : scheduleChanged ? 'Dərs yeniləndi; gün, saat və dərsin növü bütün qruplarına tətbiq olundu.' : 'Dərs yeniləndi.';
+      const base = editingId === null ? tr('apLessonAddedNext') : scheduleChanged ? tr('apLessonUpdatedAll') : tr('apLessonUpdated');
       const booksText = result.booksError
         ? ` ${result.booksError}`
         : result.booksSaved
-          ? entries.length ? ` ${entries.length} kitab dərsə bağlandı.` : ' Dərsdən kitablar çıxarıldı.'
+          ? entries.length ? ` ${tr('apBooksLinked').replace('{n}', String(entries.length))}` : ` ${tr('apBooksRemoved')}`
           : '';
-      setNotice(`${base}${booksText}${dropped && !result.booksError ? ` Kitabxanadan silinmiş ${dropped} kitab siyahıdan çıxarıldı.` : ''}`);
+      setNotice(`${base}${booksText}${dropped && !result.booksError ? ` ${tr('apBooksDropped').replace('{n}', String(dropped))}` : ''}`);
       reset();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Dərs yadda saxlanılmadı.');
+      setNotice(error instanceof Error ? error.message : tr('apLessonNotSaved'));
     } finally {
       savingRef.current = false;
       setIsSaving(false);
@@ -1969,11 +1985,11 @@ function SchedulePrepSection({ onOpenStudents, onOpenTeachers }: { onOpenStudent
   };
 
   const remove = async (resourceId: number) => {
-    if (!window.confirm('Bu dərsi silmək istəyirsiniz?')) return;
+    if (!window.confirm(tr('apDeleteLessonConfirm'))) return;
     const response = await fetch(apiUrl(`/admin/schedule-lessons/${resourceId}`), { method: 'DELETE' });
     const result = await response.json().catch(() => ({})) as { error?: string };
     if (!response.ok) {
-      setNotice(result.error || 'Dərs silinmədi.');
+      setNotice(result.error || tr('apLessonNotDeleted'));
       return;
     }
     await Promise.all([
@@ -1981,7 +1997,7 @@ function SchedulePrepSection({ onOpenStudents, onOpenTeachers }: { onOpenStudent
       queryClient.invalidateQueries({ queryKey: getGetCoursesQueryKey() }),
     ]);
     if (editingId === resourceId) reset();
-    setNotice('Dərs silindi.');
+    setNotice(tr('apLessonDeleted'));
   };
 
   const bookCountFor = (courseId: number) => courseBooks.items.find((item) => item.courseId === courseId && item.termNumber === termNumber)?.books.filter((book) => book.available).length ?? 0;
@@ -2057,7 +2073,7 @@ function SchedulePrepSection({ onOpenStudents, onOpenTeachers }: { onOpenStudent
           <button type="submit" className={buttonClass} disabled={isSaving} data-testid="button-save-schedule-prep">{isSaving ? tr('saving') : editingId === null ? tr('addLesson') : tr('saveChanges')}</button>
         </div>
       </form>
-      {notice && <FormNotice text={notice} error={notice.includes('bil') || notice.includes('mütləq') || notice.includes('silinmə') || notice.includes('artıq var') || notice.includes('bağlıdır') || notice.includes('saxlanılmadı') || notice.includes('aktiv deyil') || notice.includes('tapılmadı') || notice.includes('düzgün deyil')} />}
+      {notice && <FormNotice text={notice} error={notice.includes('bil') || notice.includes('mütləq') || notice.includes('silinmə') || notice.includes('artıq var') || notice.includes('bağlıdır') || notice.includes('saxlanılmadı') || notice.includes('aktiv deyil') || notice.includes('tapılmadı') || notice.includes('düzgün deyil') || notice.includes(tr('apLessonNameRequired')) || notice.includes(tr('apPdfHttps')) || notice.includes(tr('apLessonNotSaved')) || notice.includes(tr('apLessonNotDeleted')) || notice.includes(tr('apDayTimeRequired')) || notice.includes(tr('uxInvalidPage'))} />}
       <div className="space-y-2" data-testid="list-schedule-prep">
         {resourcesQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{tr('listLoading')}</p> : lessons.length ? lessons.map((lesson) => {
           const courseTitle = coursesQuery.data?.find((course) => course.id === lesson.courseId)?.title ?? lesson.title;
@@ -2074,13 +2090,13 @@ function SchedulePrepSection({ onOpenStudents, onOpenTeachers }: { onOpenStudent
               </div>
               {booksCourseId === lesson.courseId && (
                 <div className="mt-3 border-t border-[hsl(var(--border))] pt-3">
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Kitabxanadan dərs kitabları · {termNumber}-{termSuffixes[termNumber] ?? 'ci'} semestr</p>
+                  <p className="mb-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{tr('apLibBooks')} · {tr('gcTerm').replace('{n}', String(termNumber))}</p>
                   <CourseBooksEditor courseId={lesson.courseId} termNumber={termNumber} courseTitle={courseTitle} />
                 </div>
               )}
             </div>
           );
-        }) : <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">Bu semestr üçün dərs yoxdur.</p>}
+        }) : <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">{tr('apNoLessonTerm')}</p>}
       </div>
     </section>
   );
@@ -2208,9 +2224,9 @@ function TeacherSchedule({ ownerName, onOpenGroups }: { ownerName: string; onOpe
   }));
   const activeDay = selectedDay ?? todayKey;
   const selected = schedule.find((item) => item.day === activeDay) ?? schedule[0];
-  const currentUserName = ownerName || [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || user?.fullName || user?.username || 'İstifadəçi';
+  const currentUserName = ownerName || [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || user?.fullName || user?.username || t('apUser');
   // Birgə tədris olunan dərsdə bütün müəllimlərin adı göstərilir.
-  const displayMyTeacherName = (lesson: LearningResource) => isCoTaught(lesson) ? resourceTeacherLabel(lesson) : lesson.teacherClerkUserId === user?.id || lesson.teacherName?.trim().toLowerCase() === 'sistem sahibi' ? currentUserName : (lesson.teacherName ?? 'Müəllim təyin edilməyib');
+  const displayMyTeacherName = (lesson: LearningResource) => isCoTaught(lesson) ? resourceTeacherLabel(lesson) : lesson.teacherClerkUserId === user?.id || lesson.teacherName?.trim().toLowerCase() === 'sistem sahibi' ? currentUserName : (lesson.teacherName ?? t('uxTeacherUnset'));
   const openLesson = (lesson: LearningResource) => {
     setSelectedLesson(lesson);
     setEditing(false);
@@ -2249,16 +2265,16 @@ function TeacherSchedule({ ownerName, onOpenGroups }: { ownerName: string; onOpe
         }),
       });
       const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Linklər yenilənə bilmədi.');
-      setNotice('Dərs linkləri yadda saxlanıldı.');
+      if (!response.ok) throw new Error(result.error || t('apLinksFail'));
+      setNotice(t('apLinksSaved'));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Linklər yenilənə bilmədi.');
+      setNotice(error instanceof Error ? error.message : t('apLinksFail'));
     }
   };
   const saveLesson = async (event: FormEvent) => {
     event.preventDefault();
     if (!selectedLesson || !editForm.lessonDays.length || !editForm.lessonTime) {
-      setNotice('Ən azı bir gün və dərs saatı seçin.');
+      setNotice(t('apPickDayTime'));
       return;
     }
     setNotice('');
@@ -2267,9 +2283,9 @@ function TeacherSchedule({ ownerName, onOpenGroups }: { ownerName: string; onOpe
       if (pdfFile) {
         const uploadRequest = await fetch(apiUrl('/admin/courses/upload-url'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: pdfFile.name, size: pdfFile.size, contentType: 'application/pdf' }) });
         const upload = await uploadRequest.json() as { uploadURL?: string; objectPath?: string; error?: string };
-        if (!uploadRequest.ok || !upload.uploadURL || !upload.objectPath) throw new Error(upload.error || 'PDF yükləməyə hazırlıq alınmadı.');
+        if (!uploadRequest.ok || !upload.uploadURL || !upload.objectPath) throw new Error(upload.error || t('apPdfPrepFail'));
         const uploaded = await fetch(upload.uploadURL, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: pdfFile });
-        if (!uploaded.ok) throw new Error('PDF faylı yüklənə bilmədi.');
+        if (!uploaded.ok) throw new Error(t('gcPdfFail'));
         materialUrl = upload.objectPath;
       }
       const lessonDayTimes = lessonTimesForSave(selectedLesson.lessonTime, editForm.lessonDays, activeDay, editForm.lessonTime);
@@ -2291,7 +2307,7 @@ function TeacherSchedule({ ownerName, onOpenGroups }: { ownerName: string; onOpe
         }),
       });
       const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Dərs yenilənə bilmədi.');
+      if (!response.ok) throw new Error(result.error || t('apLessonUpdateFail'));
       const courseResponse = await fetch(apiUrl(`/admin/courses/${selectedLesson.courseId}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -2303,24 +2319,24 @@ function TeacherSchedule({ ownerName, onOpenGroups }: { ownerName: string; onOpe
         }),
       });
       const courseResult = await courseResponse.json() as { error?: string };
-      if (!courseResponse.ok) throw new Error(courseResult.error || 'Dərs keçid linkləri yenilənə bilmədi.');
+      if (!courseResponse.ok) throw new Error(courseResult.error || t('apCourseLinksFail'));
       await Promise.all(Array.from({ length: 8 }, (_, index) => index + 1).map((termNumber) => queryClient.invalidateQueries({ queryKey: ['get', 'admin', 'teacher-schedule', { termNumber }] })));
       setSelectedLesson({ ...selectedLesson, title: editForm.title.trim(), body: editForm.body.trim(), url: materialUrl, lessonDays: editForm.lessonDays as LearningResource['lessonDays'], lessonTime: Object.values(lessonDayTimes).every((time) => time === editForm.lessonTime) ? editForm.lessonTime : JSON.stringify(lessonDayTimes) });
       setEditing(false);
       setPdfFile(null);
       if (pdfInput.current) pdfInput.current.value = '';
-      setNotice('Dərs məlumatları yadda saxlanıldı.');
+      setNotice(t('apLessonInfoSaved'));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Dərs yenilənə bilmədi.');
+      setNotice(error instanceof Error ? error.message : t('apLessonUpdateFail'));
     }
   };
   return (
     <section className="space-y-5" data-testid="section-teacher-schedule">
        {selectedLesson && editing && <TeacherCourseLinksPortal links={courseLinks} onChange={(key, value) => setCourseLinks((current) => ({ ...current, [key]: value }))} />}
-       {selectedLesson && linkOnlyOpen && !editing && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teacher-course-links-standalone"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">Yalnız linkləri redaktə et</p><button type="button" onClick={() => setLinkOnlyOpen(false)} className="focus-ring rounded-lg px-2 py-1 text-xs font-bold text-[hsl(var(--muted-foreground))]">Bağla</button></div><div className="mt-3"><TeacherCourseLinksEditor links={courseLinks} onChange={(key, value) => setCourseLinks((current) => ({ ...current, [key]: value }))} /></div><button type="button" onClick={() => void saveCourseLinks()} className={`${buttonClass} mt-3`} data-testid="button-save-standalone-course-links"><Link2 size={15} /> Yalnız linkləri yadda saxla</button></section>}
+       {selectedLesson && linkOnlyOpen && !editing && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teacher-course-links-standalone"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{t('apEditLinksOnly')}</p><button type="button" onClick={() => setLinkOnlyOpen(false)} className="focus-ring rounded-lg px-2 py-1 text-xs font-bold text-[hsl(var(--muted-foreground))]">{t('close')}</button></div><div className="mt-3"><TeacherCourseLinksEditor links={courseLinks} onChange={(key, value) => setCourseLinks((current) => ({ ...current, [key]: value }))} /></div><button type="button" onClick={() => void saveCourseLinks()} className={`${buttonClass} mt-3`} data-testid="button-save-standalone-course-links"><Link2 size={15} /> {t('apSaveLinksOnly')}</button></section>}
        {notice && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800" data-testid="text-lesson-save-notice">{notice}</p>}
-       <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{t('myLessons')}</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('weeklySchedule')}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Sizə təyin edilmiş qruplar: dərsi seçib linkləri, materialı, mətnini, gün və saatını dəyişin, tələbə siyahısına baxın.</p></div><div className="flex shrink-0 flex-wrap items-center gap-2 pt-1"><SchedulePdfButton apiPath="/admin/teacher-schedule.pdf" fileName="Muellim-cedveli.pdf" testId="button-download-teacher-schedule-pdf" /><button type="button" disabled={!selectedLesson} onClick={openLessonLinks} className={`${buttonClass} ${selectedLesson ? 'bg-[hsl(var(--secondary-foreground))]' : 'bg-[hsl(var(--muted-foreground))]'}`} data-testid="button-my-schedule-links"><Link2 size={16} /> Yalnız linklər</button></div></div>
-       {isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('scheduleLoading')}</p> : <><div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3" data-testid="section-my-lessons"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Dərslərim · {lessons.length} qrup</p>{lessons.length ? <div className="mt-2 grid gap-2 sm:grid-cols-2">{[...lessons].sort((a, b) => a.termNumber - b.termNumber || a.title.localeCompare(b.title, 'az')).map((lesson) => <button key={lesson.id} type="button" onClick={() => { if (lesson.lessonDays[0] && !lesson.lessonDays.includes(activeDay as LearningResource['lessonDays'][number])) setSelectedDay(lesson.lessonDays[0]); openLesson(lesson); }} className={`focus-ring flex min-h-11 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left ${selectedLesson?.id === lesson.id ? 'border-[hsl(var(--primary))] bg-[hsl(var(--secondary)/.25)]' : 'border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))]'}`} data-testid={`button-my-lesson-${lesson.id}`}><span className="min-w-0"><span className="block truncate text-sm font-bold text-[hsl(var(--primary))]">{lesson.title}</span><span className="block truncate text-[11px] text-[hsl(var(--muted-foreground))]">{lesson.termNumber}-ci semestr · {lesson.lessonDays.length ? lesson.lessonDays.map((day) => `${lessonDayOptions.find(([value]) => value === day)?.[1] ?? day} ${parseDayTimes(lesson.lessonTime, [day])[day] || ''}`.trim()).join(', ') : 'gün/saat yoxdur'}</span></span><ChevronDown size={14} className="-rotate-90 shrink-0 text-[hsl(var(--muted-foreground))]" /></button>)}</div> : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Sizə hələ qrup təyin olunmayıb. «Qruplar» bölməsində aktiv semestrin dərsi üçün özünüzə qrup yarada bilərsiniz.</p>}</div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">{schedule.map(({ day, label, lessons }) => <button key={day} type="button" onClick={() => setSelectedDay(day)} className={`focus-ring rounded-2xl border px-2 py-3 text-center ${day === activeDay ? 'border-transparent bg-[hsl(var(--accent))] text-[hsl(var(--primary))] shadow-[var(--shadow-xs)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]'}`} data-testid={`button-teacher-schedule-day-${day}`}><span className="block text-xs font-black">{label}</span><span className="mt-1 block text-[10px] font-semibold opacity-70">{lessons.length ? `${lessons.length} ${t('lessonWord')}` : t('noLesson')}</span></button>)}</div><div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-4" data-testid="section-teacher-selected-schedule"><p className="flex items-center gap-2 text-xs font-black text-[hsl(var(--primary))]"><CalendarDays size={14} /> {selected?.label}</p>{selected?.lessons.length ? <div className="mt-3 space-y-2">{selected.lessons.map((lesson) => <button key={lesson.id} type="button" onClick={() => openLesson(lesson)} className="focus-ring flex w-full items-center justify-between gap-3 rounded-lg bg-[hsl(var(--card))] px-3 py-3 text-left hover:bg-[hsl(var(--secondary)/.25)]"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{lesson.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{lesson.termNumber}-ci semestr · {displayMyTeacherName(lesson)}</p></div><span className="rounded-lg bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-sm font-black text-[hsl(var(--secondary-foreground))]">{parseDayTimes(lesson.lessonTime, [activeDay])[activeDay] || '—'}</span></button>)}</div> : <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">{t('noLessonToday')}</p>}</div>{selectedLesson && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teacher-lesson-details"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{selectedLesson.termNumber}-ci semestr · {parseDayTimes(selectedLesson.lessonTime, [activeDay])[activeDay] || 'Saat təyin edilməyib'}</p><h4 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{selectedLesson.title}</h4></div><div className="flex gap-2"><button type="button" onClick={openLessonLinks} className={`${buttonClass} bg-[hsl(var(--secondary-foreground))]`} data-testid="button-open-scheduled-lesson-links"><Link2 size={15} /> Yalnız linklər</button><button type="button" onClick={() => { setEditing((value) => !value); setLinkOnlyOpen(false); }} className={buttonClass} data-testid="button-edit-scheduled-lesson"><Pencil size={15} /> {editing ? 'Baxışa qayıt' : 'Redaktə et'}</button></div></div>{editing ? <form onSubmit={saveLesson} className="mt-4 space-y-4"><Field label="Dərsin adı"><input required className={inputClass} value={editForm.title} onChange={(event) => setEditForm({ ...editForm, title: event.target.value })} /></Field><Field label="Dərs haqqında geniş məlumat"><textarea required rows={5} className={`${inputClass} resize-y`} value={editForm.body} onChange={(event) => setEditForm({ ...editForm, body: event.target.value })} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Həftənin günləri"><div className="grid grid-cols-2 gap-2 rounded-xl border border-[hsl(var(--border))] p-3">{lessonDayOptions.map(([day, label]) => <label key={day} className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={editForm.lessonDays.includes(day)} onChange={(event) => setEditForm({ ...editForm, lessonDays: event.target.checked ? [...editForm.lessonDays, day] : editForm.lessonDays.filter((item) => item !== day) })} />{label}</label>)}</div></Field><Field label="Saat"><input required type="time" className={inputClass} value={editForm.lessonTime} onChange={(event) => setEditForm({ ...editForm, lessonTime: event.target.value })} /></Field></div><Field label="PDF və ya material linki"><input type="text" className={inputClass} value={editForm.url} onChange={(event) => setEditForm({ ...editForm, url: event.target.value })} placeholder="Mövcud link" /><input ref={pdfInput} type="file" accept="application/pdf,.pdf" className="mt-2 block w-full text-xs" onChange={(event) => { const file = event.target.files?.[0] ?? null; setPdfFile(file); }} data-testid="input-schedule-pdf-file" />{pdfFile && <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{pdfFile.name} — yadda saxlanarkən dəyişdiriləcək</p>}</Field><button type="submit" className={buttonClass}>Yadda saxla</button>{notice && <p className="text-xs font-semibold">{notice}</p>}</form> : <div className="mt-4 space-y-3"><p className="whitespace-pre-wrap text-sm leading-6 text-[hsl(var(--muted-foreground))]">{selectedLesson.body || 'Bu dərs üçün əlavə məlumat yazılmayıb.'}</p>{selectedLesson.url && <a href={selectedLesson.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-[hsl(var(--secondary-foreground))]">Materialı aç</a>}<div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.25)] p-3" data-testid="section-teacher-lesson-books"><p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]"><BookMarked size={13} /> Dərs kitabları (Kitabxanadan)</p><CourseBooksEditor key={`${selectedLesson.courseId}-${selectedLesson.termNumber}`} courseId={selectedLesson.courseId} termNumber={selectedLesson.termNumber} courseTitle={selectedLesson.title} /></div><GroupRosterReadOnly resourceId={selectedLesson.id} onOpenGroups={onOpenGroups} />{notice && <p className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}</div>}</section>}</>}
+       <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{t('myLessons')}</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('weeklySchedule')}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('apMyGroupsHint')}</p></div><div className="flex shrink-0 flex-wrap items-center gap-2 pt-1"><SchedulePdfButton apiPath="/admin/teacher-schedule.pdf" fileName="Muellim-cedveli.pdf" testId="button-download-teacher-schedule-pdf" /><button type="button" disabled={!selectedLesson} onClick={openLessonLinks} className={`${buttonClass} ${selectedLesson ? 'bg-[hsl(var(--secondary-foreground))]' : 'bg-[hsl(var(--muted-foreground))]'}`} data-testid="button-my-schedule-links"><Link2 size={16} /> {t('apLinksOnly')}</button></div></div>
+       {isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('scheduleLoading')}</p> : <><div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3" data-testid="section-my-lessons"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{t('apMyLessonsCount').replace('{n}', String(lessons.length))}</p>{lessons.length ? <div className="mt-2 grid gap-2 sm:grid-cols-2">{[...lessons].sort((a, b) => a.termNumber - b.termNumber || a.title.localeCompare(b.title, 'az')).map((lesson) => <button key={lesson.id} type="button" onClick={() => { if (lesson.lessonDays[0] && !lesson.lessonDays.includes(activeDay as LearningResource['lessonDays'][number])) setSelectedDay(lesson.lessonDays[0]); openLesson(lesson); }} className={`focus-ring flex min-h-11 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left ${selectedLesson?.id === lesson.id ? 'border-[hsl(var(--primary))] bg-[hsl(var(--secondary)/.25)]' : 'border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))]'}`} data-testid={`button-my-lesson-${lesson.id}`}><span className="min-w-0"><span className="block truncate text-sm font-bold text-[hsl(var(--primary))]">{lesson.title}</span><span className="block truncate text-[11px] text-[hsl(var(--muted-foreground))]">{t('gcTerm').replace('{n}', String(lesson.termNumber))} · {lesson.lessonDays.length ? lesson.lessonDays.map((day) => `${lessonDayOptions.find(([value]) => value === day)?.[1] ?? day} ${parseDayTimes(lesson.lessonTime, [day])[day] || ''}`.trim()).join(', ') : t('noDayTime')}</span></span><ChevronDown size={14} className="-rotate-90 shrink-0 text-[hsl(var(--muted-foreground))]" /></button>)}</div> : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{t('apNoGroupYet')}</p>}</div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">{schedule.map(({ day, label, lessons }) => <button key={day} type="button" onClick={() => setSelectedDay(day)} className={`focus-ring rounded-2xl border px-2 py-3 text-center ${day === activeDay ? 'border-transparent bg-[hsl(var(--accent))] text-[hsl(var(--primary))] shadow-[var(--shadow-xs)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]'}`} data-testid={`button-teacher-schedule-day-${day}`}><span className="block text-xs font-black">{label}</span><span className="mt-1 block text-[10px] font-semibold opacity-70">{lessons.length ? `${lessons.length} ${t('lessonWord')}` : t('noLesson')}</span></button>)}</div><div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-4" data-testid="section-teacher-selected-schedule"><p className="flex items-center gap-2 text-xs font-black text-[hsl(var(--primary))]"><CalendarDays size={14} /> {selected?.label}</p>{selected?.lessons.length ? <div className="mt-3 space-y-2">{selected.lessons.map((lesson) => <button key={lesson.id} type="button" onClick={() => openLesson(lesson)} className="focus-ring flex w-full items-center justify-between gap-3 rounded-lg bg-[hsl(var(--card))] px-3 py-3 text-left hover:bg-[hsl(var(--secondary)/.25)]"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{lesson.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('gcTerm').replace('{n}', String(lesson.termNumber))} · {displayMyTeacherName(lesson)}</p></div><span className="rounded-lg bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-sm font-black text-[hsl(var(--secondary-foreground))]">{parseDayTimes(lesson.lessonTime, [activeDay])[activeDay] || '—'}</span></button>)}</div> : <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">{t('noLessonToday')}</p>}</div>{selectedLesson && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teacher-lesson-details"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{t('gcTerm').replace('{n}', String(selectedLesson.termNumber))} · {parseDayTimes(selectedLesson.lessonTime, [activeDay])[activeDay] || t('apNoTime')}</p><h4 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{selectedLesson.title}</h4></div><div className="flex gap-2"><button type="button" onClick={openLessonLinks} className={`${buttonClass} bg-[hsl(var(--secondary-foreground))]`} data-testid="button-open-scheduled-lesson-links"><Link2 size={15} /> {t('apLinksOnly')}</button><button type="button" onClick={() => { setEditing((value) => !value); setLinkOnlyOpen(false); }} className={buttonClass} data-testid="button-edit-scheduled-lesson"><Pencil size={15} /> {editing ? t('apBackToView') : t('edit')}</button></div></div>{editing ? <form onSubmit={saveLesson} className="mt-4 space-y-4"><Field label={t('lessonName')}><input required className={inputClass} value={editForm.title} onChange={(event) => setEditForm({ ...editForm, title: event.target.value })} /></Field><Field label={t('apLessonAbout')}><textarea required rows={5} className={`${inputClass} resize-y`} value={editForm.body} onChange={(event) => setEditForm({ ...editForm, body: event.target.value })} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label={t('apWeekDays')}><div className="grid grid-cols-2 gap-2 rounded-xl border border-[hsl(var(--border))] p-3">{lessonDayOptions.map(([day, label]) => <label key={day} className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={editForm.lessonDays.includes(day)} onChange={(event) => setEditForm({ ...editForm, lessonDays: event.target.checked ? [...editForm.lessonDays, day] : editForm.lessonDays.filter((item) => item !== day) })} />{label}</label>)}</div></Field><Field label="Saat"><input required type="time" className={inputClass} value={editForm.lessonTime} onChange={(event) => setEditForm({ ...editForm, lessonTime: event.target.value })} /></Field></div><Field label={t('apPdfOrLink')}><input type="text" className={inputClass} value={editForm.url} onChange={(event) => setEditForm({ ...editForm, url: event.target.value })} placeholder={t('apCurrentLink')} /><input ref={pdfInput} type="file" accept="application/pdf,.pdf" className="mt-2 block w-full text-xs" onChange={(event) => { const file = event.target.files?.[0] ?? null; setPdfFile(file); }} data-testid="input-schedule-pdf-file" />{pdfFile && <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{pdfFile.name} — {t('apPdfPending')}</p>}</Field><button type="submit" className={buttonClass}>{t('save')}</button>{notice && <p className="text-xs font-semibold">{notice}</p>}</form> : <div className="mt-4 space-y-3"><p className="whitespace-pre-wrap text-sm leading-6 text-[hsl(var(--muted-foreground))]">{selectedLesson.body || t('apNoExtra')}</p>{selectedLesson.url && <a href={selectedLesson.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-[hsl(var(--secondary-foreground))]">{t('apOpenMaterial')}</a>}<div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.25)] p-3" data-testid="section-teacher-lesson-books"><p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]"><BookMarked size={13} /> {t('apLibCourseBooks')}</p><CourseBooksEditor key={`${selectedLesson.courseId}-${selectedLesson.termNumber}`} courseId={selectedLesson.courseId} termNumber={selectedLesson.termNumber} courseTitle={selectedLesson.title} /></div><GroupRosterReadOnly resourceId={selectedLesson.id} onOpenGroups={onOpenGroups} />{notice && <p className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}</div>}</section>}</>}
     </section>
   );
 }
@@ -2351,7 +2367,7 @@ function TeachersSchedule({ ownerName }: { ownerName: string }) {
       .map((lesson) => ({ ...lesson, teacherName: lesson.teacherName?.trim().toLowerCase() === 'sistem sahibi' ? ownerName : lesson.teacherName })),
   }));
   const selected = schedule.find((item) => item.day === activeDay) ?? schedule[0];
-  const displayTeacherName = (lesson: LearningResource) => lesson.teacherName?.trim().toLowerCase() === 'sistem sahibi' ? ownerName : (lesson.teacherName ?? 'Müəllim təyin edilməyib');
+  const displayTeacherName = (lesson: LearningResource) => lesson.teacherName?.trim().toLowerCase() === 'sistem sahibi' ? ownerName : (lesson.teacherName ?? t('uxTeacherUnset'));
   const openLesson = (lesson: LearningResource) => {
     setSelectedLesson(lesson);
     setEditing(false);
@@ -2382,16 +2398,16 @@ function TeachersSchedule({ ownerName }: { ownerName: string }) {
         }),
       });
       const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Linklər yenilənə bilmədi.');
-      setNotice('Dərs linkləri yadda saxlanıldı.');
+      if (!response.ok) throw new Error(result.error || t('apLinksFail'));
+      setNotice(t('apLinksSaved'));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Linklər yenilənə bilmədi.');
+      setNotice(error instanceof Error ? error.message : t('apLinksFail'));
     }
   };
   const saveLesson = async (event: FormEvent) => {
     event.preventDefault();
     if (!selectedLesson || !editForm.title.trim() || !editForm.body.trim() || !editForm.lessonDays.length || !editForm.lessonTime) {
-      setNotice('Dərsin adı, məlumatı, ən azı bir günü və saatı daxil edilməlidir.');
+      setNotice(t('apLessonFieldsRequired'));
       return;
     }
     try {
@@ -2402,23 +2418,23 @@ function TeachersSchedule({ ownerName }: { ownerName: string }) {
         body: JSON.stringify({ courseId: selectedLesson.courseId, termNumber: selectedLesson.termNumber, kind: selectedLesson.kind, title: editForm.title.trim(), body: editForm.body.trim(), url: editForm.url.trim() || null, lessonDays: editForm.lessonDays, lessonTime: editForm.lessonTime, lessonDayTimes, isMandatory: selectedLesson.isMandatory, teacherClerkUserId: selectedLesson.teacherClerkUserId }),
       });
       const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Dərs yenilənə bilmədi.');
+      if (!response.ok) throw new Error(result.error || t('apLessonUpdateFail'));
       await queryClient.invalidateQueries({ queryKey: getGetAdminResourcesQueryKey() });
       setSelectedLesson({ ...selectedLesson, title: editForm.title.trim(), body: editForm.body.trim(), url: editForm.url.trim() || null, lessonDays: editForm.lessonDays as LearningResource['lessonDays'], lessonTime: Object.values(lessonDayTimes).every((time) => time === editForm.lessonTime) ? editForm.lessonTime : JSON.stringify(lessonDayTimes) });
       setEditing(false);
-      setNotice('Dərs məlumatları yadda saxlanıldı.');
+      setNotice(t('apLessonInfoSaved'));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Dərs yenilənə bilmədi.');
+      setNotice(error instanceof Error ? error.message : t('apLessonUpdateFail'));
     }
   };
   return (
     <section className="space-y-5" data-testid="section-teachers-schedule">
       {selectedLesson && <TeachersScheduleLinksAction onClick={() => setLinkOnlyOpen((value) => !value)} />}
-      <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{t('academySchedule')}</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('teachersSchedule')}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Bütün müəllimlərə təyin edilmiş dərslər və dərs saatları.</p></div>
-      {selectedLesson && <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setLinkOnlyOpen((value) => !value)} className={`${buttonClass} bg-[hsl(var(--secondary-foreground))]`} data-testid="button-open-teachers-schedule-links"><Link2 size={15} /> Yalnız linklər</button></div>}
+      <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{t('academySchedule')}</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('teachersSchedule')}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('apAllTeachersHint')}</p></div>
+      {selectedLesson && <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setLinkOnlyOpen((value) => !value)} className={`${buttonClass} bg-[hsl(var(--secondary-foreground))]`} data-testid="button-open-teachers-schedule-links"><Link2 size={15} /> {t('apLinksOnly')}</button></div>}
        {notice && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800" data-testid="text-teachers-lesson-save-notice">{notice}</p>}
-      {selectedLesson && linkOnlyOpen && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teachers-schedule-links"><TeacherCourseLinksEditor links={courseLinks} onChange={(key, value) => setCourseLinks((current) => ({ ...current, [key]: value }))} /><button type="button" onClick={() => void saveCourseLinks()} className={`${buttonClass} mt-3`} data-testid="button-save-teachers-schedule-links"><Link2 size={15} /> Yalnız linkləri yadda saxla</button></section>}
-       {resourcesQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('scheduleLoading')}</p> : <><div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-7">{schedule.map(({ day, label, lessons }) => <button key={day} type="button" onClick={() => setSelectedDay(day)} className={`focus-ring rounded-xl border px-2 py-3 text-center ${day === activeDay ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent))] text-[hsl(var(--primary))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]'}`}><span className="block text-xs font-black">{label}</span><span className="mt-1 block text-[10px]">{lessons.length ? `${lessons.length} ${t('lessonWord')}` : t('noLesson')}</span></button>)}</div><div className="rounded-xl border border-[hsl(var(--border))] p-4" data-testid="section-teachers-selected-schedule"><p className="text-xs font-black text-[hsl(var(--primary))]">{selected?.label}</p>{selected?.lessons.length ? <div className="mt-3 space-y-2">{selected.lessons.map((lesson) => <button key={lesson.id} type="button" onClick={() => openLesson(lesson)} className="focus-ring flex w-full flex-wrap items-center justify-between gap-3 rounded-lg bg-[hsl(var(--muted)/.45)] px-3 py-3 text-left hover:bg-[hsl(var(--secondary)/.25)]"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{lesson.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{lesson.teacherName ?? 'Müəllim təyin edilməyib'} · {lesson.termNumber}-ci semestr</p><p className="mt-1 line-clamp-2 text-xs text-[hsl(var(--muted-foreground))]">{lesson.body}</p></div><span className="rounded-lg bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-sm font-black text-[hsl(var(--secondary-foreground))]">{parseDayTimes(lesson.lessonTime, [activeDay])[activeDay] || '—'}</span></button>)}</div> : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{t('noLessonToday')}</p>}</div>{selectedLesson && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teachers-lesson-details"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{selectedLesson.teacherName ?? 'Müəllim'} · {selectedLesson.termNumber}-ci semestr · {parseDayTimes(selectedLesson.lessonTime, [activeDay])[activeDay] || '—'}</p><h4 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{selectedLesson.title}</h4></div><button type="button" onClick={() => setEditing((value) => !value)} className={buttonClass} data-testid="button-edit-teachers-lesson"><Pencil size={15} /> {editing ? 'Baxışa qayıt' : 'Redaktə et'}</button></div>{editing ? <form onSubmit={saveLesson} className="mt-4 space-y-4"><Field label="Dərsin adı"><input required className={inputClass} value={editForm.title} onChange={(event) => setEditForm({ ...editForm, title: event.target.value })} /></Field><Field label="Dərs haqqında məlumat"><textarea required rows={5} className={`${inputClass} resize-y`} value={editForm.body} onChange={(event) => setEditForm({ ...editForm, body: event.target.value })} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Həftənin günləri"><div className="grid grid-cols-2 gap-2 rounded-xl border border-[hsl(var(--border))] p-3">{lessonDayOptions.map(([day, label]) => <label key={day} className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={editForm.lessonDays.includes(day)} onChange={(event) => setEditForm({ ...editForm, lessonDays: event.target.checked ? [...editForm.lessonDays, day] : editForm.lessonDays.filter((item) => item !== day) })} />{label}</label>)}</div></Field><Field label="Saat"><input required type="time" className={inputClass} value={editForm.lessonTime} onChange={(event) => setEditForm({ ...editForm, lessonTime: event.target.value })} /></Field></div><Field label="PDF və ya material linki"><input type="text" className={inputClass} value={editForm.url} onChange={(event) => setEditForm({ ...editForm, url: event.target.value })} placeholder="https:// və ya yüklənmiş PDF" /></Field><button type="submit" className={buttonClass}>Yadda saxla</button>{notice && <p className="text-xs font-semibold">{notice}</p>}</form> : <div className="mt-4 space-y-3"><p className="whitespace-pre-wrap text-sm leading-6 text-[hsl(var(--muted-foreground))]">{selectedLesson.body || 'Bu dərs üçün əlavə məlumat yazılmayıb.'}</p>{selectedLesson.url && <a href={selectedLesson.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-[hsl(var(--secondary-foreground))]">Materialı aç</a>}{notice && <p className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}</div>}</section>}</>}
+      {selectedLesson && linkOnlyOpen && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teachers-schedule-links"><TeacherCourseLinksEditor links={courseLinks} onChange={(key, value) => setCourseLinks((current) => ({ ...current, [key]: value }))} /><button type="button" onClick={() => void saveCourseLinks()} className={`${buttonClass} mt-3`} data-testid="button-save-teachers-schedule-links"><Link2 size={15} /> {t('apSaveLinksOnly')}</button></section>}
+       {resourcesQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('scheduleLoading')}</p> : <><div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-7">{schedule.map(({ day, label, lessons }) => <button key={day} type="button" onClick={() => setSelectedDay(day)} className={`focus-ring rounded-xl border px-2 py-3 text-center ${day === activeDay ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent))] text-[hsl(var(--primary))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]'}`}><span className="block text-xs font-black">{label}</span><span className="mt-1 block text-[10px]">{lessons.length ? `${lessons.length} ${t('lessonWord')}` : t('noLesson')}</span></button>)}</div><div className="rounded-xl border border-[hsl(var(--border))] p-4" data-testid="section-teachers-selected-schedule"><p className="text-xs font-black text-[hsl(var(--primary))]">{selected?.label}</p>{selected?.lessons.length ? <div className="mt-3 space-y-2">{selected.lessons.map((lesson) => <button key={lesson.id} type="button" onClick={() => openLesson(lesson)} className="focus-ring flex w-full flex-wrap items-center justify-between gap-3 rounded-lg bg-[hsl(var(--muted)/.45)] px-3 py-3 text-left hover:bg-[hsl(var(--secondary)/.25)]"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{lesson.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{lesson.teacherName ?? t('uxTeacherUnset')} · {t('gcTerm').replace('{n}', String(lesson.termNumber))}</p><p className="mt-1 line-clamp-2 text-xs text-[hsl(var(--muted-foreground))]">{lesson.body}</p></div><span className="rounded-lg bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-sm font-black text-[hsl(var(--secondary-foreground))]">{parseDayTimes(lesson.lessonTime, [activeDay])[activeDay] || '—'}</span></button>)}</div> : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{t('noLessonToday')}</p>}</div>{selectedLesson && <section className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-teachers-lesson-details"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{selectedLesson.teacherName ?? t('roleTeacher')} · {t('gcTerm').replace('{n}', String(selectedLesson.termNumber))} · {parseDayTimes(selectedLesson.lessonTime, [activeDay])[activeDay] || '—'}</p><h4 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{selectedLesson.title}</h4></div><button type="button" onClick={() => setEditing((value) => !value)} className={buttonClass} data-testid="button-edit-teachers-lesson"><Pencil size={15} /> {editing ? t('apBackToView') : t('edit')}</button></div>{editing ? <form onSubmit={saveLesson} className="mt-4 space-y-4"><Field label={t('lessonName')}><input required className={inputClass} value={editForm.title} onChange={(event) => setEditForm({ ...editForm, title: event.target.value })} /></Field><Field label={t('apLessonAboutShort')}><textarea required rows={5} className={`${inputClass} resize-y`} value={editForm.body} onChange={(event) => setEditForm({ ...editForm, body: event.target.value })} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label={t('apWeekDays')}><div className="grid grid-cols-2 gap-2 rounded-xl border border-[hsl(var(--border))] p-3">{lessonDayOptions.map(([day, label]) => <label key={day} className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={editForm.lessonDays.includes(day)} onChange={(event) => setEditForm({ ...editForm, lessonDays: event.target.checked ? [...editForm.lessonDays, day] : editForm.lessonDays.filter((item) => item !== day) })} />{label}</label>)}</div></Field><Field label="Saat"><input required type="time" className={inputClass} value={editForm.lessonTime} onChange={(event) => setEditForm({ ...editForm, lessonTime: event.target.value })} /></Field></div><Field label={t('apPdfOrLink')}><input type="text" className={inputClass} value={editForm.url} onChange={(event) => setEditForm({ ...editForm, url: event.target.value })} placeholder={t('apPdfPh')} /></Field><button type="submit" className={buttonClass}>{t('save')}</button>{notice && <p className="text-xs font-semibold">{notice}</p>}</form> : <div className="mt-4 space-y-3"><p className="whitespace-pre-wrap text-sm leading-6 text-[hsl(var(--muted-foreground))]">{selectedLesson.body || t('apNoExtra')}</p>{selectedLesson.url && <a href={selectedLesson.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-[hsl(var(--secondary-foreground))]">{t('apOpenMaterial')}</a>}{notice && <p className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}</div>}</section>}</>}
     </section>
   );
 }
@@ -2433,7 +2449,7 @@ function ApplicationList({ applications, isLoading, onDecision, busyId, canDecid
   onAssignTeacher: (application: Application) => void;
   teacherBusyId: number | null;
 }) {
-  const { t: tr } = useI18n();
+  const { t: tr, locale } = useI18n();
   const [activeStatus, setActiveStatus] = useState<Application['status'] | null>('pending');
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -2458,7 +2474,7 @@ function ApplicationList({ applications, isLoading, onDecision, busyId, canDecid
         <button type="button" onClick={() => setActiveStatus((current) => current === item.value ? null : item.value)} aria-expanded={activeStatus === item.value} className={`focus-ring w-full rounded-2xl border p-4 text-left transition hover:shadow-sm ${item.className} ${activeStatus === item.value ? 'ring-2 ring-[hsl(var(--primary)/.35)]' : 'opacity-80'}`} data-testid={`button-application-status-${item.value}`}><p className="text-[10px] font-bold uppercase tracking-[.14em]">{item.label}</p><p className="mt-2 font-serif text-3xl">{item.count}</p><p className="mt-1 text-xs font-semibold">{activeStatus === item.value ? tr('hideNames') : tr('showNames')}</p></button>
         {activeStatus === item.value && <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.25)] p-4" data-testid={`application-names-${activeStatus}`}><p className="text-xs font-bold text-[hsl(var(--muted-foreground))]">{item.label} {tr('applicants')}</p>{visibleApplications.length ? <div className="mt-3 flex flex-wrap gap-2">{visibleApplications.map((application) => <button type="button" key={application.id} onClick={() => { setReason(''); setIsRejecting(false); setSelectedApplication(application); }} className="focus-ring rounded-xl bg-[hsl(var(--card))] px-3 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--secondary)/.25)]" data-testid={`button-application-name-${application.id}`}>{application.firstName} {application.lastName}</button>)}</div> : <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">{tr('noStatusApplications')}</p>}</div>}
       </div>)}</div>
-      {selectedApplication && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[hsl(var(--primary)/.5)] px-4 py-6 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="application-details-title"><div className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-sm)]"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">{tr('applicationDetails')}</p><h4 id="application-details-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{selectedApplication.firstName} {selectedApplication.lastName}</h4><p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{selectedApplication.status === 'pending' ? tr('statusPending') : selectedApplication.status === 'approved' ? tr('approvedShort') : tr('rejectedShort')}</p></div><button type="button" onClick={() => setSelectedApplication(null)} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Bağla"><X size={18} /></button></div><dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2"><div><dt className="text-xs text-[hsl(var(--muted-foreground))]">E-poçt</dt><dd className="mt-1 font-semibold">{selectedApplication.email}</dd></div><div><dt className="text-xs text-[hsl(var(--muted-foreground))]">Telefon</dt><dd className="mt-1 font-semibold">{selectedApplication.phone}</dd></div><div><dt className="text-xs text-[hsl(var(--muted-foreground))]">Doğum tarixi</dt><dd className="mt-1 font-semibold">{selectedApplication.birthDate}</dd></div><div><dt className="text-xs text-[hsl(var(--muted-foreground))]">Ərəb dili səviyyəsi</dt><dd className="mt-1 font-semibold">{selectedApplication.arabicLevel}</dd></div><div><dt className="text-xs text-[hsl(var(--muted-foreground))]">Müraciət tarixi</dt><dd className="mt-1 font-semibold">{new Intl.DateTimeFormat('az-AZ', { dateStyle: 'medium' }).format(new Date(selectedApplication.createdAt))}</dd></div></dl>{selectedApplication.status !== 'rejected' && <div className="mt-5 border-t border-[hsl(var(--border))] pt-4"><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{tr('uploadedPdfs')}</p><div className="mt-2 flex flex-wrap gap-2">{selectedApplication.recommendationNames.map((name, index) => <a key={name} href={downloadPath(selectedApplication.id, index)} className="focus-ring inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--muted))] px-2.5 py-2 text-xs font-bold text-[hsl(var(--secondary-foreground))] hover:underline"><FileText size={14} /> {name}</a>)}</div></div>}{selectedApplication.status === 'rejected' && selectedApplication.rejectionReason && <p className="mt-5 rounded-lg bg-[hsl(var(--destructive)/.08)] p-3 text-xs leading-5 text-[hsl(var(--destructive))]"><strong>{tr('rejectionReason')}:</strong> {selectedApplication.rejectionReason}</p>}{canDecide && selectedApplication.status === 'pending' && <div className="mt-5 border-t border-[hsl(var(--border))] pt-4"><div className="flex flex-wrap gap-2"><button type="button" disabled={busyId === selectedApplication.id || teacherBusyId === selectedApplication.id} onClick={() => { onDecision(selectedApplication, 'approved'); setSelectedApplication(null); }} className="focus-ring rounded-lg bg-[hsl(var(--secondary))] px-3 py-2 text-xs font-bold text-[hsl(var(--secondary-foreground))] disabled:opacity-50" data-testid={`button-approve-application-${selectedApplication.id}`}>{tr('verify')}</button><button type="button" disabled={busyId === selectedApplication.id || teacherBusyId === selectedApplication.id} onClick={() => { setIsRejecting(true); setReason(''); }} className="focus-ring rounded-lg border border-[hsl(var(--destructive)/.3)] px-3 py-2 text-xs font-bold text-[hsl(var(--destructive))] disabled:opacity-50">{tr('reject')}</button></div>{isRejecting && <><textarea required value={reason} onChange={(event) => setReason(event.target.value)} placeholder={tr('rejectionPlaceholder')} className={`${inputClass} mt-3 min-h-20`} /><button type="button" disabled={!reason.trim() || busyId === selectedApplication.id} onClick={() => { onDecision(selectedApplication, 'rejected', reason); setSelectedApplication(null); }} className="mt-2 focus-ring rounded-lg bg-[hsl(var(--destructive))] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{tr('sendRejection')}</button></>}</div>}{canAssignTeacher && selectedApplication.status !== 'rejected' && <div className="mt-5 border-t border-[hsl(var(--border))] pt-4"><button type="button" disabled={teacherBusyId === selectedApplication.id || busyId === selectedApplication.id} onClick={() => onAssignTeacher(selectedApplication)} className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" data-testid={`button-assign-teacher-${selectedApplication.id}`}>{teacherBusyId === selectedApplication.id ? tr('assigning') : tr('assignTeacher')}</button></div>}<div className="mt-6 flex justify-end"><button type="button" onClick={() => setSelectedApplication(null)} className="focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-[hsl(var(--muted-foreground))]">{tr('close')}</button></div></div></div>}
+      {selectedApplication && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[hsl(var(--primary)/.5)] px-4 py-6 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="application-details-title"><div className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-sm)]"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">{tr('applicationDetails')}</p><h4 id="application-details-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{selectedApplication.firstName} {selectedApplication.lastName}</h4><p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{selectedApplication.status === 'pending' ? tr('statusPending') : selectedApplication.status === 'approved' ? tr('approvedShort') : tr('rejectedShort')}</p></div><button type="button" onClick={() => setSelectedApplication(null)} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={tr('close')}><X size={18} /></button></div><dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2"><div><dt className="text-xs text-[hsl(var(--muted-foreground))]">{tr('apEmail')}</dt><dd className="mt-1 font-semibold">{selectedApplication.email}</dd></div><div><dt className="text-xs text-[hsl(var(--muted-foreground))]">{tr('apPhone')}</dt><dd className="mt-1 font-semibold">{selectedApplication.phone}</dd></div><div><dt className="text-xs text-[hsl(var(--muted-foreground))]">{tr('birthDate')}</dt><dd className="mt-1 font-semibold">{selectedApplication.birthDate}</dd></div><div><dt className="text-xs text-[hsl(var(--muted-foreground))]">{tr('apArabicLevel')}</dt><dd className="mt-1 font-semibold">{selectedApplication.arabicLevel}</dd></div><div><dt className="text-xs text-[hsl(var(--muted-foreground))]">{tr('apAppliedOn')}</dt><dd className="mt-1 font-semibold">{new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'az-AZ', { dateStyle: 'medium' }).format(new Date(selectedApplication.createdAt))}</dd></div></dl>{selectedApplication.status !== 'rejected' && <div className="mt-5 border-t border-[hsl(var(--border))] pt-4"><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{tr('uploadedPdfs')}</p><div className="mt-2 flex flex-wrap gap-2">{selectedApplication.recommendationNames.map((name, index) => <a key={name} href={downloadPath(selectedApplication.id, index)} className="focus-ring inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--muted))] px-2.5 py-2 text-xs font-bold text-[hsl(var(--secondary-foreground))] hover:underline"><FileText size={14} /> {name}</a>)}</div></div>}{selectedApplication.status === 'rejected' && selectedApplication.rejectionReason && <p className="mt-5 rounded-lg bg-[hsl(var(--destructive)/.08)] p-3 text-xs leading-5 text-[hsl(var(--destructive))]"><strong>{tr('rejectionReason')}:</strong> {selectedApplication.rejectionReason}</p>}{canDecide && selectedApplication.status === 'pending' && <div className="mt-5 border-t border-[hsl(var(--border))] pt-4"><div className="flex flex-wrap gap-2"><button type="button" disabled={busyId === selectedApplication.id || teacherBusyId === selectedApplication.id} onClick={() => { onDecision(selectedApplication, 'approved'); setSelectedApplication(null); }} className="focus-ring rounded-lg bg-[hsl(var(--secondary))] px-3 py-2 text-xs font-bold text-[hsl(var(--secondary-foreground))] disabled:opacity-50" data-testid={`button-approve-application-${selectedApplication.id}`}>{tr('verify')}</button><button type="button" disabled={busyId === selectedApplication.id || teacherBusyId === selectedApplication.id} onClick={() => { setIsRejecting(true); setReason(''); }} className="focus-ring rounded-lg border border-[hsl(var(--destructive)/.3)] px-3 py-2 text-xs font-bold text-[hsl(var(--destructive))] disabled:opacity-50">{tr('reject')}</button></div>{isRejecting && <><textarea required value={reason} onChange={(event) => setReason(event.target.value)} placeholder={tr('rejectionPlaceholder')} className={`${inputClass} mt-3 min-h-20`} /><button type="button" disabled={!reason.trim() || busyId === selectedApplication.id} onClick={() => { onDecision(selectedApplication, 'rejected', reason); setSelectedApplication(null); }} className="mt-2 focus-ring rounded-lg bg-[hsl(var(--destructive))] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{tr('sendRejection')}</button></>}</div>}{canAssignTeacher && selectedApplication.status !== 'rejected' && <div className="mt-5 border-t border-[hsl(var(--border))] pt-4"><button type="button" disabled={teacherBusyId === selectedApplication.id || busyId === selectedApplication.id} onClick={() => onAssignTeacher(selectedApplication)} className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" data-testid={`button-assign-teacher-${selectedApplication.id}`}>{teacherBusyId === selectedApplication.id ? tr('assigning') : tr('assignTeacher')}</button></div>}<div className="mt-6 flex justify-end"><button type="button" onClick={() => setSelectedApplication(null)} className="focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-[hsl(var(--muted-foreground))]">{tr('close')}</button></div></div></div>}
     </div>
   );
 }
@@ -2526,8 +2542,8 @@ function AcademicManagement({ mode }: { mode: 'grades' | 'attendance' }) {
     setNotice('');
     const invalidGrade = mode === 'grades' && Object.values(grades).some((value) => value !== '' && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 100));
     if (invalidGrade || (mode === 'attendance' && (!attendanceCourseId || !attendanceDate))) {
-      setNotice(invalidGrade ? 'Qiymətlər 0 ilə 100 arasında olmalıdır.' : 'Davamiyyət 0 ilə 100 arasında olmalıdır.');
-      if (!invalidGrade) setNotice('Davamiyyət qeydi üçün dərs və tarix seçilməlidir.');
+      setNotice(invalidGrade ? t('apGradeRange') : t('apAttendRange'));
+      if (!invalidGrade) setNotice(t('apAttendNeedLesson'));
       return;
     }
     try {
@@ -2556,9 +2572,9 @@ function AcademicManagement({ mode }: { mode: 'grades' | 'attendance' }) {
         queryClient.invalidateQueries({ queryKey: getGetAdminAcademicProfilesQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetAdminAcademicProfileQueryKey(profile.id) }),
       ]);
-       setNotice(mode === 'grades' ? 'Akademik status və qiymətlər yadda saxlanıldı.' : 'Davamiyyət qeydi yadda saxlanıldı.');
+       setNotice(mode === 'grades' ? t('apAcademicSaved') : t('apAttendSaved'));
     } catch {
-      setNotice('Məlumatlar yadda saxlanıla bilmədi. Yenidən cəhd edin.');
+      setNotice(t('apDataNotSaved'));
     }
   };
 
@@ -2671,7 +2687,7 @@ function AcademicManagement({ mode }: { mode: 'grades' | 'attendance' }) {
                 <button type="submit" disabled={updateProfile.isPending || updateGrades.isPending || updateAttendance.isPending} className={buttonClass} data-testid={mode === 'grades' ? 'button-save-grades' : 'button-save-attendance'}>{updateProfile.isPending || updateGrades.isPending || updateAttendance.isPending ? t('saving') : mode === 'grades' ? t('saveGrades') : t('saveAttendance')}</button>
               </div>
             </div>
-          <FormNotice text={notice} error={notice.includes(t('gradeNotSaved')) || notice.includes(t('gradeRange')) || notice.includes('bilmədi') || notice.includes('arasında')} />
+          <FormNotice text={notice} error={notice.includes(t('gradeNotSaved')) || notice.includes(t('gradeRange')) || notice.includes('bilmədi') || notice.includes('arasında') || notice.includes(t('apGradeRange')) || notice.includes(t('apAttendRange')) || notice.includes(t('apAttendNeedLesson')) || notice.includes(t('apDataNotSaved'))} />
         </>
       )}
     </form>
@@ -2727,7 +2743,7 @@ function StudentDirectory({ filter, onClose, canEdit, embedded = false, focusStu
       : Array.from(new Set([...current, ...visibleProfileIds])));
   };
   const bulkPromote = async () => {
-    if (!selectedProfileIds.length || !window.confirm(`${selectedProfileIds.length} tələbənin növbəti semestrə keçirilməsini təsdiqləyirsiniz?`)) return;
+    if (!selectedProfileIds.length || !window.confirm(t('apBulkPromoteConfirm').replace('{n}', String(selectedProfileIds.length)))) return;
     setBulkBusy('promotion');
     setNotice('');
     try {
@@ -2736,19 +2752,19 @@ function StudentDirectory({ filter, onClose, canEdit, embedded = false, focusStu
         return student ? { profileId, expectedTermNumber: student.currentTermNumber } : null;
       });
       if (expectedCurrentTerms.some((item) => item === null)) {
-        setNotice('Seçilmiş tələbələrdən birinin cari semestr məlumatı yenilənib. Siyahını yeniləyin.');
+        setNotice(t('apTermStale'));
         return;
       }
       const response = await fetch(apiUrl('/admin/academic-profiles/bulk-promote'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileIds: selectedProfileIds, expectedCurrentTerms }) });
       const result = await response.json().catch(() => ({})) as { promotedProfileIds?: number[]; failures?: Array<{ error: string }>; error?: string };
-      if (!response.ok) throw new Error(result.error || 'Toplu semestr keçidi baş tutmadı.');
+      if (!response.ok) throw new Error(result.error || t('apBulkPromoteFail'));
       setSelectedProfileIds((current) => current.filter((id) => !(result.promotedProfileIds ?? []).includes(id)));
       await Promise.all([studentsQuery.refetch(), queryClient.invalidateQueries({ queryKey: getGetAdminAcademicProfilesQueryKey() })]);
       const promoted = result.promotedProfileIds?.length ?? 0;
       const failures = result.failures?.length ?? 0;
-      setNotice(`${promoted} tələbə növbəti semestrə keçirildi${failures ? `, ${failures} tələbə üçün əməliyyat baş tutmadı.` : '.'}`);
+      setNotice(failures ? t('apBulkPromotePartial').replace('{n}', String(promoted)).replace('{f}', String(failures)) : t('apBulkPromoteDone').replace('{n}', String(promoted)));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Toplu semestr keçidi baş tutmadı.');
+      setNotice(error instanceof Error ? error.message : t('apBulkPromoteFail'));
     } finally {
       setBulkBusy(null);
     }
@@ -2761,12 +2777,12 @@ function StudentDirectory({ filter, onClose, canEdit, embedded = false, focusStu
     try {
       const response = await fetch(apiUrl('/admin/student-notifications'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...notificationForm, targetProfileIds: selectedProfileIds }) });
       const result = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Bildiriş göndərilmədi.');
+      if (!response.ok) throw new Error(result.error || t('noticeNotSent'));
       setNotificationForm({ title: '', body: '', destination: 'home' });
       setNotificationOpen(false);
-      setNotice(`${selectedProfileIds.length} tələbəyə bildiriş göndərildi.`);
+      setNotice(t('apBulkNotified').replace('{n}', String(selectedProfileIds.length)));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Bildiriş göndərilmədi.');
+      setNotice(error instanceof Error ? error.message : t('noticeNotSent'));
     } finally {
       setBulkBusy(null);
     }
@@ -2797,11 +2813,11 @@ function StudentDirectory({ filter, onClose, canEdit, embedded = false, focusStu
     try {
       const response = await fetch(apiUrl(`/admin/academic-profiles/${profileId}/schedule-access`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ approved }) });
       const result = await response.json().catch(() => ({})) as { approved?: boolean; error?: string };
-      if (!response.ok) throw new Error(result.error || 'Cədvəl giriş statusu dəyişdirilmədi.');
+      if (!response.ok) throw new Error(result.error || t('accessFail'));
       setScheduleAccess((current) => ({ ...current, [profileId]: result.approved === true }));
-      setNotice(approved ? `${studentName} üçün cədvələ giriş təsdiqləndi.` : `${studentName} üçün cədvəl girişi geri alındı.`);
+      setNotice(approved ? t('apAccessOn').replace('{name}', studentName) : t('apAccessOff').replace('{name}', studentName));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Cədvəl giriş statusu dəyişdirilmədi.');
+      setNotice(error instanceof Error ? error.message : t('accessFail'));
     } finally {
       setApprovingScheduleProfileId(null);
     }
@@ -2863,7 +2879,7 @@ function StudentDirectory({ filter, onClose, canEdit, embedded = false, focusStu
             <button type="submit" disabled={bulkBusy !== null} className={buttonClass} data-testid="button-send-bulk-notification">{bulkBusy === 'notification' ? t('sending') : t('send')}</button>
           </div>
         </form>}
-        {notice && <p className={`mt-3 rounded-xl p-3 text-xs font-semibold ${notice.includes(t('accountNotDeleted')) || notice.includes('bilmədi') ? 'bg-[hsl(var(--destructive)/.08)] text-[hsl(var(--destructive))]' : 'bg-[hsl(var(--secondary)/.45)] text-[hsl(var(--secondary-foreground))]'}`}>{notice}</p>}
+        {notice && <p className={`mt-3 rounded-xl p-3 text-xs font-semibold ${notice.includes(t('accountNotDeleted')) || notice.includes('bilmədi') || notice.includes(t('apBulkPromoteFail')) ? 'bg-[hsl(var(--destructive)/.08)] text-[hsl(var(--destructive))]' : 'bg-[hsl(var(--secondary)/.45)] text-[hsl(var(--secondary-foreground))]'}`}>{notice}</p>}
         {studentsQuery.isLoading ? (
           <div className="mt-6 space-y-3">{[1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-2xl bg-[hsl(var(--muted))]" />)}</div>
         ) : studentsQuery.isError ? (
@@ -3056,7 +3072,7 @@ function TeacherStats({ canEdit, canReadProfiles }: { canEdit: boolean; canReadP
           {[1, 2, 3].map((item) => <div key={item} className="h-16 animate-pulse rounded-xl bg-[hsl(var(--muted))]" />)}
         </div>
       ) : profilesQuery.isError ? (
-        <p className="rounded-2xl border border-[hsl(var(--destructive)/.2)] bg-[hsl(var(--destructive)/.05)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">Tələbə statistikası yüklənə bilmədi.</p>
+        <p className="rounded-2xl border border-[hsl(var(--destructive)/.2)] bg-[hsl(var(--destructive)/.05)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">{tr('apStatsStudentsFail')}</p>
       ) : (
         <div className="grid gap-2 sm:grid-cols-3">
            <button type="button" onClick={() => setDirectoryFilter('all')} className="focus-ring flex items-center justify-between gap-2 rounded-xl bg-[hsl(var(--primary))] px-3 py-2.5 text-left text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5">
@@ -3089,13 +3105,13 @@ function TeacherStats({ canEdit, canReadProfiles }: { canEdit: boolean; canReadP
              <GraduationCap size={16} className="text-[hsl(var(--secondary-foreground))]" />
              <p className="mt-2 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{tr('year3')}</p>
              <p className="mt-0.5 font-serif text-2xl leading-none text-[hsl(var(--primary))]">{thirdYearCount}</p>
-             <p className="text-[11px] text-[hsl(var(--muted-foreground))]">tələbə</p>
+             <p className="text-[11px] text-[hsl(var(--muted-foreground))]">{tr('studentWord')}</p>
             </button>}
             {activeTerms.includes(7) && activeTerms.includes(8) && <button type="button" onClick={() => setDirectoryFilter(4)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2.5 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
              <GraduationCap size={16} className="text-[hsl(var(--secondary-foreground))]" />
              <p className="mt-2 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{tr('year4')}</p>
              <p className="mt-0.5 font-serif text-2xl leading-none text-[hsl(var(--primary))]">{fourthYearCount}</p>
-             <p className="text-[11px] text-[hsl(var(--muted-foreground))]">tələbə</p>
+             <p className="text-[11px] text-[hsl(var(--muted-foreground))]">{tr('studentWord')}</p>
             </button>}
         </div>
       )}
@@ -3117,8 +3133,8 @@ const formatTeacherNumber = (index: number) => `M${String(index + 1).padStart(2,
 const formatSupervisorNumber = (index: number) => `B${String(index + 1).padStart(3, '0')}`;
 const formatOwnerAssistantNumber = (index: number) => `NK${index + 1}`;
 // Adı olmayan hesab (məs. Clerk panelindən yaradılmış müəllim) «İstifadəçi» əvəzinə e-poçtla göstərilir.
-const adminUserName = (user: Pick<AdminUser, 'firstName' | 'lastName' | 'username'> & { email?: string | null }) =>
-  [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.username || user.email || 'İstifadəçi';
+const adminUserName = (user: Pick<AdminUser, 'firstName' | 'lastName' | 'username'> & { email?: string | null }, fallback = 'İstifadəçi') =>
+  [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.username || user.email || fallback;
 const roleBadgeClass = (role: AdminUser['role']) => {
   if (role === 'owner') return 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]';
   if (role === 'teacher' || role === 'admin') return 'bg-[hsl(var(--primary)/.86)] text-[hsl(var(--primary-foreground))]';
@@ -3278,22 +3294,22 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
   const removeUser = async (user: AdminUser) => {
     if (user.role !== 'none') return;
     const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username || user.email;
-    if (!window.confirm(`${name} hesabını tamamilə silmək istədiyinizə əminsiniz? Bu əməliyyat geri qaytarıla bilməz.`)) return;
+    if (!window.confirm(t('apDeleteUserConfirm').replace('{name}', name))) return;
     setDeletingUserId(user.id);
     setNotice('');
     try {
       await deleteUser.mutateAsync({ userId: user.id });
       await queryClient.invalidateQueries({ queryKey: getGetAdminUsersQueryKey() });
-      setNotice(`${name} hesabı silindi.`);
+      setNotice(t('apUserDeleted').replace('{name}', name));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'İstifadəçi hesabı silinə bilmədi.');
+      setNotice(error instanceof Error ? error.message : t('apAccountNotDeleted'));
     } finally {
       setDeletingUserId(null);
     }
   };
 
-  if (usersQuery.isLoading) return <p className="text-sm text-[hsl(var(--muted-foreground))]">Qeydiyyatdan keçən istifadəçilər yüklənir...</p>;
-  if (usersQuery.isError) return <p className="rounded-xl bg-[hsl(var(--destructive)/.06)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">İstifadəçi siyahısı yüklənə bilmədi.</p>;
+  if (usersQuery.isLoading) return <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('apUsersLoading')}</p>;
+  if (usersQuery.isError) return <p className="rounded-xl bg-[hsl(var(--destructive)/.06)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">{t('apUsersLoadFail')}</p>;
   const users = usersQuery.data ?? [];
   const teachers = users.filter((user) => user.role === 'teacher' || user.role === 'admin' || user.role === 'owner');
   const supervisors = users.filter((user) => user.role === 'supervisor');
@@ -3311,15 +3327,15 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
          <div className="grid gap-4 md:grid-cols-3" data-testid="staff-role-summary">
          <section className="order-2 rounded-2xl border border-[hsl(var(--primary))] bg-[hsl(var(--primary))] p-5 text-[hsl(var(--primary-foreground))]" data-testid="teacher-summary">
            <button type="button" onClick={() => setExpandedSummaryRole((current) => current === 'teacher' ? null : 'teacher')} aria-expanded={expandedSummaryRole === 'teacher'} className="focus-ring flex w-full items-start justify-between gap-4 rounded-xl text-left"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--accent))]">{t('teacherStaff')}</p><h3 className="mt-2 font-serif text-3xl">{teachers.length}</h3><p className="mt-1 text-xs text-[hsl(var(--primary-foreground)/.65)]">{expandedSummaryRole === 'teacher' ? t('hideNames') : t('showNames')}</p></div><UsersRound className="text-[hsl(var(--accent))]" size={24} /></button>
-            {expandedSummaryRole === 'teacher' && (teachers.length ? <div className="mt-5 flex flex-wrap gap-2">{teachers.map((teacher, index) => <button type="button" key={teacher.id} onClick={() => setViewingUser(teacher)} className="focus-ring rounded-full bg-[hsl(var(--primary-foreground)/.12)] px-3 py-1.5 text-xs font-semibold hover:bg-[hsl(var(--primary-foreground)/.22)]">{teacher.role === 'owner' ? t('systemOwner') : formatTeacherNumber(index)} · {adminUserName(teacher)}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--primary-foreground)/.65)]">{t('noTeachersYet')}</p>)}
+            {expandedSummaryRole === 'teacher' && (teachers.length ? <div className="mt-5 flex flex-wrap gap-2">{teachers.map((teacher, index) => <button type="button" key={teacher.id} onClick={() => setViewingUser(teacher)} className="focus-ring rounded-full bg-[hsl(var(--primary-foreground)/.12)] px-3 py-1.5 text-xs font-semibold hover:bg-[hsl(var(--primary-foreground)/.22)]">{teacher.role === 'owner' ? t('systemOwner') : formatTeacherNumber(index)} · {adminUserName(teacher, t('apUser'))}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--primary-foreground)/.65)]">{t('noTeachersYet')}</p>)}
          </section>
           <section className="order-1 rounded-2xl border border-[hsl(var(--secondary)/.75)] bg-[hsl(var(--secondary)/.48)] p-5 shadow-[var(--shadow-xs)]" data-testid="owner-assistant-summary">
            <button type="button" onClick={() => setExpandedSummaryRole((current) => current === 'assistant' ? null : 'assistant')} aria-expanded={expandedSummaryRole === 'assistant'} className="focus-ring flex w-full items-start justify-between gap-4 rounded-xl text-left"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('roleBoard')}</p><h3 className="mt-2 font-serif text-3xl text-[hsl(var(--primary))]">{ownerAssistants.length}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{expandedSummaryRole === 'assistant' ? t('hideNames') : t('showNames')}</p></div><UserCog className="text-[hsl(var(--secondary-foreground))]" size={24} /></button>
-            {expandedSummaryRole === 'assistant' && (ownerAssistants.length ? <div className="mt-5 flex flex-wrap gap-2">{ownerAssistants.map((assistant, index) => <button type="button" key={assistant.id} onClick={() => setViewingUser(assistant)} className="focus-ring rounded-full bg-[hsl(var(--muted))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--border))]">{formatOwnerAssistantNumber(index)} · {adminUserName(assistant)}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--muted-foreground))]">{t('noBoardYet')}</p>)}
+            {expandedSummaryRole === 'assistant' && (ownerAssistants.length ? <div className="mt-5 flex flex-wrap gap-2">{ownerAssistants.map((assistant, index) => <button type="button" key={assistant.id} onClick={() => setViewingUser(assistant)} className="focus-ring rounded-full bg-[hsl(var(--muted))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--border))]">{formatOwnerAssistantNumber(index)} · {adminUserName(assistant, t('apUser'))}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--muted-foreground))]">{t('noBoardYet')}</p>)}
          </section>
           <section className="order-3 rounded-2xl border border-[hsl(var(--accent)/.8)] bg-[hsl(var(--accent)/.22)] p-5 shadow-[var(--shadow-xs)]" data-testid="supervisor-summary">
            <button type="button" onClick={() => setExpandedSummaryRole((current) => current === 'supervisor' ? null : 'supervisor')} aria-expanded={expandedSummaryRole === 'supervisor'} className="focus-ring flex w-full items-start justify-between gap-4 rounded-xl text-left"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('roleSupervisor')}</p><h3 className="mt-2 font-serif text-3xl text-[hsl(var(--primary))]">{supervisors.length}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{expandedSummaryRole === 'supervisor' ? t('hideNames') : t('showNames')}</p></div><ShieldCheck className="text-[hsl(var(--secondary-foreground))]" size={24} /></button>
-            {expandedSummaryRole === 'supervisor' && (supervisors.length ? <div className="mt-5 flex flex-wrap gap-2">{supervisors.map((supervisor, index) => <button type="button" key={supervisor.id} onClick={() => setViewingUser(supervisor)} className="focus-ring rounded-full bg-[hsl(var(--muted))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--border))]">{formatSupervisorNumber(index)} · {adminUserName(supervisor)}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--muted-foreground))]">{t('noSupervisorsYet')}</p>)}
+            {expandedSummaryRole === 'supervisor' && (supervisors.length ? <div className="mt-5 flex flex-wrap gap-2">{supervisors.map((supervisor, index) => <button type="button" key={supervisor.id} onClick={() => setViewingUser(supervisor)} className="focus-ring rounded-full bg-[hsl(var(--muted))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--border))]">{formatSupervisorNumber(index)} · {adminUserName(supervisor, t('apUser'))}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--muted-foreground))]">{t('noSupervisorsYet')}</p>)}
          </section>
        </div>
       <h3 id="user-role-management-list" className="pt-2 font-serif text-2xl text-[hsl(var(--primary))]">{t('manageRoles')}</h3>
@@ -3341,7 +3357,7 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
               <article key={user.id} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate font-bold text-[hsl(var(--primary))]">{adminUserName(user)}</p>
+                    <p className="truncate font-bold text-[hsl(var(--primary))]">{adminUserName(user, t('apUser'))}</p>
                     <p className="mt-1 truncate text-xs text-[hsl(var(--muted-foreground))]">{user.email}{user.username ? ` · @${user.username}` : ''}</p>
                   </div>
                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${roleBadgeClass(user.role)}`}>{isOwner ? `N1 · ${t('systemOwner')}` : user.role === 'owner_assistant' ? `${formatOwnerAssistantNumber(ownerAssistants.findIndex((assistant) => assistant.id === user.id))} · ${roleName(user.role)}` : user.role === 'teacher' || user.role === 'admin' ? `${formatTeacherNumber(teachers.findIndex((teacher) => teacher.id === user.id))} · ${roleName(user.role)}` : user.role === 'supervisor' ? `${formatSupervisorNumber(supervisors.findIndex((supervisor) => supervisor.id === user.id))} · ${roleName(user.role)}` : roleName(user.role)}</span>
@@ -3365,7 +3381,7 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
                        </button>
                         {canConfigurePermissions && individualPermissionRole(user) && <button type="button" className="focus-ring rounded-xl border border-[hsl(var(--secondary)/.65)] px-3 py-2 text-xs font-bold text-[hsl(var(--secondary-foreground))] hover:bg-[hsl(var(--secondary)/.2)]" onClick={() => { setPermissionUser(user); setIndividualPermissions([]); }} data-testid={`button-edit-individual-permissions-${user.id}`}>{t('individualPerms')}</button>}
                         <button type="button" className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))]" onClick={() => setEditingUser(user)} data-testid={`button-edit-user-${user.id}`}>{t('editDetails')}</button>
-                         {canConfigurePermissions && user.role === 'none' && <button type="button" className="focus-ring rounded-xl border border-[hsl(var(--destructive)/.28)] px-3 py-2 text-xs font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.08)] disabled:opacity-50" disabled={deletingUserId === user.id} onClick={() => void removeUser(user)} data-testid={`button-delete-user-${user.id}`}>{deletingUserId === user.id ? 'Silinir...' : 'Hesabı sil'}</button>}
+                         {canConfigurePermissions && user.role === 'none' && <button type="button" className="focus-ring rounded-xl border border-[hsl(var(--destructive)/.28)] px-3 py-2 text-xs font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.08)] disabled:opacity-50" disabled={deletingUserId === user.id} onClick={() => void removeUser(user)} data-testid={`button-delete-user-${user.id}`}>{deletingUserId === user.id ? t('apDeleting') : t('deleteAccount')}</button>}
                      </div>
                     {studentNote && <p className={`w-full rounded-lg px-3 py-2 text-[11px] leading-5 ${hasChange && user.role === 'none' ? 'bg-amber-50 text-amber-900' : 'bg-[hsl(var(--muted)/.6)] text-[hsl(var(--muted-foreground))]'}`} data-testid={`note-user-student-record-${user.id}`}>{studentNote}</p>}
                   </div>
@@ -3375,7 +3391,7 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
           })}
         </div>
       )}
-      <FormNotice text={notice} error={notice.includes('bilmədi') || notice.includes('tapılmadı') || notice.includes('dəyişdirilə') || notice.includes(t('roleNotUpdated')) || notice.includes(t('permsNotSaved')) || notice.includes(t('individualNotSaved'))} />
+      <FormNotice text={notice} error={notice.includes('bilmədi') || notice.includes('tapılmadı') || notice.includes('dəyişdirilə') || notice.includes(t('roleNotUpdated')) || notice.includes(t('permsNotSaved')) || notice.includes(t('individualNotSaved')) || notice.includes(t('apAccountNotDeleted'))} />
       {permissionRole && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[hsl(var(--primary)/.5)] px-4 py-6 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="role-permissions-title">
           <div className="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-sm)]">
@@ -3419,7 +3435,7 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">{t('individualTitle')}</p>
-                <h4 id="individual-permissions-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{adminUserName(permissionUser)} · {permissionUser.role === 'teacher' ? t('roleTeacher') : permissionUser.role === 'supervisor' ? t('roleSupervisor') : t('roleBoard')}</h4>
+                <h4 id="individual-permissions-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{adminUserName(permissionUser, t('apUser'))} · {permissionUser.role === 'teacher' ? t('roleTeacher') : permissionUser.role === 'supervisor' ? t('roleSupervisor') : t('roleBoard')}</h4>
                 <p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('individualHint')}</p>
               </div>
               <button type="button" onClick={() => setPermissionUser(null)} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={t('close')}><X size={18} /></button>
@@ -3443,7 +3459,7 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
                   await updateRole.mutateAsync({ userId: permissionUser.id, data: { role, permissions: individualPermissions } });
                   await queryClient.invalidateQueries({ queryKey: getGetAdminUserProfileQueryKey(permissionUser.id) });
                   setPermissionUser(null);
-                  setNotice(`${adminUserName(permissionUser)}: ${t('individualSaved')}`);
+                  setNotice(`${adminUserName(permissionUser, t('apUser'))}: ${t('individualSaved')}`);
                 } catch (error) {
                   setNotice(error instanceof Error ? error.message : t('individualNotSaved'));
                 } finally { setIsSavingIndividualPermissions(false); }
@@ -3459,23 +3475,24 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
 }
 
 function UserProfileManagement() {
+  const { t } = useI18n();
   const usersQuery = useGetAdminUsers();
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   return <section className="space-y-4" data-testid="owner-user-profile-management">
-    <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">İdarəetmə bölməsi</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">İstifadəçi məlumatlarını düzəlt</h3><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">İstifadəçilərin ad, əlaqə və müraciət məlumatlarını yeniləyin. Sistem sahibinin məlumatları qorunur.</p></div>
-    {usersQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">İstifadəçilər yüklənir...</p> : usersQuery.isError ? <p className="rounded-xl bg-[hsl(var(--destructive)/.08)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">İstifadəçilər yüklənə bilmədi.</p> : (usersQuery.data ?? []).length === 0 ? <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-7 text-center text-sm text-[hsl(var(--muted-foreground))]">Qeydiyyatdan keçmiş istifadəçi yoxdur.</p> : <div className="space-y-3">{(usersQuery.data ?? []).map((user) => <article key={user.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] p-4"><div className="min-w-0"><p className="truncate font-bold text-[hsl(var(--primary))]">{adminUserName(user)}</p><p className="mt-1 truncate text-xs text-[hsl(var(--muted-foreground))]">{user.email}</p></div><button type="button" disabled={user.role === 'owner'} onClick={() => setEditingUser(user)} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))] disabled:cursor-not-allowed disabled:opacity-50" data-testid={`button-edit-profile-${user.id}`}>{user.role === 'owner' ? 'Sahib hesabı qorunur' : 'Məlumatları düzəlt'}</button></article>)}</div>}
+    <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{t('apSection')}</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('apEditUsers')}</h3><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('apEditUsersHint')}</p></div>
+    {usersQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('apUsersLoadingShort')}</p> : usersQuery.isError ? <p className="rounded-xl bg-[hsl(var(--destructive)/.08)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">{t('apUsersFail')}</p> : (usersQuery.data ?? []).length === 0 ? <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-7 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('apNoUsers')}</p> : <div className="space-y-3">{(usersQuery.data ?? []).map((user) => <article key={user.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] p-4"><div className="min-w-0"><p className="truncate font-bold text-[hsl(var(--primary))]">{adminUserName(user, t('apUser'))}</p><p className="mt-1 truncate text-xs text-[hsl(var(--muted-foreground))]">{user.email}</p></div><button type="button" disabled={user.role === 'owner'} onClick={() => setEditingUser(user)} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))] disabled:cursor-not-allowed disabled:opacity-50" data-testid={`button-edit-profile-${user.id}`}>{user.role === 'owner' ? t('apOwnerProtected') : t('editDetails')}</button></article>)}</div>}
     {editingUser && <UserProfileEditor user={editingUser} onClose={() => setEditingUser(null)} onSaved={async () => { setEditingUser(null); await usersQuery.refetch(); }} />}
   </section>;
 }
 
-const userProfileHistoryFieldLabels: Record<string, string> = {
-  firstName: 'Ad',
-  lastName: 'Soyad',
-  username: 'İstifadəçi adı',
-  email: 'E-poçt',
-  phone: 'Telefon',
-  birthDate: 'Doğum tarixi',
-  arabicLevel: 'Ərəb dili səviyyəsi',
+const userProfileHistoryFieldLabels: Record<string, MessageKey> = {
+  firstName: 'firstName',
+  lastName: 'lastName',
+  username: 'apUsername',
+  email: 'apEmail',
+  phone: 'apPhone',
+  birthDate: 'birthDate',
+  arabicLevel: 'apArabicLevel',
 };
 
 function userProfileHistoryValue(value: string | null | undefined) {
@@ -3483,23 +3500,24 @@ function userProfileHistoryValue(value: string | null | undefined) {
 }
 
 function UserProfileHistory({ userId }: { userId: string }) {
+  const { t, locale } = useI18n();
   const historyQuery = useGetAdminUserProfileHistory(userId, {
     query: { queryKey: getGetAdminUserProfileHistoryQueryKey(userId) },
   });
-  const formatDate = (value: string) => new Intl.DateTimeFormat('az-AZ', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  const formatDate = (value: string) => new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'az-AZ', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
   const entries = historyQuery.data ?? [];
   return (
     <section className="mt-5 rounded-xl border border-[hsl(var(--secondary)/.5)] bg-[hsl(var(--secondary)/.12)] p-4" data-testid="section-user-profile-history">
       <div className="flex items-start gap-2">
         <ShieldCheck size={17} className="mt-0.5 shrink-0 text-[hsl(var(--secondary-foreground))]" />
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">Profil dəyişikliklərinin tarixçəsi</p>
-          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Bu məlumatları yalnız sistem sahibi görə bilər.</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">{t('apHistoryTitle')}</p>
+          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('apHistoryOwnerOnly')}</p>
         </div>
       </div>
-      {historyQuery.isLoading ? <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">Tarixçə yüklənir...</p> :
-        historyQuery.isError ? <p className="mt-4 rounded-lg bg-[hsl(var(--destructive)/.08)] p-3 text-xs font-semibold text-[hsl(var(--destructive))]">Profil tarixçəsi yüklənə bilmədi.</p> :
-          entries.length === 0 ? <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">Hələ profil dəyişikliyi qeydə alınmayıb.</p> :
+      {historyQuery.isLoading ? <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">{t('apHistoryLoading')}</p> :
+        historyQuery.isError ? <p className="mt-4 rounded-lg bg-[hsl(var(--destructive)/.08)] p-3 text-xs font-semibold text-[hsl(var(--destructive))]">{t('apHistoryFail')}</p> :
+          entries.length === 0 ? <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">{t('apNoHistory')}</p> :
             <div className="mt-4 space-y-3">{entries.map((entry: UserProfileHistoryEntry) => (
               <article key={entry.id} className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3" data-testid={`user-profile-history-entry-${entry.id}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -3509,11 +3527,11 @@ function UserProfileHistory({ userId }: { userId: string }) {
                 <div className="mt-3 overflow-x-auto">
                   <table className="w-full min-w-[420px] text-left text-xs">
                     <thead className="text-[10px] uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">
-                      <tr><th className="pb-2 pr-3 font-bold">Məlumat</th><th className="pb-2 pr-3 font-bold">Əvvəlki dəyər</th><th className="pb-2 font-bold">Yeni dəyər</th></tr>
+                      <tr><th className="pb-2 pr-3 font-bold">{t('apField')}</th><th className="pb-2 pr-3 font-bold">{t('apPrevValue')}</th><th className="pb-2 font-bold">{t('apNewValue')}</th></tr>
                     </thead>
                     <tbody className="divide-y divide-[hsl(var(--border))]">
                       {entry.changedFields.map((field) => <tr key={field}>
-                        <th className="py-2 pr-3 font-semibold text-[hsl(var(--primary))]">{userProfileHistoryFieldLabels[field] ?? field}</th>
+                        <th className="py-2 pr-3 font-semibold text-[hsl(var(--primary))]">{userProfileHistoryFieldLabels[field] ? t(userProfileHistoryFieldLabels[field]) : field}</th>
                         <td className="py-2 pr-3 text-[hsl(var(--muted-foreground))]">{userProfileHistoryValue(entry.previousValues[field])}</td>
                         <td className="py-2 font-semibold text-[hsl(var(--foreground))]">{userProfileHistoryValue(entry.newValues[field])}</td>
                       </tr>)}
@@ -3613,6 +3631,7 @@ function StudentDeletionAudit() {
 }
 
 function ApplicationWindowSettings() {
+  const { t } = useI18n();
   const query = useGetAdminApplicationWindow();
   const updateWindow = useUpdateAdminApplicationWindow();
   const [opensAt, setOpensAt] = useState('');
@@ -3641,13 +3660,13 @@ function ApplicationWindowSettings() {
     event.preventDefault();
     setNotice('');
     if ((opensAt && !closesAt) || (!opensAt && closesAt)) {
-      setNotice('Başlama və bitmə vaxtlarını birlikdə daxil edin.');
+      setNotice(t('apWindowBoth'));
       return;
     }
     const opensDate = opensAt ? parseAzerbaijanDateTime(opensAt) : null;
     const closesDate = closesAt ? parseAzerbaijanDateTime(closesAt) : null;
     if (opensDate && closesDate && closesDate.getTime() <= opensDate.getTime()) {
-      setNotice('Bitmə vaxtı başlama vaxtından sonra olmalıdır.');
+      setNotice(t('apWindowOrder'));
       return;
     }
     try {
@@ -3658,36 +3677,36 @@ function ApplicationWindowSettings() {
         },
       });
       await query.refetch();
-      setNotice('Müraciət vaxtı yadda saxlanıldı.');
+      setNotice(t('apWindowSaved'));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Müraciət vaxtı yadda saxlanılmadı.');
+      setNotice(error instanceof Error ? error.message : t('apWindowNotSaved'));
     }
   };
 
   const statusLabel = query.data?.status === 'open'
-    ? 'Hazırda açıqdır'
+    ? t('apWindowOpen')
     : query.data?.status === 'not_started'
-    ? 'Başlamayıb'
+    ? t('apWindowNotStarted')
     : query.data?.status === 'ended'
-    ? 'Bitib'
-    : 'Vaxt təyin edilməyib';
+    ? t('apWindowEnded')
+    : t('apWindowUnset');
 
   return (
     <section className="mb-5 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.25)] p-4" data-testid="section-application-window">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">Müraciət vaxtı</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Qəbul pəncərəsini idarə et</h3></div>
-        <span className="rounded-full bg-[hsl(var(--card))] px-3 py-1.5 text-xs font-bold text-[hsl(var(--primary))]">{query.isLoading ? 'Yüklənir...' : statusLabel}</span>
+        <div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">{t('apWindowTitle')}</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('apWindowManage')}</h3></div>
+        <span className="rounded-full bg-[hsl(var(--card))] px-3 py-1.5 text-xs font-bold text-[hsl(var(--primary))]">{query.isLoading ? t('loading') : statusLabel}</span>
       </div>
       <form className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={(event) => void save(event)}>
-        <Field label="Başlama tarixi və vaxtı (Azərbaycan vaxtı)"><input type="datetime-local" className={inputClass} value={opensAt} onChange={(event) => setOpensAt(event.target.value)} data-testid="input-application-window-opens" /></Field>
-        <Field label="Bitmə tarixi və vaxtı (Azərbaycan vaxtı)"><input type="datetime-local" className={inputClass} value={closesAt} onChange={(event) => setClosesAt(event.target.value)} data-testid="input-application-window-closes" /></Field>
+        <Field label={t('apWindowOpens')}><input type="datetime-local" className={inputClass} value={opensAt} onChange={(event) => setOpensAt(event.target.value)} data-testid="input-application-window-opens" /></Field>
+        <Field label={t('apWindowCloses')}><input type="datetime-local" className={inputClass} value={closesAt} onChange={(event) => setClosesAt(event.target.value)} data-testid="input-application-window-closes" /></Field>
         <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
-          <button type="submit" disabled={updateWindow.isPending} className={buttonClass} data-testid="button-save-application-window">{updateWindow.isPending ? 'Yadda saxlanılır...' : 'Vaxtı yadda saxla'}</button>
-          <button type="button" onClick={() => { setOpensAt(''); setClosesAt(''); }} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-4 py-2.5 text-xs font-bold text-[hsl(var(--muted-foreground))]">Vaxtı təmizlə</button>
+          <button type="submit" disabled={updateWindow.isPending} className={buttonClass} data-testid="button-save-application-window">{updateWindow.isPending ? t('saving') : t('apWindowSave')}</button>
+          <button type="button" onClick={() => { setOpensAt(''); setClosesAt(''); }} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-4 py-2.5 text-xs font-bold text-[hsl(var(--muted-foreground))]">{t('apWindowClear')}</button>
           {notice && <p className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}
         </div>
       </form>
-      <p className="mt-3 text-[11px] leading-4 text-[hsl(var(--muted-foreground))]">Vaxt təyin edilmədikdə müraciətlər əvvəlki kimi açıq qalır. Bütün tarix və saatlar Azərbaycan vaxtı ilə (UTC+4) hesablanır.</p>
+      <p className="mt-3 text-[11px] leading-4 text-[hsl(var(--muted-foreground))]">{t('apWindowHint')}</p>
     </section>
   );
 }
@@ -3695,19 +3714,20 @@ function ApplicationWindowSettings() {
 type PanelPreviewRole = 'owner_assistant' | 'teacher' | 'supervisor' | 'user';
 
 function PanelPreview({ role, ownerName, onClose }: { role: PanelPreviewRole; ownerName: string; onClose: () => void }) {
+  const { t } = useI18n();
   const details: Record<PanelPreviewRole, { label: string; title: string; description: string }> = {
-    owner_assistant: { label: 'İdarə heyəti paneli', title: 'İdarə heyətinin ana səhifəsi', description: 'Bu görünüş idarə heyətinə açılan icazələrə uyğun idarəetmə sahəsini yoxlamaq üçündür.' },
-    teacher: { label: 'Müəllim paneli', title: 'Müəllimin ana səhifəsi', description: 'Müəllimin cədvəl, tələbə əlaqəsi və sual-cavab bölmələrini yoxlayın.' },
-    supervisor: { label: 'Nəzarətçi paneli', title: 'Nəzarətçinin ana səhifəsi', description: 'Nəzarətçinin tələbə və müraciət nəzarəti görünüşünü yoxlayın.' },
-    user: { label: 'İstifadəçi paneli', title: 'İstifadəçinin ana səhifəsi', description: 'Tələbənin dərs cədvəli, elanlar və şəxsi məlumat görünüşünü yoxlayın.' },
+    owner_assistant: { label: t('adminBoard'), title: t('apBoardHome'), description: t('apBoardPreview') },
+    teacher: { label: t('adminTeacher'), title: t('apTeacherHome'), description: t('apTeacherPreview') },
+    supervisor: { label: t('adminSupervisor'), title: t('apSupervisorHome'), description: t('apSupervisorPreview') },
+    user: { label: t('apUserPanel'), title: t('apUserHome'), description: t('apUserPreview') },
   };
   const current = details[role];
   return (
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-[hsl(var(--background))]" data-testid={`panel-preview-${role}`}>
       <header className="sticky top-0 z-10 border-b border-[hsl(var(--border))] bg-[hsl(var(--card)/.95)] px-5 py-4 backdrop-blur md:px-10">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-          <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Önizləmə</p><h1 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{current.title}</h1></div>
-          <button type="button" onClick={onClose} className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-4 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-close-panel-preview"><X size={16} /> Sahib panelinə qayıt</button>
+          <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('apPreview')}</p><h1 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{current.title}</h1></div>
+          <button type="button" onClick={onClose} className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-4 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-close-panel-preview"><X size={16} /> {t('apBackOwner')}</button>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-5 py-7 md:px-10">
@@ -3717,21 +3737,21 @@ function PanelPreview({ role, ownerName, onClose }: { role: PanelPreviewRole; ow
           <p className="mt-3 max-w-xl text-sm leading-6 text-[hsl(var(--primary-foreground)/.75)]">{current.description}</p>
         </section>
         <div className="mt-5 grid gap-5 lg:grid-cols-[190px_1fr_250px]">
-          <nav className="h-fit rounded-2xl bg-[hsl(var(--sidebar))] p-3 text-[hsl(var(--sidebar-foreground))]" aria-label={`${current.label} menyusu`}>
-            <p className="px-3 py-3 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--sidebar-foreground)/.5)]">Menyu</p>
-            {(role === 'user' ? ['İcmal', 'Profilim', 'Dərs Cədvəlim', 'Yeniliklər'] : role === 'teacher' ? ['İcmal', 'Mənim cədvəlim', 'Müəllimlər cədvəli', 'Məsləhətləşmə / Əlaqə', 'Sual-cavab'] : role === 'supervisor' ? ['İcmal', 'Tələbələr', 'Müraciətlər', 'Elanlar', 'Semestr cədvəli'] : ['İcmal', 'Müraciətlər', 'Semestr cədvəli', 'İstifadəçi rolları', 'Məsləhətləşmə / Əlaqə']).map((item, index) => <div key={item} className={`rounded-xl px-3 py-3 text-xs font-semibold ${index === 0 ? 'bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))]' : 'text-[hsl(var(--sidebar-foreground)/.68)]'}`}>{item}</div>)}
+          <nav className="h-fit rounded-2xl bg-[hsl(var(--sidebar))] p-3 text-[hsl(var(--sidebar-foreground))]" aria-label={t('apMenuOf').replace('{label}', current.label)}>
+            <p className="px-3 py-3 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--sidebar-foreground)/.5)]">{t('apMenu')}</p>
+            {(role === 'user' ? [t('navOverview'), t('navProfile'), t('navSchedule'), t('news')] : role === 'teacher' ? [t('navOverview'), t('mySchedule'), t('teachersSchedule'), t('navMessages'), t('navQa')] : role === 'supervisor' ? [t('navOverview'), t('stepStudents'), t('tileApplications'), t('permAnnouncements'), t('apTermSchedule')] : [t('navOverview'), t('tileApplications'), t('apTermSchedule'), t('tileRoles'), t('navMessages')]).map((item, index) => <div key={item} className={`rounded-xl px-3 py-3 text-xs font-semibold ${index === 0 ? 'bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))]' : 'text-[hsl(var(--sidebar-foreground)/.68)]'}`}>{item}</div>)}
           </nav>
           <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)]">
-            <div className="mb-5 flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">İcmal</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{current.title}</h3></div><Eye className="text-[hsl(var(--secondary-foreground))]" size={20} /></div>
-            {role === 'teacher' && <><p className="mb-4 text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">Müəllim görünüşü</p><TeacherSchedule ownerName={ownerName} /></>}
-            {role === 'owner_assistant' && <><p className="mb-4 text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">İdarə heyəti görünüşü</p><div className="grid gap-3 sm:grid-cols-2"><PreviewCard title="Müraciətlər" text="Tələbə müraciətlərinə baxış" /><PreviewCard title="Semestr cədvəli" text="Dərs və materiallara nəzarət" /><PreviewCard title="Müəllim təyinatı" text="Açıq icazələrə əsasən" /><PreviewCard title="Mesajlar" text="Tələbə və müəllimlərlə əlaqə" /></div></>}
-            {role === 'supervisor' && <><p className="mb-4 text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">Nəzarətçi görünüşü</p><div className="grid gap-3 sm:grid-cols-2"><PreviewCard title="Tələbələr" text="Akademik məlumatlara baxış" /><PreviewCard title="Müraciətlər" text="Qəbul prosesini izləyin" /><PreviewCard title="Elanlar" text="Akademiya yenilikləri" /></div></>}
-            {role === 'user' && <><p className="mb-4 text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">İstifadəçi görünüşü</p><div className="grid gap-3 sm:grid-cols-2"><PreviewCard title="Dərs Cədvəlim" text="Fənlər və materiallar" /><PreviewCard title="Həftəlik cədvəl" text="Gündəlik dərslərə baxış" /><PreviewCard title="Yeniliklər" text="Elan və məqalələr" /><PreviewCard title="Profilim" text="Şəxsi məlumatlar" /></div></>}
+            <div className="mb-5 flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{t('navOverview')}</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{current.title}</h3></div><Eye className="text-[hsl(var(--secondary-foreground))]" size={20} /></div>
+            {role === 'teacher' && <><p className="mb-4 text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{t('apTeacherView')}</p><TeacherSchedule ownerName={ownerName} /></>}
+            {role === 'owner_assistant' && <><p className="mb-4 text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{t('apBoardView')}</p><div className="grid gap-3 sm:grid-cols-2"><PreviewCard title={t('tileApplications')} text={t('apAppsLook')} /><PreviewCard title={t('apTermSchedule')} text={t('apLessonWatch')} /><PreviewCard title={t('apTeacherAssign')} text={t('apByPermissions')} /><PreviewCard title={t('apMessages')} text={t('apPeopleContact')} /></div></>}
+            {role === 'supervisor' && <><p className="mb-4 text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{t('apSupervisorView')}</p><div className="grid gap-3 sm:grid-cols-2"><PreviewCard title={t('stepStudents')} text={t('apAcademicLook')} /><PreviewCard title={t('tileApplications')} text={t('apTrackAdmission')} /><PreviewCard title={t('permAnnouncements')} text={t('apAcademyNews')} /></div></>}
+            {role === 'user' && <><p className="mb-4 text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{t('apUserView')}</p><div className="grid gap-3 sm:grid-cols-2"><PreviewCard title={t('navSchedule')} text={t('apSubjectsMaterials')} /><PreviewCard title={t('weeklySchedule')} text={t('apDailyLook')} /><PreviewCard title={t('news')} text={t('apNewsArticles')} /><PreviewCard title={t('navProfile')} text={t('apPersonal')} /></div></>}
           </section>
           <aside className="space-y-4">
-            <div className="rounded-2xl bg-[hsl(var(--accent)/.35)] p-5"><p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">Yoxlama qeydi</p><p className="mt-3 text-sm leading-6 text-[hsl(var(--primary))]">Bu görünüş seçilmiş rolun ana səhifəsini tam quruluşda yoxlamaq üçündür. Real istifadəçi icazələri dəyişdirilmir.</p></div>
-            <PreviewCard title="Bildirişlər" text="Yeni elan və müraciət məlumatları" />
-            <PreviewCard title="Məsləhətləşmə / Əlaqə" text="İstifadəçilərlə əlaqə bölməsi" />
+            <div className="rounded-2xl bg-[hsl(var(--accent)/.35)] p-5"><p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">{t('apCheckNote')}</p><p className="mt-3 text-sm leading-6 text-[hsl(var(--primary))]">{t('apPreviewNote')}</p></div>
+            <PreviewCard title={t('notifications')} text={t('apNoticeNews')} />
+            <PreviewCard title={t('navMessages')} text={t('apContactSection')} />
           </aside>
         </div>
       </main>
@@ -3752,6 +3772,7 @@ type AdminSearchResult = {
 };
 
 function AdminGlobalSearch({ onSelectStudent }: { onSelectStudent: (profileId: number) => void }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<AdminSearchResult[]>([]);
@@ -3780,7 +3801,7 @@ function AdminGlobalSearch({ onSelectStudent }: { onSelectStudent: (profileId: n
       setLoading(true);
       void fetch(`${apiUrl('/admin/search')}?q=${encodeURIComponent(query.trim())}`, { signal: controller.signal })
         .then(async (response) => {
-          if (!response.ok) throw new Error('Axtarış baş tutmadı.');
+          if (!response.ok) throw new Error(t('apSearchFail'));
           return response.json() as Promise<AdminSearchResult[]>;
         })
         .then(setResults)
@@ -3794,22 +3815,22 @@ function AdminGlobalSearch({ onSelectStudent }: { onSelectStudent: (profileId: n
   }, [open, query]);
 
   return <>
-    <button type="button" onClick={() => setOpen(true)} className="focus-ring inline-flex shrink-0 items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-open-admin-search" aria-label="Qlobal axtarış">
-      <Search size={15} /><span className="hidden sm:inline">Axtar</span><kbd className="hidden rounded-md bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[10px] font-semibold text-[hsl(var(--muted-foreground))] sm:inline">Ctrl K</kbd>
+    <button type="button" onClick={() => setOpen(true)} className="focus-ring inline-flex shrink-0 items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-open-admin-search" aria-label={t('apGlobalSearch')}>
+      <Search size={15} /><span className="hidden sm:inline">{t('search')}</span><kbd className="hidden rounded-md bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[10px] font-semibold text-[hsl(var(--muted-foreground))] sm:inline">Ctrl K</kbd>
     </button>
-    {open && <div className="fixed inset-0 z-[70] overflow-y-auto bg-[hsl(var(--primary)/.45)] p-3 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-label="Qlobal axtarış" data-testid="admin-global-search">
+    {open && <div className="fixed inset-0 z-[70] overflow-y-auto bg-[hsl(var(--primary)/.45)] p-3 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-label={t('apGlobalSearch')} data-testid="admin-global-search">
       <div className="mx-auto mt-4 w-full max-w-2xl overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-[var(--shadow-lg)] sm:mt-[10vh]">
         <div className="flex items-center gap-2 border-b border-[hsl(var(--border))] px-3 sm:gap-3 sm:px-4">
           <Search size={18} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
-          <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent py-4 text-sm font-semibold outline-none" placeholder="Tələbə, müraciət və ya dərs axtar..." data-testid="input-admin-global-search" />
-          <button type="button" onClick={() => setOpen(false)} className="focus-ring shrink-0 rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Axtarışı bağla"><X size={18} /></button>
+          <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent py-4 text-sm font-semibold outline-none" placeholder={t('apSearchPh')} data-testid="input-admin-global-search" />
+          <button type="button" onClick={() => setOpen(false)} className="focus-ring shrink-0 rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={t('apCloseSearch')}><X size={18} /></button>
         </div>
         <div className="max-h-[55vh] overflow-y-auto p-3">
-          {!query.trim() && <p className="p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">Axtarış üçün ən azı iki simvol yazın.</p>}
-          {query.trim().length >= 2 && loading && <p className="p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">Axtarılır...</p>}
-          {query.trim().length >= 2 && !loading && !results.length && <p className="p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">Uyğun nəticə tapılmadı.</p>}
+          {!query.trim() && <p className="p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('apSearchMin')}</p>}
+          {query.trim().length >= 2 && loading && <p className="p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('apSearching')}</p>}
+          {query.trim().length >= 2 && !loading && !results.length && <p className="p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('apNoResults')}</p>}
           {results.map((result) => <button key={result.id} type="button" onClick={() => { if (result.kind === 'student' && result.profileId) onSelectStudent(result.profileId); setOpen(false); }} className="focus-ring flex w-full min-w-0 items-start gap-3 rounded-xl p-3 text-left hover:bg-[hsl(var(--muted)/.55)]" data-testid={`admin-search-result-${result.kind}`}>
-            <span className="mt-0.5 shrink-0 rounded-lg bg-[hsl(var(--secondary)/.65)] px-2 py-1 text-[10px] font-black uppercase text-[hsl(var(--secondary-foreground))]">{result.kind === 'student' ? 'Tələbə' : result.kind === 'application' ? 'Müraciət' : 'Dərs'}</span>
+            <span className="mt-0.5 shrink-0 rounded-lg bg-[hsl(var(--secondary)/.65)] px-2 py-1 text-[10px] font-black uppercase text-[hsl(var(--secondary-foreground))]">{result.kind === 'student' ? t('studentFallback') : result.kind === 'application' ? t('apApplication') : t('attLesson')}</span>
             <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-[hsl(var(--primary))]">{result.title}</span><span className="mt-1 block truncate text-xs text-[hsl(var(--muted-foreground))]">{result.subtitle}</span></span>
           </button>)}
         </div>
@@ -3921,11 +3942,11 @@ export function AdminPanel() {
         body: JSON.stringify({ status, rejectionReason }),
       });
       const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Qərar tətbiq edilə bilmədi.');
-      setDecisionNotice(status === 'approved' ? 'Müraciət təsdiqləndi və tələbəyə Gmail mesajı göndərildi.' : 'İmtina səbəbi tələbəyə Gmail ilə göndərildi.');
+      if (!response.ok) throw new Error(result.error || tr('apDecisionFail'));
+      setDecisionNotice(status === 'approved' ? tr('apApprovedMail') : tr('apRejectedMail'));
       await applicationsQuery.refetch();
     } catch (error) {
-      setDecisionNotice(error instanceof Error ? error.message : 'Qərar tətbiq edilə bilmədi.');
+      setDecisionNotice(error instanceof Error ? error.message : tr('apDecisionFail'));
     } finally {
       setDecisionBusyId(null);
     }
@@ -3936,14 +3957,14 @@ export function AdminPanel() {
     try {
       const response = await fetch(apiUrl(`/admin/applications/${application.id}/teacher-role`), { method: 'POST' });
       const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Müraciətçiyə müəllim rolu verilə bilmədi.');
+      if (!response.ok) throw new Error(result.error || tr('apRoleNotGiven'));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetAdminUsersQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetAdminTeachersQueryKey() }),
       ]);
-      setDecisionNotice(`${application.firstName} ${application.lastName} müəllim təyin edildi.`);
+      setDecisionNotice(tr('apTeacherAssigned').replace('{name}', `${application.firstName} ${application.lastName}`));
     } catch (error) {
-      setDecisionNotice(error instanceof Error ? error.message : 'Müraciətçiyə müəllim rolu verilə bilmədi.');
+      setDecisionNotice(error instanceof Error ? error.message : tr('apRoleNotGiven'));
     } finally {
       setTeacherBusyId(null);
     }
@@ -4028,7 +4049,7 @@ export function AdminPanel() {
         <section className="mt-5 min-w-0 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 shadow-[var(--shadow-sm)] sm:p-4">
            <h2 className="mb-3 flex items-center gap-2 font-serif text-2xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]"><ShieldCheck size={18} /> {tr('adminPanel')}</h2>
             <div className="grid grid-flow-row-dense grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
-                  {([['announcement', 'tileAnnouncement', Megaphone, 'announcements'], ['student-notifications', 'tileStudentNotice', Send, 'announcements'], ['article', 'tileArticle', BookOpenText, 'articles'], ['benefit', 'tileBenefit', Quote, 'dailyBenefits'], ['student-management', 'tileStudents', UsersRound, 'students'], ['application', 'tileApplications', UsersRound, 'applications'], ['exams', 'tileExams', ClipboardList, 'assignments'], ['schedule-prep', 'tileSchedulePrep', CalendarRange, null], ['groups', 'tileGroups', Users, 'schedule'], ['users', 'tileRoles', UserCog, 'userRoleManagement'], ['course-activation', 'tileCourses', BookOpen, 'schedule'], ['statistics', 'tileStatistics', UsersRound, null], ['audit-history', 'tileAudit', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'schedule-prep' && (ownerAssistant || activeRole === 'admin')) || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <Fragment key={value}><button type="button" onClick={() => toggleTab(value)} className={adminTileClass(value, tab === value)} aria-expanded={tab === value} aria-controls={tab === value ? `panel-admin-${value}` : undefined} data-testid={`tab-admin-${value}`}><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Icon size={16} /></span><span className="leading-4">{tr(label)} {value === 'application' && pendingApplicationCount > 0 && <span className="ms-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'exams' && pendingExamReviewCount > 0 && <span className="ms-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" title="Yoxlama gözləyən açıq cavablar" data-testid="badge-pending-exam-reviews">{pendingExamReviewCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="ms-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</span>{tab === value && <TilePointer />}</button>{inlinePanel(value)}</Fragment>)}
+                  {([['announcement', 'tileAnnouncement', Megaphone, 'announcements'], ['student-notifications', 'tileStudentNotice', Send, 'announcements'], ['article', 'tileArticle', BookOpenText, 'articles'], ['benefit', 'tileBenefit', Quote, 'dailyBenefits'], ['student-management', 'tileStudents', UsersRound, 'students'], ['application', 'tileApplications', UsersRound, 'applications'], ['exams', 'tileExams', ClipboardList, 'assignments'], ['schedule-prep', 'tileSchedulePrep', CalendarRange, null], ['groups', 'tileGroups', Users, 'schedule'], ['users', 'tileRoles', UserCog, 'userRoleManagement'], ['course-activation', 'tileCourses', BookOpen, 'schedule'], ['statistics', 'tileStatistics', UsersRound, null], ['audit-history', 'tileAudit', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'schedule-prep' && (ownerAssistant || activeRole === 'admin')) || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <Fragment key={value}><button type="button" onClick={() => toggleTab(value)} className={adminTileClass(value, tab === value)} aria-expanded={tab === value} aria-controls={tab === value ? `panel-admin-${value}` : undefined} data-testid={`tab-admin-${value}`}><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Icon size={16} /></span><span className="leading-4">{tr(label)} {value === 'application' && pendingApplicationCount > 0 && <span className="ms-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'exams' && pendingExamReviewCount > 0 && <span className="ms-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" title={tr('apPendingReviews')} data-testid="badge-pending-exam-reviews">{pendingExamReviewCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="ms-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</span>{tab === value && <TilePointer />}</button>{inlinePanel(value)}</Fragment>)}
                    {(owner || ownerAssistant) && <button type="button" onClick={() => toggleTab('graduation-certificates')} className={adminTileClass('graduation-certificates', tab === 'graduation-certificates')} aria-expanded={tab === 'graduation-certificates'} aria-controls={tab === 'graduation-certificates' ? 'panel-admin-graduation-certificates' : undefined} data-testid="tab-admin-graduation-certificates"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><FileBadge size={16} /></span><span className="leading-4">{tr('tileCertificates')}</span>{tab === 'graduation-certificates' && <TilePointer />}</button>}{inlinePanel('graduation-certificates')}
                    
                    <button type="button" onClick={() => toggleTab('library')} className={adminTileClass('library', tab === 'library')} aria-expanded={tab === 'library'} aria-controls={tab === 'library' ? 'panel-admin-library' : undefined} data-testid="tab-admin-library"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Library size={16} /></span><span className="leading-4">{tr('navLibrary')}</span>{tab === 'library' && <TilePointer />}</button>{inlinePanel('library')}

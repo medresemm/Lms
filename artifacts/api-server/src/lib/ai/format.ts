@@ -88,6 +88,57 @@ export function lessonDaysLabel(days: string[]) {
   return labels.length ? labels.join(", ") : "gün təyin olunmayıb";
 }
 
+/** lessonTime ya «HH:MM», ya da gün → saat JSON-u ({"monday":"18:00"}) ola bilər. */
+function parseLessonTimes(lessonTime: string | null | undefined): { single: string | null; perDay: Record<string, string> | null } {
+  const raw = (lessonTime ?? "").trim();
+  if (!raw) return { single: null, perDay: null };
+  if (raw.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const perDay = Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string" && /^\d{1,2}:\d{2}$/.test(entry[1].trim())).map(([day, time]) => [day, time.trim()]));
+      return { single: null, perDay };
+    } catch {
+      return { single: null, perDay: {} };
+    }
+  }
+  return { single: /^\d{1,2}:\d{2}$/.test(raw) ? raw : null, perDay: null };
+}
+
+/** Konkret gün üçün dərs saatı (yoxdursa null). */
+export function lessonTimeOn(lessonTime: string | null | undefined, day?: string | null): string | null {
+  const { single, perDay } = parseLessonTimes(lessonTime);
+  if (perDay) {
+    if (day) return perDay[day] ?? null;
+    const times = Array.from(new Set(Object.values(perDay)));
+    return times.length === 1 ? times[0]! : null;
+  }
+  return single;
+}
+
+/**
+ * Günlər + saat, oxunaqlı: «Bazar ertəsi 22:13, Şənbə 21:13» (hər günün öz saatı)
+ * və ya «Bazar ertəsi, Çərşənbə 18:00» (eyni saat). Xam JSON heç vaxt göstərilmir.
+ */
+export function lessonScheduleLabel(days: string[], lessonTime: string | null | undefined, options: { timeSeparator?: string } = {}) {
+  const ordered = WEEKDAY_ORDER.filter((day) => days.includes(day));
+  if (!ordered.length) return lessonDaysLabel(days);
+  const { single, perDay } = parseLessonTimes(lessonTime);
+  if (perDay) {
+    const distinct = Array.from(new Set(ordered.map((day) => perDay[day]).filter(Boolean)));
+    if (distinct.length > 1 || ordered.some((day) => !perDay[day])) {
+      return ordered.map((day) => `${WEEKDAY_LABELS[day]}${perDay[day] ? ` ${perDay[day]}` : ""}`).join(", ");
+    }
+    return `${lessonDaysLabel(ordered)}${distinct[0] ? `${options.timeSeparator ?? " "}${distinct[0]}` : ""}`;
+  }
+  return `${lessonDaysLabel(ordered)}${single ? `${options.timeSeparator ?? " "}${single}` : ""}`;
+}
+
+/** Müəllim adı(ları); boşdursa «Müəllim təyin olunmayıb». */
+export function teacherDisplay(...names: Array<string | null | undefined>) {
+  for (const name of names) if (name && name.trim()) return name.trim();
+  return "Müəllim təyin olunmayıb";
+}
+
 export function reply(lines: Array<string | null | undefined | false>, suggestions: string[] = []): AiReply {
   return {
     reply: lines.filter((line): line is string => typeof line === "string").join("\n").replace(/\n{3,}/g, "\n\n").trim(),

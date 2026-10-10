@@ -21,7 +21,7 @@ import type {
 } from "./aiProvider.js";
 import { countKeywords, fuzzyKeywordMatch, hasKeyword, normalizeText, tokenize, type ParsedMessage } from "./text.js";
 import { KW, STOPWORDS } from "./keywords.js";
-import { IGNORED_TITLE_WORDS, detectWeekday, formatDate, formatGrade, lessonDaysLabel, reply, snippet, studentCode } from "./format.js";
+import { IGNORED_TITLE_WORDS, detectWeekday, formatDate, formatGrade, lessonDaysLabel, lessonScheduleLabel, reply, snippet, studentCode, teacherDisplay } from "./format.js";
 import { answerGuide } from "./siteGuide.js";
 import { frameOf, framed, type AiFrameIcon } from "./blocks.js";
 import { bestMatches, looseSimilarity, normalizePhone, phoneMatches, rankItems, tokenSimilarity, type Ranked } from "./fuzzy.js";
@@ -521,7 +521,7 @@ function studentStats(roster: AiRosterStudent[]) {
 // ---------------------------------------------------------------------------
 
 function teacherLessonLines(teacher: AiTeacher) {
-  return teacher.lessons.map((lesson) => `• ${lesson.courseTitle} — ${termLabel(lesson.termNumber)} · ${lessonDaysLabel(lesson.lessonDays)}${lesson.lessonTime ? ` ${lesson.lessonTime}` : ""}`);
+  return teacher.lessons.map((lesson) => `• ${lesson.courseTitle} — ${termLabel(lesson.termNumber)} · ${lessonScheduleLabel(lesson.lessonDays, lesson.lessonTime)}`);
 }
 
 async function teacherBranch(ctx: AdminAiContext, parsed: ParsedMessage, entities: Set<Entity>, isCount: boolean): Promise<AiReply> {
@@ -827,8 +827,9 @@ async function courseDetailsReply(ctx: AdminAiContext, parsed: ParsedMessage, en
     if (!lessons.length) lines.push("• Bu fənn üçün hələ dərs qrupu (cədvəl) yoxdur.");
     for (const lesson of lessons) {
       const name = lesson.title && normalizeText(lesson.title) !== normalizeText(course.title) ? `«${lesson.title}» · ` : "";
-      const days = lesson.lessonDays.length ? ` · ${lessonDaysLabel(lesson.lessonDays)}${lesson.lessonTime ? ` ${lesson.lessonTime}` : ""}` : "";
-      lines.push(`• ${name}${termLabel(lesson.termNumber)} · müəllim: ${lesson.teacherName ?? course.instructor ?? "—"}${days}${lesson.isMandatory ? "" : " (seçmə)"}`);
+      const days = lesson.lessonDays.length ? ` · ${lessonScheduleLabel(lesson.lessonDays, lesson.lessonTime)}` : "";
+      const teacher = lesson.teacherName?.trim() || course.instructor?.trim();
+      lines.push(`• ${name}${termLabel(lesson.termNumber)} · ${teacher ? `müəllim: ${teacher}` : "Müəllim təyin olunmayıb"}${days}${lesson.isMandatory ? "" : " (seçmə)"}`);
     }
     const students = await ctx.courseStudents(course.courseId);
     lines.push(`Tələbələr (${students.length})${students.length ? ":" : " — cari semestrdə bu dərsə yazılan tələbə yoxdur."}`);
@@ -852,7 +853,7 @@ async function courseBranch(ctx: AdminAiContext, parsed: ParsedMessage, entities
     for (const course of matched.slice(0, 3)) {
       lines.push(`${course.title} (${course.category})`);
       for (const lesson of course.lessons) {
-        lines.push(`• ${termLabel(lesson.termNumber)} · ${lesson.teacherName ?? course.instructor ?? "—"} · ${lessonDaysLabel(lesson.lessonDays)}${lesson.lessonTime ? ` ${lesson.lessonTime}` : ""}${lesson.isMandatory ? "" : " (seçmə)"}`);
+        lines.push(`• ${termLabel(lesson.termNumber)} · ${teacherDisplay(lesson.teacherName, course.instructor)} · ${lessonScheduleLabel(lesson.lessonDays, lesson.lessonTime)}${lesson.isMandatory ? "" : " (seçmə)"}`);
       }
       if (wantsStudents) {
         const students = await ctx.courseStudents(course.courseId);
@@ -868,8 +869,10 @@ async function courseBranch(ctx: AdminAiContext, parsed: ParsedMessage, entities
   if (!isCount) {
     for (const course of courses) {
       const terms = Array.from(new Set(course.lessons.map((lesson) => lesson.termNumber))).sort((a, b) => a - b);
-      const teachers = Array.from(new Set(course.lessons.map((lesson) => lesson.teacherName).filter((name): name is string => Boolean(name))));
-      lines.push(`• ${course.title} (${course.category}) — müəllim: ${teachers.length ? teachers.join(", ") : course.instructor || "—"}${terms.length ? ` · semestr: ${terms.join(", ")}` : ""}`);
+      // Birgə tədrisdə teacherName «Ad1, Ad2» olur — hər müəllim bir dəfə göstərilir.
+      const teachers = Array.from(new Set(course.lessons.flatMap((lesson) => (lesson.teacherName ?? "").split(",")).map((name) => name.trim()).filter(Boolean)));
+      const teacherText = teachers.length ? `müəllim: ${teachers.join(", ")}` : course.instructor?.trim() ? `müəllim: ${course.instructor.trim()}` : "Müəllim təyin olunmayıb";
+      lines.push(`• ${course.title} (${course.category}) — ${teacherText}${terms.length ? ` · semestr: ${terms.join(", ")}` : ""}`);
     }
     lines.push("", "Dərsin tələbə siyahısı üçün yazın: «<dərs adı> tələbələri».");
   }

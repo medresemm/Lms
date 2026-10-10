@@ -23,7 +23,7 @@ import { countKeywords, hasKeyword, normalizeText, parse, tokenize, type ParsedM
 import { KW } from "./keywords.js";
 import {
   ATTENDANCE_STATUS, WEEKDAY_LABELS, WEEKDAY_ORDER, bakuWeekday, detectTermNumber, detectWeekday, formatDate, formatDateTime,
-  formatGrade, lessonDaysLabel, reply, snippet, studentCode, titleMatches,
+  formatGrade, lessonDaysLabel, lessonScheduleLabel, lessonTimeOn, reply, snippet, studentCode, titleMatches,
 } from "./format.js";
 import { blockReply, ensureBlocks, finalizeInternal, frameOf, framed, mergeFrames, type AiBlock, type AiItem, type AiRow } from "./blocks.js";
 import { answerAdmin } from "./admin.js";
@@ -71,12 +71,15 @@ function studentHelp(name?: string) {
   ], STUDENT_SUGGESTIONS));
 }
 
-function lessonItem(lesson: AiLesson, joinToday = false): AiItem {
+function lessonItem(lesson: AiLesson, joinToday = false, day?: string): AiItem {
+  // lessonTime gün → saat JSON-u ola bilər: həmin günün saatı göstərilir, xam JSON yox.
+  const time = lessonTimeOn(lesson.lessonTime, day);
+  const schedule = !day && !time && lesson.lessonDays.length && lesson.lessonTime ? lessonScheduleLabel(lesson.lessonDays, lesson.lessonTime) : null;
   return {
     title: lesson.courseTitle,
     detail: lesson.title && lesson.title !== lesson.courseTitle ? lesson.title : undefined,
-    meta: [lesson.lessonTime ? `saat ${lesson.lessonTime}` : "saatı hələ bəlli deyil", lesson.teacherName ? lesson.teacherName : null].filter((part): part is string => Boolean(part)),
-    action: joinToday && lesson.lessonTime ? { label: "Dərsə qoşul", href: `/api/lessons/${lesson.resourceId}/join` } : undefined,
+    meta: [time ? `saat ${time}` : schedule ?? "saatı hələ bəlli deyil", lesson.teacherName?.trim() ? lesson.teacherName.trim() : null].filter((part): part is string => Boolean(part)),
+    action: joinToday && time ? { label: "Dərsə qoşul", href: `/api/lessons/${lesson.resourceId}/join` } : undefined,
   };
 }
 
@@ -98,24 +101,24 @@ async function studentSchedule(ctx: StudentAiContext, parsed: ParsedMessage, cou
   }
   const weekday = detectWeekday(parsed);
   const today = bakuWeekday(0);
-  const byTime = (left: AiLesson, right: AiLesson) => (left.lessonTime ?? "99").localeCompare(right.lessonTime ?? "99");
+  const byTime = (day: string) => (left: AiLesson, right: AiLesson) => (lessonTimeOn(left.lessonTime, day) ?? "99").localeCompare(lessonTimeOn(right.lessonTime, day) ?? "99");
   if (weekday) {
-    const dayLessons = lessons.filter((lesson) => lesson.lessonDays.includes(weekday.day)).sort(byTime);
+    const dayLessons = lessons.filter((lesson) => lesson.lessonDays.includes(weekday.day)).sort(byTime(weekday.day));
     if (!dayLessons.length) {
       return blockReply([{ type: "text", text: `${weekday.label} dərsiniz yoxdur — istirahət edə bilərsiniz.` }], ["Dərs cədvəlim", "Tapşırıqlarım"]);
     }
     return blockReply([
       { type: "text", text: `${weekday.label} ${plural(dayLessons.length, "dərsiniz")} var:` },
-      { type: "card", title: weekday.label, items: dayLessons.map((lesson) => lessonItem(lesson, weekday.day === today)), note: "Dərs linkləri «Resurslar» bölməsində də var." },
+      { type: "card", title: weekday.label, items: dayLessons.map((lesson) => lessonItem(lesson, weekday.day === today, weekday.day)), note: "Dərs linkləri «Resurslar» bölməsində də var." },
     ], ["Dərs cədvəlim", "Resurslar"]);
   }
   const blocks: AiBlock[] = [];
   let weeklyCount = 0;
   for (const day of WEEKDAY_ORDER) {
-    const dayLessons = lessons.filter((lesson) => lesson.lessonDays.includes(day)).sort(byTime);
+    const dayLessons = lessons.filter((lesson) => lesson.lessonDays.includes(day)).sort(byTime(day));
     if (!dayLessons.length) continue;
     weeklyCount += dayLessons.length;
-    blocks.push({ type: "card", title: WEEKDAY_LABELS[day], badge: day === today ? { text: "bu gün", tone: "good" } : undefined, items: dayLessons.map((lesson) => lessonItem(lesson, day === today)) });
+    blocks.push({ type: "card", title: WEEKDAY_LABELS[day], badge: day === today ? { text: "bu gün", tone: "good" } : undefined, items: dayLessons.map((lesson) => lessonItem(lesson, day === today, day)) });
   }
   const unscheduled = lessons.filter((lesson) => !lesson.lessonDays.length);
   if (unscheduled.length) blocks.push({ type: "card", title: "Günü hələ bəlli olmayan dərslər", items: unscheduled.map((lesson) => lessonItem(lesson)) });
@@ -285,7 +288,7 @@ async function studentCourses(ctx: StudentAiContext) {
         return {
           title: subject.title,
           detail: subject.instructor ? `Müəllim: ${subject.instructor}` : "Müəllim hələ təyin olunmayıb",
-          meta: [days.length ? `${lessonDaysLabel(days)}${time ? `, saat ${time}` : ""}` : null, subject.credits ? `${subject.credits} kredit` : null].filter((part): part is string => Boolean(part)),
+          meta: [days.length ? lessonScheduleLabel(days, time, { timeSeparator: ", saat " }) : null, subject.credits ? `${subject.credits} kredit` : null].filter((part): part is string => Boolean(part)),
           badge: subject.isMandatory ? undefined : { text: "seçmə", tone: "muted" as const },
         };
       }),
@@ -342,7 +345,7 @@ async function studentCourseFocus(ctx: StudentAiContext, courseIds: Set<number>)
     if (courseLessons.length) {
       const days = Array.from(new Set(courseLessons.flatMap((lesson) => lesson.lessonDays)));
       const time = courseLessons.find((lesson) => lesson.lessonTime)?.lessonTime;
-      rows.push({ label: "Dərs günləri", value: `${lessonDaysLabel(days)}${time ? `, saat ${time}` : ""}` });
+      rows.push({ label: "Dərs günləri", value: lessonScheduleLabel(days, time, { timeSeparator: ", saat " }) });
       const link = courseLessons.find((lesson) => lesson.url)?.url;
       if (link) action = { label: "Dərs linkini aç", href: link };
     }

@@ -17,14 +17,15 @@
     "test:ai-modes": "tsx --test src/lib/ai/adminRouting.test.ts",
     "test:ai-student-external": "tsx --test src/lib/ai/studentExternal.test.ts",
     "test:library": "tsx --test src/lib/library/library.test.ts src/lib/library/missingTable.test.ts src/lib/library/courseBooks.test.ts src/lib/library/resourceBooks.test.ts ../medine-lms/src/lib/resource-books.test.ts",
-    "test:ai-polish": "tsx --test src/lib/ai/aiPolish.test.ts ../medine-lms/src/lib/aiPolish.test.ts",
+    "test:ai-polish": "tsx --test src/lib/ai/aiPolish.test.ts src/lib/ai/scheduleFormat.test.ts ../medine-lms/src/lib/aiPolish.test.ts",
     "test:exams": "tsx --test src/lib/examContent.test.ts ../medine-lms/src/lib/exam-text.test.ts",
     "test:account-profile": "tsx --test src/lib/accountProfile.test.ts ../medine-lms/src/lib/account-profile-retry.test.ts",
     "test:schedule-pdf": "tsx --test src/lib/schedulePdf.test.ts",
     "test:test-builder": "tsx --test src/lib/library/testGenerator.test.ts",
     "test:co-teachers": "tsx --test src/lib/resourceTeachers.test.ts ../medine-lms/src/lib/co-teachers.test.ts",
     "test:student-visibility": "tsx --test src/lib/studentVisibility.test.ts ../medine-lms/src/lib/staff-student-note.test.ts",
-    "test:frontend-admin": "tsx --test ../medine-lms/src/lib/clerk-token.test.ts ../medine-lms/src/lib/semester-groups-visibility.test.ts"
+    "test:frontend-admin": "tsx --test ../medine-lms/src/lib/clerk-token.test.ts ../medine-lms/src/lib/semester-groups-visibility.test.ts",
+    "test:groups": "tsx --test src/lib/groupRoster.test.ts ../medine-lms/src/lib/groups.test.ts ../medine-lms/src/lib/schedule-prep-books.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1100.0",

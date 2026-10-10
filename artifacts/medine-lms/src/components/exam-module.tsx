@@ -59,6 +59,7 @@ function ExamText({ text, language, className = '', as: Tag = 'span' }: { text: 
 }
 
 function AdmissionModeSettings({ owner }: { owner: boolean }) {
+  const { t } = useI18n();
   const query = useGetAdminAdmissionMode({
     query: {
       enabled: owner,
@@ -76,9 +77,9 @@ function AdmissionModeSettings({ owner }: { owner: boolean }) {
     try {
       await updateMutation.mutateAsync({ data: { examRequired } });
       await query.refetch();
-      setNotice(examRequired ? 'Yeni tələbələr imtahanla qəbul olunacaq.' : 'Yeni tələbələr imtahansız qəbul olunacaq.');
+      setNotice(examRequired ? t('admissionExamOn') : t('admissionExamOff'));
     } catch (error) {
-      setNotice(errorMessage(error, 'Qəbul qaydası yadda saxlanılmadı.'));
+      setNotice(errorMessage(error, t('admissionNotSaved')));
     }
   };
 
@@ -89,16 +90,16 @@ function AdmissionModeSettings({ owner }: { owner: boolean }) {
     <section className="rounded-2xl border border-[hsl(var(--accent)/.65)] bg-[hsl(var(--accent)/.1)] p-5" data-testid="section-admission-mode">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Yeni tələbə qəbulu</p>
-          <p className="mt-2 max-w-2xl text-xs leading-5 text-[hsl(var(--muted-foreground))]">Yeni təsdiqlənən tələbələrin qəbul imtahanı verib-verməyəcəyini buradan seçin. Bu seçim imtahanın öz açıq/bağlı statusundan ayrıdır.</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('newAdmission')}</p>
+          <p className="mt-2 max-w-2xl text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('admissionModeHint')}</p>
         </div>
         <span className="rounded-full bg-[hsl(var(--card))] px-3 py-1.5 text-xs font-bold text-[hsl(var(--primary))]" data-testid="status-admission-mode">
-          {query.isLoading ? 'Yüklənir...' : examRequired ? 'İmtahanla qəbul' : 'İmtahansız qəbul'}
+          {query.isLoading ? t('loading') : examRequired ? t('withExam') : t('withoutExam')}
         </span>
       </div>
-      <div className="mt-4 grid gap-2 sm:grid-cols-2" role="group" aria-label="Yeni tələbə qəbul qaydası">
-        <button type="button" onClick={() => void save(true)} disabled={disabled} aria-pressed={examRequired === true} className={`focus-ring rounded-xl border px-4 py-3 text-left text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${examRequired === true ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]'}`} data-testid="button-admission-mode-exam"><Power size={16} className="mb-1" /> İmtahanla qəbul<span className="mt-1 block text-[11px] font-normal opacity-75">Tələbə testdən sonra təsdiq gözləyir.</span></button>
-        <button type="button" onClick={() => void save(false)} disabled={disabled} aria-pressed={examRequired === false} className={`focus-ring rounded-xl border px-4 py-3 text-left text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${examRequired === false ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]'}`} data-testid="button-admission-mode-direct"><Power size={16} className="mb-1" /> İmtahansız qəbul<span className="mt-1 block text-[11px] font-normal opacity-75">Tələbə təsdiqdən sonra birbaşa ana səhifəyə keçir.</span></button>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2" role="group" aria-label={t('admissionRule')}>
+        <button type="button" onClick={() => void save(true)} disabled={disabled} aria-pressed={examRequired === true} className={`focus-ring rounded-xl border px-4 py-3 text-left text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${examRequired === true ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]'}`} data-testid="button-admission-mode-exam"><Power size={16} className="mb-1" /> {t('withExam')}<span className="mt-1 block text-[11px] font-normal opacity-75">{t('withExamHint')}</span></button>
+        <button type="button" onClick={() => void save(false)} disabled={disabled} aria-pressed={examRequired === false} className={`focus-ring rounded-xl border px-4 py-3 text-left text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${examRequired === false ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]'}`} data-testid="button-admission-mode-direct"><Power size={16} className="mb-1" /> {t('withoutExam')}<span className="mt-1 block text-[11px] font-normal opacity-75">{t('withoutExamHint')}</span></button>
       </div>
       {notice && <p className="mt-3 rounded-xl bg-[hsl(var(--secondary)/.35)] p-3 text-xs font-semibold text-[hsl(var(--secondary-foreground))]" data-testid="status-admission-mode-notice">{notice}</p>}
     </section>

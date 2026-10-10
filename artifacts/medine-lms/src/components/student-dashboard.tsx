@@ -121,19 +121,19 @@ function academyStartUtc(date: { year: number; month: number; day: number }, tim
   return new Date(Date.UTC(date.year, date.month - 1, date.day, hours - 4, minutes));
 }
 
-function formatAcademyDateTime(value: Date) {
-  return new Intl.DateTimeFormat('az-AZ', { timeZone: ACADEMY_TIME_ZONE, weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(value);
+function formatAcademyDateTime(value: Date, locale = 'az-AZ') {
+  return new Intl.DateTimeFormat(locale, { timeZone: ACADEMY_TIME_ZONE, weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(value);
 }
 
-function formatLocalTime(value: Date) {
-  return new Intl.DateTimeFormat('az-AZ', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }).format(value);
+function formatLocalTime(value: Date, locale = 'az-AZ') {
+  return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }).format(value);
 }
 
-function platformForUrl(url: string | null) {
-  if (!url) return 'Platforma təyin edilməyib';
+function platformForUrl(url: string | null, missing: string, online: string) {
+  if (!url) return missing;
   if (/zoom/i.test(url)) return 'Zoom';
   if (/meet\.google|meet\.com/i.test(url)) return 'Google Meet';
-  return 'Onlayn dərs';
+  return online;
 }
 
 function timeForLessonDay(lessonTime: string | null | undefined, day: string) {
@@ -391,6 +391,7 @@ function Header({ studentName, onNotifications, onLogout, hasNewNotification }: 
 }
 
 function TranscriptSection({ profile }: { profile: AcademicProfile }) {
+  const { t, locale } = useI18n();
   const visibleSemesters = profile.semesters.filter((item) => item.termNumber <= profile.currentTermNumber);
   const [selectedTerm, setSelectedTerm] = useState(profile.currentTermNumber);
   const [isPrintMode, setIsPrintMode] = useState(false);
@@ -418,7 +419,7 @@ function TranscriptSection({ profile }: { profile: AcademicProfile }) {
   useEffect(() => {
     if (!isPrintMode) return;
     const previousTitle = document.title;
-    document.title = `Mədinə Akademiyası · ${formatFullName(profile.firstName, profile.lastName)} · Transkript`;
+    document.title = `${t('academyName')} · ${formatFullName(profile.firstName, profile.lastName)} · ${t('transcriptTitle')}`;
     document.body.classList.add('printing-transcript');
     const print = window.setTimeout(() => window.print(), 100);
     const afterPrint = () => setIsPrintMode(false);
@@ -429,57 +430,57 @@ function TranscriptSection({ profile }: { profile: AcademicProfile }) {
       document.body.classList.remove('printing-transcript');
       document.title = previousTitle;
     };
-  }, [isPrintMode, profile.firstName, profile.lastName]);
+  }, [isPrintMode, profile.firstName, profile.lastName, t]);
 
   return (
     <>
     <section className="mt-5 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)] md:p-6" data-testid="section-student-transcript">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Akademik nəticələr</p>
-          <h2 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Nəticə kartı və transkript</h2>
-          <p className="mt-2 max-w-2xl text-xs leading-5 text-[hsl(var(--muted-foreground))]">Qiymət və davamiyyət məlumatlarınız semestr üzrə burada göstərilir.</p>
-         <p className="print-only-transcript mt-2 text-sm font-semibold">{formatFullName(profile.firstName, profile.lastName)} · Tələbə № T{String(profile.studentNumber).padStart(4, '0')} · {profile.program}</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">{t('academicResults')}</p>
+          <h2 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('transcriptTitle')}</h2>
+          <p className="mt-2 max-w-2xl text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('transcriptHint')}</p>
+         <p className="print-only-transcript mt-2 text-sm font-semibold">{formatFullName(profile.firstName, profile.lastName)} · {t('studentNo')} T{String(profile.studentNumber).padStart(4, '0')} · {profile.program}</p>
         </div>
-         <button type="button" onClick={() => { setPrintDate(new Intl.DateTimeFormat('az-AZ', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())); setIsPrintMode(true); }} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))]" data-testid="button-download-transcript"><Download size={15} /> PDF kimi saxla</button>
+         <button type="button" onClick={() => { setPrintDate(new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'az-AZ', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())); setIsPrintMode(true); }} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))]" data-testid="button-download-transcript"><Download size={15} /> {t('savePdf')}</button>
       </div>
 
        <div className="mt-5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.28)] p-4" data-testid="transcript-student-details">
-         <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">Tələbə məlumatları</p>
+         <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{t('studentDetails')}</p>
          <dl className="mt-3 grid gap-x-6 gap-y-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
-           <div><dt className="text-[hsl(var(--muted-foreground))]">Ad və soyad</dt><dd className="mt-1 font-bold text-[hsl(var(--primary))]">{formatFullName(profile.firstName, profile.lastName)}</dd></div>
-           <div><dt className="text-[hsl(var(--muted-foreground))]">Tələbə nömrəsi</dt><dd className="mt-1 font-bold text-[hsl(var(--primary))]">T{String(profile.studentNumber).padStart(4, '0')}</dd></div>
-           <div><dt className="text-[hsl(var(--muted-foreground))]">İxtisas / proqram</dt><dd className="mt-1 font-bold text-[hsl(var(--primary))]">{profile.program ?? '—'}</dd></div>
-           <div><dt className="text-[hsl(var(--muted-foreground))]">Tədris ili</dt><dd className="mt-1 font-bold text-[hsl(var(--primary))]">{profile.courseYear}-cü il · {profile.semester}-ci semestr</dd></div>
+           <div><dt className="text-[hsl(var(--muted-foreground))]">{t('fullName')}</dt><dd className="mt-1 font-bold text-[hsl(var(--primary))]">{formatFullName(profile.firstName, profile.lastName)}</dd></div>
+           <div><dt className="text-[hsl(var(--muted-foreground))]">{t('studentNumber')}</dt><dd className="mt-1 font-bold text-[hsl(var(--primary))]">T{String(profile.studentNumber).padStart(4, '0')}</dd></div>
+           <div><dt className="text-[hsl(var(--muted-foreground))]">{t('programLabel')}</dt><dd className="mt-1 font-bold text-[hsl(var(--primary))]">{profile.program ?? '—'}</dd></div>
+           <div><dt className="text-[hsl(var(--muted-foreground))]">{t('studyYear')}</dt><dd className="mt-1 font-bold text-[hsl(var(--primary))]">{profile.courseYear}. {t('yearWord')} · {profile.semester}. {t('semester')}</dd></div>
          </dl>
        </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl bg-[hsl(var(--muted)/.45)] p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">Ümumi orta bal</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{t('overallGpa')}</p>
           <p className="mt-2 font-serif text-2xl font-bold text-[hsl(var(--primary))]" data-testid="text-overall-gpa">{overallGrade === null ? '—' : overallGrade.toFixed(2)}</p>
-          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">5 üzərindən · bütün qiymətlər</p>
+          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('outOfFive')}</p>
         </div>
         <div className="rounded-xl bg-[hsl(var(--muted)/.45)] p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">Ümumi davamiyyət</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{t('overallAttendance')}</p>
           <p className="mt-2 font-serif text-2xl font-bold text-[hsl(var(--primary))]" data-testid="text-overall-attendance">{overallAttendance === null ? '—' : `${overallAttendance}%`}</p>
-          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Qeyd edilmiş fənlər üzrə</p>
+          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('recordedSubjects')}</p>
         </div>
         <div className="rounded-xl bg-[hsl(var(--muted)/.45)] p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">Akademik status</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{t('academicStatus')}</p>
           <p className="mt-2 text-lg font-bold text-[hsl(var(--primary))]">{profile.statusLabel}</p>
-          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Cari semestr: {profile.currentTermNumber}-ci</p>
+          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('currentTermShort')}: {profile.currentTermNumber}</p>
         </div>
       </div>
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-xs font-bold text-[hsl(var(--primary))]">
-          Semestr
+          {t('semester')}
           <select value={selectedTerm} onChange={(event) => setSelectedTerm(Number(event.target.value))} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-bold" data-testid="select-transcript-semester">
             {visibleSemesters.map((item) => <option key={item.termNumber} value={item.termNumber}>{item.label}</option>)}
           </select>
         </label>
-        <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">{semester.subjects.length} fənn · {semester.gpa === null ? 'GPA daxil edilməyib' : `GPA: ${semester.gpa.toFixed(2)}`}</span>
+        <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">{semester.subjects.length} {t('subjectCount')} · {semester.gpa === null ? t('gpaMissing') : `GPA: ${semester.gpa.toFixed(2)}`}</span>
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4" data-testid="section-semester-summaries">
@@ -490,7 +491,7 @@ function TranscriptSection({ profile }: { profile: AcademicProfile }) {
             <button key={item.termNumber} type="button" onClick={() => setSelectedTerm(item.termNumber)} className={`focus-ring rounded-xl border p-3 text-left transition ${isSelected ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent)/.16)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] hover:bg-[hsl(var(--muted)/.5)]'}`} aria-pressed={isSelected} data-testid={`button-semester-summary-${item.termNumber}`}>
               <span className="text-xs font-bold text-[hsl(var(--primary))]">{item.label}</span>
               <span className="mt-2 flex items-center justify-between gap-2 text-[11px] text-[hsl(var(--muted-foreground))]"><span>GPA</span><strong className="text-[hsl(var(--primary))]">{item.gpa === null ? '—' : item.gpa.toFixed(2)}</strong></span>
-              <span className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[hsl(var(--muted-foreground))]"><span>Davamiyyət</span><strong className="text-[hsl(var(--primary))]">{attendance === null ? '—' : `${attendance}%`}</strong></span>
+              <span className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[hsl(var(--muted-foreground))]"><span>{t('attendance')}</span><strong className="text-[hsl(var(--primary))]">{attendance === null ? '—' : `${attendance}%`}</strong></span>
             </button>
           );
         })}
@@ -499,7 +500,7 @@ function TranscriptSection({ profile }: { profile: AcademicProfile }) {
       <div className="mt-4 overflow-x-auto" data-testid="transcript-document">
          <div className="min-w-[800px]">
            <div className="grid grid-cols-[minmax(220px,1fr)_140px_80px_80px_130px_100px] gap-3 border-b border-[hsl(var(--border))] px-3 py-3 text-[10px] font-bold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">
-             <span>Fənn</span><span>Müəllim</span><span>Kredit</span><span>Saat</span><span>Davamiyyət</span><span>Qiymət</span>
+             <span>{t('subjectCol')}</span><span>{t('teacherCol')}</span><span>{t('credit')}</span><span>{t('hours')}</span><span>{t('attendance')}</span><span>{t('gradeCol')}</span>
           </div>
           {semester.subjects.length ? semester.subjects.map((subject) => (
              <div key={`${semester.termNumber}-${subject.courseId}`} className="grid grid-cols-[minmax(220px,1fr)_140px_80px_80px_130px_100px] gap-3 border-b border-[hsl(var(--border))] px-3 py-3 text-sm last:border-0">
@@ -507,31 +508,31 @@ function TranscriptSection({ profile }: { profile: AcademicProfile }) {
                 <p className="font-bold text-[hsl(var(--primary))]">{subject.title}</p>
                 {subject.gradingComponents?.length ? <p className="mt-1 text-[11px] text-[hsl(var(--muted-foreground))]">{subject.gradingComponents.map((component) => `${component.name}: ${component.score === null ? '—' : `${component.score}/100`}`).join(' · ')}</p> : null}
               </div>
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">{subject.instructor || 'Təyin edilməyib'}</span>
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">{subject.instructor || t('notAssigned')}</span>
                <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">{subject.credits ?? '—'}</span>
                <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">{subject.hours ?? '—'}</span>
-              <span className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{subject.attendancePercent === null ? 'Daxil edilməyib' : `${subject.attendancePercent}% · ${subject.absenceCount} qayıb`}</span>
-              <span className="font-bold text-[hsl(var(--primary))]">{subject.grade === null ? 'Daxil edilməyib' : `${subject.grade.toFixed(2)} / 5`}</span>
+              <span className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{subject.attendancePercent === null ? t('notEntered') : `${subject.attendancePercent}% · ${subject.absenceCount} ${t('absencesWord')}`}</span>
+              <span className="font-bold text-[hsl(var(--primary))]">{subject.grade === null ? t('notEntered') : `${subject.grade.toFixed(2)} / 5`}</span>
             </div>
-          )) : <p className="px-3 py-6 text-center text-sm text-[hsl(var(--muted-foreground))]">Bu semestr üzrə fənn məlumatı yoxdur.</p>}
+          )) : <p className="px-3 py-6 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noSubjectThisTerm')}</p>}
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-4 text-xs text-[hsl(var(--muted-foreground))]" data-testid="transcript-summary-footer">
-        <span>Rəsmi proqram: {profile.program}</span>
-        <span>Semestr krediti: {semesterCredits}</span>
-        <span>Semestr saatı: {semesterHours}</span>
-        <span>Qiymət daxil edilən fənn: {gradedSubjects.length}</span>
-        <span>Davamiyyəti qeyd olunan fənn: {attendanceSubjects.length}</span>
-        <span>Çap zamanı bu nəticə kartını PDF kimi saxlaya bilərsiniz.</span>
+        <span>{t('officialProgram')}: {profile.program}</span>
+        <span>{t('semesterCredits')}: {semesterCredits}</span>
+        <span>{t('semesterHours')}: {semesterHours}</span>
+        <span>{t('gradedCount')}: {gradedSubjects.length}</span>
+        <span>{t('attendanceCount')}: {attendanceSubjects.length}</span>
+        <span>{t('printHint')}</span>
       </div>
     </section>
     {createPortal(
       <>
-        <div className="print-only-transcript-logo" aria-label="Mədinə Tədris Akademiyası">
+        <div className="print-only-transcript-logo" aria-label={t('academyName')}>
           <div className="transcript-print-logo-mark">M</div>
-          <div><strong>Mədinə Tədris Akademiyası</strong><span>Akademik sənəd</span></div>
+          <div><strong>{t('academyName')}</strong><span>{t('academicDoc')}</span></div>
         </div>
-        <div className="print-only-transcript-stamp" data-testid="transcript-print-stamp" aria-label="Mədinə Tədris Akademiyasının möhürü">
+        <div className="print-only-transcript-stamp" data-testid="transcript-print-stamp" aria-label={t('officialSeal')}>
           <div className="transcript-print-seal">
             <span className="transcript-seal-top">MƏDİNƏ TƏDRİS</span>
             <span className="transcript-seal-name">AKADEMİYASI</span>
@@ -540,7 +541,7 @@ function TranscriptSection({ profile }: { profile: AcademicProfile }) {
             <span className="transcript-seal-date">{printDate}</span>
             <span className="transcript-seal-bottom">TRANSKRİPT</span>
           </div>
-          <p>Akademik sənədin təsdiq möhürü</p>
+          <p>{t('officialSeal')}</p>
         </div>
       </>,
       document.body,
@@ -549,17 +550,19 @@ function TranscriptSection({ profile }: { profile: AcademicProfile }) {
   );
 }
 
-function lessonBookNames(rows: CourseBooksItem[]) {
+function lessonBookNames(rows: CourseBooksItem[], bookLabel: string) {
   const names = rows.flatMap((row) => row.books.filter((book) => book.available).map((book) => book.bookShortTitle));
-  return names.length ? `Kitab: ${Array.from(new Set(names)).join(', ')}` : '';
+  return names.length ? `${bookLabel}: ${Array.from(new Set(names)).join(', ')}` : '';
 }
 
 function UpcomingLessons({ resources, courseNames, onJoin }: { resources: LearningResource[]; courseNames: Map<number, string>; onJoin: (url: string) => void }) {
+  const { t, locale } = useI18n();
+  const dateLocale = locale === 'ar' ? 'ar' : 'az-AZ';
   const { booksFor } = useCourseBooks();
   const upcoming = resources.map((resource) => ({ resource, date: upcomingLessonDate(resource) })).filter((item): item is { resource: LearningResource; date: Date } => Boolean(item.date)).sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 4);
   return <section className="mt-4 rounded-xl border border-[hsl(var(--accent)/.45)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-upcoming-lessons">
-    <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">Yaxınlaşan tədbirlər / dərslər</p><h4 className="mt-1 font-serif text-xl text-[hsl(var(--primary))]">Növbəti dərslər</h4></div><Clock3 size={19} className="text-[hsl(var(--secondary-foreground))]" /></div>
-    {upcoming.length ? <div className="mt-3 space-y-2">{upcoming.map(({ resource, date }) => <div key={`${resource.id}-${date.toISOString()}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[hsl(var(--card))] px-3 py-3"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{academyDateKey(date) === academyDateKey() ? 'Bu gün' : formatAcademyDateTime(date)} — {courseNames.get(resource.courseId) ?? resource.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Akademiya vaxtı: {formatAcademyDateTime(date)} · Sizin vaxtınız: {formatLocalTime(date)} · {platformForUrl(resource.url)}</p>{lessonBookNames(booksFor(resource.courseId, resource.termNumber)) && <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-[hsl(var(--secondary-foreground))]" data-testid={`text-upcoming-lesson-books-${resource.id}`}><BookMarked size={12} /> {lessonBookNames(booksFor(resource.courseId, resource.termNumber))}</p>}</div>{resource.url ? <button type="button" onClick={() => onJoin(resource.url!)} className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-[10px] font-black text-[hsl(var(--primary-foreground))]" data-testid={`button-join-lesson-${resource.id}`}>Dərsə qoşul</button> : <span className="rounded-lg bg-[hsl(var(--muted))] px-3 py-2 text-[10px] font-bold text-[hsl(var(--muted-foreground))]">Link yoxdur</span>}</div>)}</div> : <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Yaxınlaşan dərs cədvələ əlavə edilməyib.</p>}
+    <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">{t('upcomingEvents')}</p><h4 className="mt-1 font-serif text-xl text-[hsl(var(--primary))]">{t('nextLessons')}</h4></div><Clock3 size={19} className="text-[hsl(var(--secondary-foreground))]" /></div>
+    {upcoming.length ? <div className="mt-3 space-y-2">{upcoming.map(({ resource, date }) => <div key={`${resource.id}-${date.toISOString()}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[hsl(var(--card))] px-3 py-3"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{academyDateKey(date) === academyDateKey() ? t('today') : formatAcademyDateTime(date, dateLocale)} — {courseNames.get(resource.courseId) ?? resource.title}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('academyTime')}: {formatAcademyDateTime(date, dateLocale)} · {t('yourTime')}: {formatLocalTime(date, dateLocale)} · {platformForUrl(resource.url, t('platformMissing'), t('onlineLesson'))}</p>{lessonBookNames(booksFor(resource.courseId, resource.termNumber), t('bookLabel')) && <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-[hsl(var(--secondary-foreground))]" data-testid={`text-upcoming-lesson-books-${resource.id}`}><BookMarked size={12} /> {lessonBookNames(booksFor(resource.courseId, resource.termNumber), t('bookLabel'))}</p>}</div>{resource.url ? <button type="button" onClick={() => onJoin(resource.url!)} className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-[10px] font-black text-[hsl(var(--primary-foreground))]" data-testid={`button-join-lesson-${resource.id}`}>{t('joinLesson')}</button> : <span className="rounded-lg bg-[hsl(var(--muted))] px-3 py-2 text-[10px] font-bold text-[hsl(var(--muted-foreground))]">{t('noLink')}</span>}</div>)}</div> : <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">{t('noUpcoming')}</p>}
   </section>;
 }
 

@@ -90,6 +90,7 @@ function UserPortal() {
 }
 
 function AdmissionExamPortal() {
+  const { t } = useI18n();
   const { user } = useUser();
   const { signOut } = useClerk();
   const scheduleAccessQuery = useGetStudentScheduleAccess({
@@ -117,10 +118,10 @@ function AdmissionExamPortal() {
     return (
       <main className="grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5 py-8">
         <section className="w-full max-w-lg rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 text-center shadow-[var(--shadow-sm)]">
-          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--destructive))]">Qəbul mərhələsi</p>
-          <h1 className="mt-3 font-serif text-3xl text-[hsl(var(--primary))]">İmtahan məlumatı yüklənmədi</h1>
-          <p className="mt-3 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Qəbul testinə keçmək üçün məlumatları yenidən yoxlayın.</p>
-          <button type="button" onClick={() => { void scheduleAccessQuery.refetch(); void academicProfileQuery.refetch(); }} className="focus-ring mt-6 inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))]"><RefreshCw size={15} /> Yenidən yoxla</button>
+          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--destructive))]">{t('admissionStage')}</p>
+          <h1 className="mt-3 font-serif text-3xl text-[hsl(var(--primary))]">{t('examLoadFail')}</h1>
+          <p className="mt-3 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('examRecheck')}</p>
+          <button type="button" onClick={() => { void scheduleAccessQuery.refetch(); void academicProfileQuery.refetch(); }} className="focus-ring mt-6 inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))]"><RefreshCw size={15} /> {t('retryCheck')}</button>
         </section>
       </main>
     );
@@ -135,19 +136,19 @@ function AdmissionExamPortal() {
         <header className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-[13px] bg-[hsl(var(--accent))] font-serif text-xl font-bold text-[hsl(var(--primary))] shadow-[0_5px_0_hsl(37_83%_52%)]">M</div>
-            <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Mədinə Tədris Akademiyası</p><p className="font-serif text-lg text-[hsl(var(--primary))]">Qəbul mərhələsi</p></div>
+            <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{t('academyName')}</p><p className="font-serif text-lg text-[hsl(var(--primary))]">{t('admissionStage')}</p></div>
           </div>
           <div className="flex items-center gap-2">
             <LanguageSwitch />
-            <button type="button" onClick={() => void signOut({ redirectUrl: basePath || '/' })} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))]">Çıxış et</button>
+            <button type="button" onClick={() => void signOut({ redirectUrl: basePath || '/' })} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))]">{t('logout')}</button>
           </div>
         </header>
         <section className="mt-8 rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-[var(--shadow-sm)] md:p-9" data-testid="admission-exam-gate">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[hsl(var(--accent)/.35)] text-[hsl(var(--secondary-foreground))]"><ClipboardList size={22} /></div>
-            <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Son qəbul addımı</p><h1 className="mt-2 font-serif text-3xl leading-tight text-[hsl(var(--primary))]">Qəbul imtahanınızı tamamlayın</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-[hsl(var(--muted-foreground))]">Müraciətiniz qəbul edilib. Tələbə ana səhifəsi və dərslər yalnız qəbul testini verdikdən və müəllim təsdiqindən sonra açılacaq.</p></div>
+            <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('lastAdmissionStep')}</p><h1 className="mt-2 font-serif text-3xl leading-tight text-[hsl(var(--primary))]">{t('finishAdmissionExam')}</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('admissionExamHint')}</p></div>
           </div>
-          <div className="mt-6 flex items-center gap-2 rounded-xl bg-[hsl(var(--secondary)/.4)] px-4 py-3 text-xs font-semibold text-[hsl(var(--secondary-foreground))]"><CheckCircle2 size={16} /> İmtahan cavablarından sonra müəllim yoxlaması gözlənilir.</div>
+          <div className="mt-6 flex items-center gap-2 rounded-xl bg-[hsl(var(--secondary)/.4)] px-4 py-3 text-xs font-semibold text-[hsl(var(--secondary-foreground))]"><CheckCircle2 size={16} /> {t('examReviewWait')}</div>
         </section>
         <div className="mt-6">
           {academicProfile && examId ? (
@@ -160,8 +161,8 @@ function AdmissionExamPortal() {
           ) : (
             <section className="rounded-[26px] border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 text-center shadow-[var(--shadow-xs)]" data-testid="admission-exam-waiting">
               <ClipboardList className="mx-auto text-[hsl(var(--accent))]" size={30} />
-              <h2 className="mt-3 font-serif text-2xl text-[hsl(var(--primary))]">Qəbul testi hazırlanır</h2>
-              <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Test hazır olduqda bu səhifədə görünəcək. Bu müddətdə tələbə ana səhifəsinə giriş açılmır.</p>
+              <h2 className="mt-3 font-serif text-2xl text-[hsl(var(--primary))]">{t('examPreparing')}</h2>
+              <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('examPreparingHint')}</p>
             </section>
           )}
         </div>
@@ -171,6 +172,7 @@ function AdmissionExamPortal() {
 }
 
 function StudentPortal({ initialScheduleAccess }: { initialScheduleAccess?: { approved?: boolean; onboardingRequired?: boolean; onboardingExamId?: number | null } }) {
+  const { t, locale } = useI18n();
   const dashboardQuery = useGetDashboard({ query: { queryKey: getGetDashboardQueryKey(), staleTime: 60_000 } });
   const academicProfileQuery = useGetStudentAcademicProfile({ query: { queryKey: getGetStudentAcademicProfileQueryKey(), staleTime: 60_000 } });
   const deletionNoticeQuery = useGetStudentDeletionNotice({ query: { queryKey: getGetStudentDeletionNoticeQueryKey() } });
@@ -179,7 +181,7 @@ function StudentPortal({ initialScheduleAccess }: { initialScheduleAccess?: { ap
   const displayName = dashboardQuery.data?.studentName || user?.firstName || user?.primaryEmailAddress?.emailAddress;
   const accountError = dashboardQuery.error as { status?: number; data?: { error?: string } } | null;
   const isPendingAccount = accountError?.status === 403;
-  const accountMessage = accountError?.data?.error ?? 'Müraciətiniz müəllim heyəti tərəfindən hələ təsdiqlənməyib. Təsdiq olunana qədər dərslərə və tələbə panelinə giriş mümkün deyil.';
+  const accountMessage = accountError?.data?.error ?? t('accountWaitingHint');
   const isRejectedAccount = accountMessage.includes('imtina');
 
   if (deletionNoticeQuery.data) {
@@ -188,15 +190,15 @@ function StudentPortal({ initialScheduleAccess }: { initialScheduleAccess?: { ap
       <main className="grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5 py-7">
         <section className="w-full max-w-lg rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 shadow-[var(--shadow-sm)] md:p-9" data-testid="student-deletion-notice">
           <HomeLink />
-          <p className="mt-5 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--destructive))]">Hesab barədə bildiriş</p>
-          <h1 className="mt-3 font-serif text-4xl leading-tight text-[hsl(var(--primary))]">Hesabınız deaktiv edilib.</h1>
-          <p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Akademiyanın qərarına əsasən hesabınıza və akademik məlumatlarınıza giriş bağlanıb.</p>
+          <p className="mt-5 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--destructive))]">{t('accountNotice')}</p>
+          <h1 className="mt-3 font-serif text-4xl leading-tight text-[hsl(var(--primary))]">{t('accountDisabled')}</h1>
+          <p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('accountDisabledHint')}</p>
           <div className="mt-6 rounded-2xl bg-[hsl(var(--muted)/.45)] p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">Silinmə səbəbi</p>
+            <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{t('deletionReason')}</p>
             <p className="mt-2 text-sm font-semibold leading-6 text-[hsl(var(--primary))]">{notice.reason}</p>
-            <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Əməliyyatı edən: {notice.deletedByName} · {new Intl.DateTimeFormat('az-AZ', { dateStyle: 'medium' }).format(new Date(notice.deletedAt))}</p>
+            <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">{t('actedBy')}: {notice.deletedByName} · {new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'az-AZ', { dateStyle: 'medium' }).format(new Date(notice.deletedAt))}</p>
           </div>
-          <button type="button" onClick={() => void signOut({ redirectUrl: basePath || '/' })} className="focus-ring mt-7 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))]">Çıxış et</button>
+          <button type="button" onClick={() => void signOut({ redirectUrl: basePath || '/' })} className="focus-ring mt-7 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))]">{t('logout')}</button>
         </section>
       </main>
     );
@@ -207,17 +209,17 @@ function StudentPortal({ initialScheduleAccess }: { initialScheduleAccess?: { ap
       <main className="grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5 py-7">
         <section className="w-full max-w-lg rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 shadow-[var(--shadow-sm)] md:p-9">
           <HomeLink />
-          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Mədinə Tədris Akademiyası</p>
-           <h1 className="mt-4 font-serif text-4xl leading-none text-[hsl(var(--primary))]">{isRejectedAccount ? 'Müraciətinizə imtina verilib.' : 'Hesabınız gözləmədədir.'}</h1>
+          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('academyName')}</p>
+           <h1 className="mt-4 font-serif text-4xl leading-none text-[hsl(var(--primary))]">{isRejectedAccount ? t('accountRejected') : t('accountWaiting')}</h1>
            <p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{accountMessage}</p>
-          <button type="button" onClick={() => void signOut({ redirectUrl: basePath || '/' })} className="focus-ring mt-7 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))]">Çıxış et</button>
+          <button type="button" onClick={() => void signOut({ redirectUrl: basePath || '/' })} className="focus-ring mt-7 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))]">{t('logout')}</button>
         </section>
       </main>
     );
   }
 
   return <StudentDashboard
-    dashboard={displayName && dashboardQuery.data ? { ...dashboardQuery.data, studentName: displayName, greeting: `Xoş gəldin, ${displayName}` } : dashboardQuery.data}
+    dashboard={displayName && dashboardQuery.data ? { ...dashboardQuery.data, studentName: displayName, greeting: `${t('welcome')}, ${displayName}` } : dashboardQuery.data}
     courses={dashboardQuery.data?.courses}
     announcements={dashboardQuery.data?.announcements}
     academicProfile={academicProfileQuery.data}

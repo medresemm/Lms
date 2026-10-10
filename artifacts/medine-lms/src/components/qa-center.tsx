@@ -32,16 +32,16 @@ export function QaCenter({ canAsk = false, canAnswer = false, onUnansweredCountC
     event.preventDefault();
     const response = await fetch(apiUrl('/questions'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, body }) });
     const result = await response.json() as Question & { error?: string };
-    if (!response.ok) { setNotice(result.error || 'Sual göndərilə bilmədi.'); return; }
-    setTitle(''); setBody(''); setNotice('Sualınız göndərildi.'); await load();
+    if (!response.ok) { setNotice(result.error || t('questionNotSent')); return; }
+    setTitle(''); setBody(''); setNotice(t('questionSent')); await load();
   };
   const answerQuestion = async (question: Question) => {
     const answer = answers[question.id]?.trim();
     if (!answer) return;
     const response = await fetch(apiUrl(`/questions/${question.id}/answer`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answer }) });
     const result = await response.json() as { error?: string };
-    if (!response.ok) { setNotice(result.error || 'Cavab göndərilə bilmədi.'); return; }
-    setAnswers((current) => ({ ...current, [question.id]: '' })); setNotice('Cavab yayımlandı.'); await load();
+    if (!response.ok) { setNotice(result.error || t('answerNotSent')); return; }
+    setAnswers((current) => ({ ...current, [question.id]: '' })); setNotice(t('answerPublished')); await load();
   };
   return <section className="space-y-5" data-testid="section-qa-center">
     <div><p className="flex items-center gap-2 font-serif text-3xl font-bold leading-tight tracking-[-.02em] text-[hsl(var(--secondary-foreground))] sm:text-4xl"><HelpCircle size={23} /> {t('navQa')} {questions.some((question) => !question.answer) && <span className="rounded-full bg-red-600 px-2 py-0.5 font-sans text-xs font-black text-white">{questions.filter((question) => !question.answer).length}</span>}</p><p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{t('qaHint')}</p></div>

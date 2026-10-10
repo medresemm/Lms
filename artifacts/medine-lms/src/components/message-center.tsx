@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Mail, Reply, Send, Trash2, UserRound } from 'lucide-react';
+import { useI18n } from '@/lib/i18n';
 
 type Message = {
   id: number;
@@ -57,6 +58,7 @@ function MessageThread({
   onReply: (event: React.FormEvent) => void;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
   const thread = messages
     .filter((message) => message.id === selected.id || message.parentMessageId === selected.id)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -65,7 +67,7 @@ function MessageThread({
     <div className="mt-2 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5" data-testid={`thread-${selected.id}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{staff ? 'Söhbət' : 'Müəllimlə söhbət'}</p>
+          <p className="text-xs font-bold uppercase tracking-[.12em] text-[hsl(var(--secondary-foreground))]">{staff ? t('chat') : t('chatWithTeacher')}</p>
           <h4 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{staff ? selected.senderName : selected.recipientName}</h4>
           {staff && <div className="mt-2 space-y-1 text-xs text-[hsl(var(--muted-foreground))]">
             <p className="flex items-center gap-2"><UserRound size={14} /> {selected.senderEmail} {selected.senderPhone && `· ${selected.senderPhone}`}</p>
@@ -75,7 +77,7 @@ function MessageThread({
           </div>}
         </div>
         <div className="flex items-center gap-1">
-          {!staff && selected.parentMessageId === null && <button type="button" onClick={onToggleEdit} className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-edit-message">{isEditing ? 'Ləğv et' : 'Redaktə et'}</button>}
+          {!staff && selected.parentMessageId === null && <button type="button" onClick={onToggleEdit} className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-edit-message">{isEditing ? t('cancel') : t('edit')}</button>}
           {staff && <button type="button" onClick={onDelete} className="focus-ring rounded-lg p-2 text-[hsl(var(--destructive))]" aria-label="Söhbəti sil"><Trash2 size={17} /></button>}
         </div>
       </div>
@@ -84,17 +86,18 @@ function MessageThread({
           <div key={item.id} className={`rounded-2xl p-4 ${index === 0 ? 'bg-[hsl(var(--secondary)/.42)]' : 'bg-[hsl(var(--muted)/.55)]'}`} data-testid={`thread-message-${item.id}`}>
             <div className="flex items-center justify-between gap-3"><p className="text-xs font-bold text-[hsl(var(--primary))]">{item.senderName}</p><p className="text-[10px] text-[hsl(var(--muted-foreground))]">{dateLabel(item.createdAt)}</p></div>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-[hsl(var(--foreground))]">{item.body}</p>
-            {!staff && <p className="mt-2 text-[10px] font-bold text-[hsl(var(--muted-foreground))]">{item.readAt ? 'Oxunub' : 'Göndərilib'}</p>}
-            {!staff && item.id === selected.id && isEditing && <form onSubmit={onEdit} className="mt-3 border-t border-[hsl(var(--border))] pt-3"><textarea required rows={4} value={editBody} onChange={(event) => onEditBodyChange(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-3 text-sm" data-testid="textarea-edit-message" /><button type="submit" className="focus-ring mt-3 inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))]" data-testid="button-save-message-edit"><Send size={15} /> Yadda saxla</button></form>}
+            {!staff && <p className="mt-2 text-[10px] font-bold text-[hsl(var(--muted-foreground))]">{item.readAt ? t('messageRead') : t('sent')}</p>}
+            {!staff && item.id === selected.id && isEditing && <form onSubmit={onEdit} className="mt-3 border-t border-[hsl(var(--border))] pt-3"><textarea required rows={4} value={editBody} onChange={(event) => onEditBodyChange(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-3 text-sm" data-testid="textarea-edit-message" /><button type="submit" className="focus-ring mt-3 inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))]" data-testid="button-save-message-edit"><Send size={15} /> {t('save')}</button></form>}
           </div>
         ))}
       </div>
-      {staff && <form onSubmit={onReply} className="mt-5 border-t border-[hsl(var(--border))] pt-4"><textarea required rows={3} value={reply} onChange={(event) => onReplyChange(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-3 text-sm" placeholder="Cavabınızı yazın..." /><button type="submit" className="focus-ring mt-3 inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))]"><Reply size={15} /> Cavab yaz</button></form>}
+      {staff && <form onSubmit={onReply} className="mt-5 border-t border-[hsl(var(--border))] pt-4"><textarea required rows={3} value={reply} onChange={(event) => onReplyChange(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-3 text-sm" placeholder={t('writeAnswer')} /><button type="submit" className="focus-ring mt-3 inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))]"><Reply size={15} /> {t('writeReply')}</button></form>}
     </div>
   );
 }
 
 export function MessageCenter({ staff = false, onUnreadCountChange }: { staff?: boolean; onUnreadCountChange?: (count: number) => void }) {
+  const { t } = useI18n();
   const [messages, setMessages] = useState<Message[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [selected, setSelected] = useState<Message | null>(null);
@@ -222,21 +225,21 @@ export function MessageCenter({ staff = false, onUnreadCountChange }: { staff?: 
   return (
     <section className="space-y-5" data-testid="section-message-center">
       <div>
-        <p className="flex items-center gap-2 font-serif text-2xl font-bold leading-tight tracking-[-.02em] text-[hsl(var(--primary))] sm:text-3xl"><Mail size={21} /> Məsləhətləşmə / Əlaqə {staff && unreadCount > 0 && <span className="inline-flex rounded-full bg-red-600 px-2 py-1 align-middle font-sans text-xs font-black text-white">{unreadCount}</span>}</p>
-        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{staff ? 'Tələbələrdən gələn mesajları oxuyun və cavablandırın.' : 'Müəllim heyəti ilə əlaqə saxlayın.'}</p>
+        <p className="flex items-center gap-2 font-serif text-2xl font-bold leading-tight tracking-[-.02em] text-[hsl(var(--primary))] sm:text-3xl"><Mail size={21} /> {t('navMessages')} {staff && unreadCount > 0 && <span className="inline-flex rounded-full bg-red-600 px-2 py-1 align-middle font-sans text-xs font-black text-white">{unreadCount}</span>}</p>
+        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{staff ? t('msgStaffHint') : t('msgStudentHint')}</p>
       </div>
       {!staff && <form onSubmit={sendMessage} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
         <div className="grid gap-3 sm:grid-cols-[1fr_2fr]">
           <select required value={recipient} onChange={(event) => setRecipient(event.target.value)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-3 text-sm" data-testid="select-message-teacher">
-            <option value="">Müəllim seçin</option>
+            <option value="">{t('chooseTeacher')}</option>
              {teachers.map((teacher) => <option key={teacher.clerkUserId} value={teacher.clerkUserId}>{teacher.displayName}</option>)}
           </select>
-          <textarea required rows={3} value={body} onChange={(event) => setBody(event.target.value)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-3 text-sm" placeholder="Mesajınızı yazın..." data-testid="textarea-new-message" />
+          <textarea required rows={3} value={body} onChange={(event) => setBody(event.target.value)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-3 text-sm" placeholder={t('writeMessage')} data-testid="textarea-new-message" />
         </div>
-        <button type="submit" className="focus-ring mt-3 inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))]"><Send size={15} /> Göndər</button>
+        <button type="submit" className="focus-ring mt-3 inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))]"><Send size={15} /> {t('submit')}</button>
       </form>}
       {notice && <p className="rounded-xl bg-[hsl(var(--secondary)/.35)] p-3 text-sm font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}
-       {loading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Mesajlar yüklənir...</p> : !messages.length ? <p className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">Hələ mesaj yoxdur.</p> : <div className="grid gap-4">
+       {loading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('messagesLoading')}</p> : !messages.length ? <p className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noMessages')}</p> : <div className="grid gap-4">
          <div className="space-y-2">{rootMessages.map((message) => { const unread = staff ? !message.readAt : hasUnreadReply(message.id); const preview = staff ? message : [...threadMessages(message.id)].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? message; const previewName = !staff && preview.id !== message.id ? preview.senderName : staff ? message.senderName : message.recipientName; return <div key={message.id}><button type="button" onClick={() => void openMessage(message.id === selected?.id ? null : message)} className={`focus-ring w-full rounded-xl border p-3 text-left ${unread ? 'border-red-300 bg-red-50/60' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'}`} data-testid={`button-message-${message.id}`}><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{previewName}</p><p className="mt-1 line-clamp-2 text-xs text-[hsl(var(--muted-foreground))]">{preview.body}</p></div>{unread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-600" />}</div><p className="mt-2 text-[10px] text-[hsl(var(--muted-foreground))]">{dateLabel(preview.createdAt)}</p></button>{selected?.id === message.id && selected && <MessageThread selected={selected} messages={messages} staff={staff} isEditing={isEditing} editBody={editBody} reply={reply} onToggleEdit={() => { setIsEditing((value) => !value); setEditBody(selected.body); }} onEditBodyChange={setEditBody} onEdit={(event) => void editMessage(event)} onReplyChange={setReply} onReply={(event) => void sendReply(event)} onDelete={() => void deleteMessage()} />}</div>; })}</div>
        </div>}
     </section>

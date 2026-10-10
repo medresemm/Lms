@@ -801,7 +801,6 @@ const az = {
   confirmDeleteExcuse: 'Bu üzr müraciətini silmək istəyirsiniz?',
   confirmDeleteAbsence: 'Bu qayıb qeydini silmək istəyirsiniz?',
   recordedBy: 'Davamiyyəti qeyd edən müəllim',
-  statusPending: 'Gözləmədə',
   statusApproved: 'Təsdiqlənib',
   statusRejected: 'Rədd edilib',
   choiceTitle: 'Müəllim seçim müraciətləri',
@@ -822,7 +821,6 @@ const az = {
   noReason: 'İzah qeyd edilməyib.',
   rejectionNote: 'Tələbəyə göndəriləcək izah',
   rejectionPh: 'Rədd səbəbini yazın...',
-  sendRejection: 'Rəddi göndər',
 } as const;
 
 export type MessageKey = keyof typeof az;
@@ -1624,7 +1622,6 @@ const ar: Record<MessageKey, string> = {
   confirmDeleteExcuse: 'هل تريد حذف طلب العذر هذا؟',
   confirmDeleteAbsence: 'هل تريد حذف سجل الغياب هذا؟',
   recordedBy: 'المعلم الذي سجّل الحضور',
-  statusPending: 'قيد الانتظار',
   statusApproved: 'مقبول',
   statusRejected: 'مرفوض',
   choiceTitle: 'طلبات اختيار المعلم',
@@ -1645,7 +1642,6 @@ const ar: Record<MessageKey, string> = {
   noReason: 'لم يُسجَّل توضيح.',
   rejectionNote: 'التوضيح الذي يُرسل للطالب',
   rejectionPh: 'اكتب سبب الرفض...',
-  sendRejection: 'إرسال الرفض',
 };
 
 const dictionaries = { az, ar };

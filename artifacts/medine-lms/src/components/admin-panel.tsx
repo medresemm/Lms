@@ -3174,6 +3174,12 @@ const adminTileClass = (_value: string, active: boolean) =>
 function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: boolean }) {
   const { t } = useI18n();
   const roleName = (role: AdminUser['role']) => role === 'owner' ? t('systemOwner') : role === 'owner_assistant' ? t('roleBoard') : role === 'teacher' || role === 'admin' ? t('roleTeacher') : role === 'supervisor' ? t('roleSupervisor') : role === 'none' ? t('plainUser') : roleLabels[role];
+  const permLabel = (key: RolePermissionKey) => {
+    const map = {
+      applications: 'permApplications', students: 'permStudents', grading: 'permGrading', attendance: 'permAttendance', excuses: 'permExcuses', announcements: 'permAnnouncements', articles: 'permArticles', dailyBenefits: 'permBenefits', schedule: 'permSchedule', assignments: 'permAssignments', teacherAssignment: 'permTeacherAssign', userRoleManagement: 'permUserRoles',
+    } as const;
+    return t(map[key]);
+  };
   const usersQuery = useGetAdminUsers({ query: { queryKey: getGetAdminUsersQueryKey() } });
   const updateRole = useUpdateAdminUserRole();
   const deleteUser = useDeleteAdminUser();
@@ -3359,40 +3365,40 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
           })}
         </div>
       )}
-      <FormNotice text={notice} error={notice.includes('bilmədi') || notice.includes('tapılmadı') || notice.includes('dəyişdirilə')} />
+      <FormNotice text={notice} error={notice.includes('bilmədi') || notice.includes('tapılmadı') || notice.includes('dəyişdirilə') || notice.includes(t('roleNotUpdated')) || notice.includes(t('permsNotSaved')) || notice.includes(t('individualNotSaved'))} />
       {permissionRole && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[hsl(var(--primary)/.5)] px-4 py-6 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="role-permissions-title">
           <div className="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-sm)]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">Sahib icazələri</p>
-                <h4 id="role-permissions-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{permissionRole === 'teacher' ? 'Müəllim rollarını təyin et' : permissionRole === 'supervisor' ? 'Nəzarətçi rollarını təyin et' : 'İdarə heyəti rollarını idarə et'}</h4>
-                 <p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Bu seçim fərdi icazəsi olmayan həmin roldakı istifadəçilər üçün ümumi səlahiyyət profilini müəyyən edir.</p>
+                <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">{t('ownerPerms')}</p>
+                <h4 id="role-permissions-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{permissionRole === 'teacher' ? t('setTeacherRoles') : permissionRole === 'supervisor' ? t('setSupervisorRoles') : t('boardRoles')}</h4>
+                 <p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('permHint')}</p>
               </div>
-              <button type="button" onClick={() => setPermissionRole(null)} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Bağla"><X size={18} /></button>
+              <button type="button" onClick={() => setPermissionRole(null)} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={t('close')}><X size={18} /></button>
             </div>
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
               {(Object.entries(rolePermissionLabels) as Array<[RolePermissionKey, string]>)
                 .filter(([key]) => permissionRole === 'owner_assistant' || (key !== 'teacherAssignment' && key !== 'userRoleManagement'))
-                .map(([key, label]) => {
+                .map(([key]) => {
                 const checked = rolePermissions[permissionRole].includes(key);
-                return <label key={key} className="flex cursor-pointer items-center gap-3 rounded-xl border border-[hsl(var(--border))] px-3.5 py-3 text-sm font-semibold hover:bg-[hsl(var(--muted)/.5)]"><input type="checkbox" checked={checked} onChange={() => setRolePermissions((current) => ({ ...current, [permissionRole]: checked ? current[permissionRole].filter((item) => item !== key) : [...current[permissionRole], key] }))} className="h-4 w-4 accent-[hsl(var(--primary))]" />{label}</label>;
+                return <label key={key} className="flex cursor-pointer items-center gap-3 rounded-xl border border-[hsl(var(--border))] px-3.5 py-3 text-sm font-semibold hover:bg-[hsl(var(--muted)/.5)]"><input type="checkbox" checked={checked} onChange={() => setRolePermissions((current) => ({ ...current, [permissionRole]: checked ? current[permissionRole].filter((item) => item !== key) : [...current[permissionRole], key] }))} className="h-4 w-4 accent-[hsl(var(--primary))]" />{permLabel(key)}</label>;
               })}
             </div>
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setPermissionRole(null)} className="focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-[hsl(var(--muted-foreground))]">Ləğv et</button>
+              <button type="button" onClick={() => setPermissionRole(null)} className="focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-[hsl(var(--muted-foreground))]">{t('cancel')}</button>
               <button type="button" disabled={isSavingPermissions} onClick={async () => {
                 setIsSavingPermissions(true);
                 try {
                   const response = await fetch(apiUrl('/admin/role-permissions'), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rolePermissions) });
                   const data = await response.json() as { error?: string };
-                  if (!response.ok) throw new Error(data.error || 'İcazələr yadda saxlanıla bilmədi.');
+                  if (!response.ok) throw new Error(data.error || t('permsNotSaved'));
                   setPermissionRole(null);
-                  setNotice('Rol icazələri yadda saxlanıldı.');
+                  setNotice(t('permsSaved'));
                 } catch (error) {
-                  setNotice(error instanceof Error ? error.message : 'İcazələr yadda saxlanıla bilmədi.');
+                  setNotice(error instanceof Error ? error.message : t('permsNotSaved'));
                 } finally { setIsSavingPermissions(false); }
-              }} className={buttonClass}>{isSavingPermissions ? 'Yadda saxlanılır...' : 'İcazələri yadda saxla'}</button>
+              }} className={buttonClass}>{isSavingPermissions ? t('saving') : t('savePerms')}</button>
             </div>
           </div>
         </div>
@@ -3402,22 +3408,22 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
           <div className="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-sm)]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">Fərdi səlahiyyətlər</p>
-                <h4 id="individual-permissions-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{adminUserName(permissionUser)} · {permissionUser.role === 'teacher' ? 'Müəllim' : permissionUser.role === 'supervisor' ? 'Nəzarətçi' : 'İdarə heyəti'}</h4>
-                <p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Bu seçim yalnız seçilmiş idarə heyəti üzvünə tətbiq olunur və digər üzvlərin icazələrini dəyişmir.</p>
+                <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">{t('individualTitle')}</p>
+                <h4 id="individual-permissions-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{adminUserName(permissionUser)} · {permissionUser.role === 'teacher' ? t('roleTeacher') : permissionUser.role === 'supervisor' ? t('roleSupervisor') : t('roleBoard')}</h4>
+                <p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('individualHint')}</p>
               </div>
-              <button type="button" onClick={() => setPermissionUser(null)} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Bağla"><X size={18} /></button>
+              <button type="button" onClick={() => setPermissionUser(null)} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={t('close')}><X size={18} /></button>
             </div>
-            {individualProfileQuery.isLoading ? <p className="mt-5 text-sm text-[hsl(var(--muted-foreground))]">İcazələr yüklənir...</p> :
-              individualProfileQuery.isError ? <p className="mt-5 rounded-xl bg-[hsl(var(--destructive)/.08)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]">Bu istifadəçinin icazələri yüklənə bilmədi.</p> :
+            {individualProfileQuery.isLoading ? <p className="mt-5 text-sm text-[hsl(var(--muted-foreground))]">{t('permsLoading')}</p> :
+              individualProfileQuery.isError ? <p className="mt-5 rounded-xl bg-[hsl(var(--destructive)/.08)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]">{t('permsLoadFail')}</p> :
                 <div className="mt-5 grid gap-2 sm:grid-cols-2">
-                  {(Object.entries(rolePermissionLabels) as Array<[RolePermissionKey, string]>).map(([key, label]) => {
+                  {(Object.entries(rolePermissionLabels) as Array<[RolePermissionKey, string]>).map(([key]) => {
                     const checked = individualPermissions.includes(key);
-                    return <label key={key} className="flex cursor-pointer items-center gap-3 rounded-xl border border-[hsl(var(--border))] px-3.5 py-3 text-sm font-semibold hover:bg-[hsl(var(--muted)/.5)]"><input type="checkbox" checked={checked} onChange={() => setIndividualPermissions((current) => checked ? current.filter((item) => item !== key) : [...current, key])} className="h-4 w-4 accent-[hsl(var(--primary))]" />{label}</label>;
+                    return <label key={key} className="flex cursor-pointer items-center gap-3 rounded-xl border border-[hsl(var(--border))] px-3.5 py-3 text-sm font-semibold hover:bg-[hsl(var(--muted)/.5)]"><input type="checkbox" checked={checked} onChange={() => setIndividualPermissions((current) => checked ? current.filter((item) => item !== key) : [...current, key])} className="h-4 w-4 accent-[hsl(var(--primary))]" />{permLabel(key)}</label>;
                   })}
                 </div>}
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setPermissionUser(null)} className="focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-[hsl(var(--muted-foreground))]">Ləğv et</button>
+              <button type="button" onClick={() => setPermissionUser(null)} className="focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-[hsl(var(--muted-foreground))]">{t('cancel')}</button>
               <button type="button" disabled={isSavingIndividualPermissions || individualProfileQuery.isLoading || individualProfileQuery.isError} onClick={async () => {
                 if (!permissionUser) return;
                 setIsSavingIndividualPermissions(true);
@@ -3427,11 +3433,11 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
                   await updateRole.mutateAsync({ userId: permissionUser.id, data: { role, permissions: individualPermissions } });
                   await queryClient.invalidateQueries({ queryKey: getGetAdminUserProfileQueryKey(permissionUser.id) });
                   setPermissionUser(null);
-                  setNotice(`${adminUserName(permissionUser)} üçün fərdi icazələr yadda saxlanıldı.`);
+                  setNotice(`${adminUserName(permissionUser)}: ${t('individualSaved')}`);
                 } catch (error) {
-                  setNotice(error instanceof Error ? error.message : 'Fərdi icazələr yadda saxlanıla bilmədi.');
+                  setNotice(error instanceof Error ? error.message : t('individualNotSaved'));
                 } finally { setIsSavingIndividualPermissions(false); }
-              }} className={buttonClass}>{isSavingIndividualPermissions ? 'Yadda saxlanılır...' : 'Fərdi icazələri yadda saxla'}</button>
+              }} className={buttonClass}>{isSavingIndividualPermissions ? t('saving') : t('saveIndividual')}</button>
             </div>
           </div>
         </div>

@@ -2444,6 +2444,13 @@ function ApplicationList({ applications, isLoading, onDecision, busyId, canDecid
 }
 
 function AcademicManagement({ mode }: { mode: 'grades' | 'attendance' }) {
+  const { t } = useI18n();
+  const gradeCriteria = [
+    { id: 'Dərsdə iştirak', label: t('critAttend') },
+    { id: 'Dərslərdə fəallıq', label: t('critActivity') },
+    { id: 'Birinci imtahan nəticələri', label: t('critFirstExam') },
+    { id: 'Sonuncu imtahan nəticələri', label: t('critFinalExam') },
+  ];
   const profilesQuery = useGetAdminAcademicProfiles();
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
   const profileQuery = useGetAdminAcademicProfile(selectedProfileId ?? 0, { query: { enabled: selectedProfileId !== null, queryKey: getGetAdminAcademicProfileQueryKey(selectedProfileId ?? 0) } });
@@ -2544,7 +2551,7 @@ function AcademicManagement({ mode }: { mode: 'grades' | 'attendance' }) {
     const invalid = Object.values(componentGrades).some((score) => score !== null && (!Number.isFinite(score) || score < 0 || score > 100))
       || (finalGrade !== null && (!Number.isFinite(finalGrade) || finalGrade < 0 || finalGrade > 100));
     if (invalid) {
-      setNotice('Qiymət 0 ilə 100 arasında olmalıdır.');
+      setNotice(t('gradeRange'));
       return;
     }
     setSavingCourseId(subject.courseId);
@@ -2558,93 +2565,93 @@ function AcademicManagement({ mode }: { mode: 'grades' | 'attendance' }) {
         },
       });
       await queryClient.invalidateQueries({ queryKey: getGetAdminAcademicProfileQueryKey(profile.id) });
-      setNotice(`${subject.title} qiyməti yadda saxlanıldı.`);
+      setNotice(`${subject.title}: ${t('gradeSaved')}`);
     } catch {
-      setNotice(`${subject.title} qiyməti yadda saxlanıla bilmədi.`);
+      setNotice(`${subject.title}: ${t('gradeNotSaved')}`);
     } finally {
       setSavingCourseId(null);
     }
   };
 
-  if (profilesQuery.isLoading) return <p className="text-sm text-[hsl(var(--muted-foreground))]">Tələbə profilləri yüklənir...</p>;
-  if (!(profilesQuery.data ?? []).length) return <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-7 text-center text-sm text-[hsl(var(--muted-foreground))]">Təsdiqlənmiş tələbə profili hələ yoxdur.</p>;
+  if (profilesQuery.isLoading) return <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('profilesLoading')}</p>;
+  if (!(profilesQuery.data ?? []).length) return <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-7 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noApprovedProfile')}</p>;
   return (
     <form onSubmit={save} className="space-y-5" data-testid="form-academic-grading">
-      <Field label="Tələbə">
-        <input type="search" value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} placeholder="Ad, soyad, istifadəçi adı və ya tələbə nömrəsi ilə axtar..." className={`${inputClass} mb-2`} data-testid="input-academic-student-search" />
+      <Field label={t('gradeStudent')}>
+        <input type="search" value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} placeholder={t('gradeSearch')} className={`${inputClass} mb-2`} data-testid="input-academic-student-search" />
         <select className={inputClass} value={selectedProfileId ?? ''} onChange={(event) => setSelectedProfileId(Number(event.target.value))} data-testid="select-academic-student">
-          {filteredProfiles.length ? filteredProfiles.map((item) => <option key={item.id} value={item.id}>{item.firstName} {item.lastName} · N{item.studentNumber} — {item.statusLabel}</option>) : <option value="">Tələbə tapılmadı</option>}
+          {filteredProfiles.length ? filteredProfiles.map((item) => <option key={item.id} value={item.id}>{item.firstName} {item.lastName} · N{item.studentNumber} — {item.statusLabel}</option>) : <option value="">{t('noStudentFound')}</option>}
         </select>
       </Field>
-      {profileQuery.isLoading && <p className="text-sm text-[hsl(var(--muted-foreground))]">Profil məlumatları yüklənir...</p>}
+      {profileQuery.isLoading && <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('profileLoading')}</p>}
       {profile && (
         <>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Rəsmi proqram" hint="Akademik sənədlərdə tələbə ilə birlikdə göstərilir.">
+            <Field label={t('officialProgram')} hint={t('programHint')}>
               <input required minLength={1} maxLength={160} className={inputClass} value={program} onChange={(event) => setProgram(event.target.value)} data-testid="input-academic-program" />
             </Field>
-            <Field label="Cari dərs mərhələsi">
-              <div className={`${inputClass} bg-[hsl(var(--muted)/.45)]`}>{profile ? `${profile.courseYear}-ci tədris ili` : 'Tələbə seçin'}</div>
+            <Field label={t('currentStage')}>
+              <div className={`${inputClass} bg-[hsl(var(--muted)/.45)]`}>{profile ? t((['year1', 'year2', 'year3', 'year4'] as const)[profile.courseYear - 1] ?? 'year1') : t('chooseStudent')}</div>
             </Field>
-            <Field label="Cari semestr" hint="Tələbə seçiləndə avtomatik göstərilir.">
-              <div className={`${inputClass} bg-[hsl(var(--muted)/.45)]`}>{profile ? `${profile.currentTermNumber}-ci semestr` : 'Tələbə seçin'}</div>
+            <Field label={t('currentSemester')} hint={t('semesterAuto')}>
+              <div className={`${inputClass} bg-[hsl(var(--muted)/.45)]`}>{profile ? `${profile.currentTermNumber}. ${t('termLabel')}` : t('chooseStudent')}</div>
             </Field>
           </div>
-          <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Qiymət və davamiyyət tələbənin cari semestrinə yazılacaq: {selectedSemester?.label ?? '—'}</p>
+          <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">{t('gradesWriteTo')}: {selectedSemester?.label ?? '—'}</p>
            {mode === 'grades' && <div className="rounded-2xl border border-[hsl(var(--border))] p-4">
-            <div className="mb-4 flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">Dərs qiymətləri</p><p className="mt-1 text-sm font-bold text-[hsl(var(--primary))]">{selectedSemester?.label}</p></div><span className="text-xs font-bold text-[hsl(var(--secondary-foreground))]">0 – 100</span></div>
+            <div className="mb-4 flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">{t('lessonGrades')}</p><p className="mt-1 text-sm font-bold text-[hsl(var(--primary))]">{selectedSemester?.label}</p></div><span className="text-xs font-bold text-[hsl(var(--secondary-foreground))]">0 – 100</span></div>
             <div className="space-y-3">{(selectedSemester?.subjects ?? []).map((subject) => {
               const names = gradingComponents[subject.courseId] ?? [];
               const scores = componentScores[subject.courseId] ?? {};
               const toggleComponent = (name: string) => setGradingComponents((current) => ({ ...current, [subject.courseId]: names.includes(name) ? names.filter((item) => item !== name) : [...names, name] }));
               return <div key={subject.courseId} className={`overflow-hidden rounded-2xl border transition ${openGradeCourseId === subject.courseId ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent)/.08)] shadow-sm' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/.35)]'}`}>
-                <button type="button" onClick={() => setOpenGradeCourseId((current) => current === subject.courseId ? null : subject.courseId)} className={`flex w-full items-center gap-3 p-4 text-left transition ${openGradeCourseId === subject.courseId ? 'bg-[hsl(var(--accent)/.16)]' : 'hover:bg-[hsl(var(--muted)/.35)]'}`} aria-expanded={openGradeCourseId === subject.courseId} data-testid={`button-open-grade-${subject.courseId}`}><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[hsl(var(--primary))] text-xs font-black text-[hsl(var(--primary-foreground))]">F</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-[hsl(var(--primary))]">{subject.title}</span><span className="mt-1 block text-[11px] font-medium text-[hsl(var(--muted-foreground))]">{names.length ? `${names.length} qiymət meyarı aktivdir` : 'Birbaşa yekun qiymət yazılır'}</span></span><span className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-bold ${openGradeCourseId === subject.courseId ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'bg-[hsl(var(--muted))] text-[hsl(var(--primary))]'}`}>{openGradeCourseId === subject.courseId ? 'Bağla' : 'Aç'}</span></button>
-                {!names.length && <div className="flex items-center gap-2 border-t border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-3"><input type="number" min="0" max="100" step="1" value={grades[subject.courseId] ?? ''} onChange={(event) => setGrades((current) => ({ ...current, [subject.courseId]: event.target.value }))} placeholder="Yekun qiymət (0–100)" className={`${inputClass} min-w-0 flex-1`} data-testid={`input-quick-grade-${subject.courseId}`} /><button type="button" onClick={() => void saveSingleGrade(subject)} disabled={savingCourseId === subject.courseId} className="shrink-0 rounded-xl bg-[hsl(var(--primary))] px-3 py-2.5 text-[10px] font-bold text-[hsl(var(--primary-foreground))] transition hover:opacity-90 disabled:opacity-60" data-testid={`button-quick-save-grade-${subject.courseId}`}>{savingCourseId === subject.courseId ? '...' : 'Yadda saxla'}</button></div>}
+                <button type="button" onClick={() => setOpenGradeCourseId((current) => current === subject.courseId ? null : subject.courseId)} className={`flex w-full items-center gap-3 p-4 text-left transition ${openGradeCourseId === subject.courseId ? 'bg-[hsl(var(--accent)/.16)]' : 'hover:bg-[hsl(var(--muted)/.35)]'}`} aria-expanded={openGradeCourseId === subject.courseId} data-testid={`button-open-grade-${subject.courseId}`}><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[hsl(var(--primary))] text-xs font-black text-[hsl(var(--primary-foreground))]">F</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-[hsl(var(--primary))]">{subject.title}</span><span className="mt-1 block text-[11px] font-medium text-[hsl(var(--muted-foreground))]">{names.length ? `${names.length} ${t('criteriaActive')}` : t('directGrade')}</span></span><span className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-bold ${openGradeCourseId === subject.courseId ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'bg-[hsl(var(--muted))] text-[hsl(var(--primary))]'}`}>{openGradeCourseId === subject.courseId ? t('close') : t('open')}</span></button>
+                {!names.length && <div className="flex items-center gap-2 border-t border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-3"><input type="number" min="0" max="100" step="1" value={grades[subject.courseId] ?? ''} onChange={(event) => setGrades((current) => ({ ...current, [subject.courseId]: event.target.value }))} placeholder={t('finalGradePh')} className={`${inputClass} min-w-0 flex-1`} data-testid={`input-quick-grade-${subject.courseId}`} /><button type="button" onClick={() => void saveSingleGrade(subject)} disabled={savingCourseId === subject.courseId} className="shrink-0 rounded-xl bg-[hsl(var(--primary))] px-3 py-2.5 text-[10px] font-bold text-[hsl(var(--primary-foreground))] transition hover:opacity-90 disabled:opacity-60" data-testid={`button-quick-save-grade-${subject.courseId}`}>{savingCourseId === subject.courseId ? '...' : t('save')}</button></div>}
                 {openGradeCourseId === subject.courseId && <div className="mt-3 space-y-3 border-t border-[hsl(var(--border))] pt-3">
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {['Dərsdə iştirak', 'Dərslərdə fəallıq', 'Birinci imtahan nəticələri', 'Sonuncu imtahan nəticələri'].map((name) => <label key={name} className={`flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-xs font-semibold transition ${names.includes(name) ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent)/.16)] text-[hsl(var(--primary))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:bg-[hsl(var(--muted)/.45)]'}`}><input type="checkbox" className="size-4 accent-[hsl(var(--primary))]" checked={names.includes(name)} onChange={() => toggleComponent(name)} />{name}</label>)}
+                    {gradeCriteria.map(({ id, label }) => <label key={id} className={`flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-xs font-semibold transition ${names.includes(id) ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent)/.16)] text-[hsl(var(--primary))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:bg-[hsl(var(--muted)/.45)]'}`}><input type="checkbox" className="size-4 accent-[hsl(var(--primary))]" checked={names.includes(id)} onChange={() => toggleComponent(id)} />{label}</label>)}
                   </div>
-                  <button type="button" className="inline-flex items-center rounded-xl border border-dashed border-[hsl(var(--primary)/.45)] bg-[hsl(var(--card))] px-3 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" onClick={() => setShowCustomComponentInput((current) => ({ ...current, [subject.courseId]: !current[subject.courseId] }))}>+ Yeni qiymət meyarı əlavə et</button>
-                  {showCustomComponentInput[subject.courseId] && <div className="rounded-xl border border-[hsl(var(--accent)/.55)] bg-[hsl(var(--card))] p-3 shadow-sm"><label className="mb-2 block text-[11px] font-bold text-[hsl(var(--primary))]">Yeni meyarın adı</label><div className="flex flex-col gap-2 sm:flex-row"><input autoFocus type="text" value={customComponentInputs[subject.courseId] ?? ''} onChange={(event) => setCustomComponentInputs((current) => ({ ...current, [subject.courseId]: event.target.value }))} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); const name = (customComponentInputs[subject.courseId] ?? '').trim(); if (name && !names.includes(name)) { toggleComponent(name); setCustomComponentInputs((current) => ({ ...current, [subject.courseId]: '' })); setShowCustomComponentInput((current) => ({ ...current, [subject.courseId]: false })); } } }} placeholder="Məsələn: Layihə işi" className={`${inputClass} flex-1`} data-testid={`input-custom-grade-name-${subject.courseId}`} /><button type="button" className="rounded-xl bg-[hsl(var(--primary))] px-4 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))] hover:opacity-90" onClick={() => { const name = (customComponentInputs[subject.courseId] ?? '').trim(); if (name && !names.includes(name)) { toggleComponent(name); setCustomComponentInputs((current) => ({ ...current, [subject.courseId]: '' })); setShowCustomComponentInput((current) => ({ ...current, [subject.courseId]: false })); } }}>Əlavə et</button></div></div>}
-                  {names.length ? <div className="space-y-2">{names.map((name) => <div key={name} className="grid grid-cols-[1fr_110px] items-center gap-3"><label className="text-xs">{name}</label><input type="number" min="0" max="100" step="1" value={scores[name] ?? ''} onChange={(event) => setComponentScores((current) => ({ ...current, [subject.courseId]: { ...(current[subject.courseId] ?? {}), [name]: event.target.value } }))} placeholder="0–100" className={inputClass} /></div>)}</div> : <p className="text-xs text-[hsl(var(--muted-foreground))]">Meyar seçilməyibsə, yalnız yekun qiymət yazılır.</p>}
+                  <button type="button" className="inline-flex items-center rounded-xl border border-dashed border-[hsl(var(--primary)/.45)] bg-[hsl(var(--card))] px-3 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" onClick={() => setShowCustomComponentInput((current) => ({ ...current, [subject.courseId]: !current[subject.courseId] }))}>+ {t('criteriaNew')}</button>
+                  {showCustomComponentInput[subject.courseId] && <div className="rounded-xl border border-[hsl(var(--accent)/.55)] bg-[hsl(var(--card))] p-3 shadow-sm"><label className="mb-2 block text-[11px] font-bold text-[hsl(var(--primary))]">{t('criteriaName')}</label><div className="flex flex-col gap-2 sm:flex-row"><input autoFocus type="text" value={customComponentInputs[subject.courseId] ?? ''} onChange={(event) => setCustomComponentInputs((current) => ({ ...current, [subject.courseId]: event.target.value }))} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); const name = (customComponentInputs[subject.courseId] ?? '').trim(); if (name && !names.includes(name)) { toggleComponent(name); setCustomComponentInputs((current) => ({ ...current, [subject.courseId]: '' })); setShowCustomComponentInput((current) => ({ ...current, [subject.courseId]: false })); } } }} placeholder={t('criteriaExample')} className={`${inputClass} flex-1`} data-testid={`input-custom-grade-name-${subject.courseId}`} /><button type="button" className="rounded-xl bg-[hsl(var(--primary))] px-4 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))] hover:opacity-90" onClick={() => { const name = (customComponentInputs[subject.courseId] ?? '').trim(); if (name && !names.includes(name)) { toggleComponent(name); setCustomComponentInputs((current) => ({ ...current, [subject.courseId]: '' })); setShowCustomComponentInput((current) => ({ ...current, [subject.courseId]: false })); } }}>{t('add')}</button></div></div>}
+                  {names.length ? <div className="space-y-2">{names.map((name) => <div key={name} className="grid grid-cols-[1fr_110px] items-center gap-3"><label className="text-xs">{gradeCriteria.find((item) => item.id === name)?.label ?? name}</label><input type="number" min="0" max="100" step="1" value={scores[name] ?? ''} onChange={(event) => setComponentScores((current) => ({ ...current, [subject.courseId]: { ...(current[subject.courseId] ?? {}), [name]: event.target.value } }))} placeholder="0–100" className={inputClass} /></div>)}</div> : <p className="text-xs text-[hsl(var(--muted-foreground))]">{t('noCriteria')}</p>}
                 </div>}
-                {openGradeCourseId === subject.courseId && <button type="button" onClick={() => void saveSingleGrade(subject)} disabled={savingCourseId === subject.courseId} className="mt-3 w-full rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-xs font-bold text-[hsl(var(--primary-foreground))] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60" data-testid={`button-save-grade-${subject.courseId}`}>{savingCourseId === subject.courseId ? 'Yadda saxlanılır...' : 'Bu dərsin qiymətini yadda saxla'}</button>}
+                {openGradeCourseId === subject.courseId && <button type="button" onClick={() => void saveSingleGrade(subject)} disabled={savingCourseId === subject.courseId} className="mt-3 w-full rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-xs font-bold text-[hsl(var(--primary-foreground))] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60" data-testid={`button-save-grade-${subject.courseId}`}>{savingCourseId === subject.courseId ? t('saving') : t('saveThisGrade')}</button>}
               </div>;
             })}</div>
            </div>}
              {mode === 'attendance' && <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.28)] p-4">
-              <p className="mb-3 text-xs font-bold text-[hsl(var(--primary))]">Davamiyyət qeydi</p>
+              <p className="mb-3 text-xs font-bold text-[hsl(var(--primary))]">{t('attendanceNote')}</p>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Dərs">
+                <Field label={t('attLesson')}>
                   <select className={inputClass} value={attendanceCourseId} onChange={(event) => setAttendanceCourseId(event.target.value)} required data-testid="select-attendance-course">
-                    <option value="">Dərs seçin</option>
+                    <option value="">{t('chooseLesson')}</option>
                     {(selectedSemester?.subjects ?? []).map((subject) => <option key={subject.courseId} value={subject.courseId}>{subject.title}</option>)}
                   </select>
                 </Field>
-                 <Field label="Davamiyyət tarixi" hint="Qeyd bu tarixə yazılacaq.">
+                 <Field label={t('attendanceDate')} hint={t('attendanceDateHint')}>
                    <input type="date" value={attendanceDate} onChange={(event) => setAttendanceDate(event.target.value)} className={inputClass} required data-testid="input-attendance-date" />
                  </Field>
-                <Field label="İştirak vəziyyəti">
+                <Field label={t('attendanceStatus')}>
                   <select className={inputClass} value={attendanceStatus} onChange={(event) => setAttendanceStatus(event.target.value as typeof attendanceStatus)} data-testid="select-attendance-status">
-                    <option value="present">İştirak edib</option>
-                    <option value="absent">İştirak etməyib</option>
-                    <option value="late">Gecikib</option>
-                    <option value="excused">Üzrlü</option>
+                    <option value="present">{t('statusPresent')}</option>
+                    <option value="absent">{t('statusAbsent')}</option>
+                    <option value="late">{t('statusLate')}</option>
+                    <option value="excused">{t('statusExcused')}</option>
                   </select>
                 </Field>
               </div>
-              <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Qeyd yadda saxlanarkən müəllim adı serverdə giriş hesabından götürülür.</p>
+              <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">{t('teacherFromAccount')}</p>
             </div>}
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">{mode === 'grades' ? 'Boş saxlanan qiymətlər GPA hesablanmasına daxil edilmir.' : 'Qeyd seçilmiş dərs və tarix üzrə tələbənin tarixçəsinə əlavə olunur.'}</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">{mode === 'grades' ? t('emptyGrades') : t('recordAdded')}</p>
               <div className="flex flex-wrap gap-2">
                 {mode === 'attendance' && <button type="button" disabled={updateAttendance.isPending} onClick={() => void save(undefined, 'absent')} className="focus-ring rounded-xl border border-[hsl(var(--destructive)/.35)] px-4 py-2.5 text-sm font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.08)] disabled:opacity-50" data-testid="button-mark-absent">
-                  Davamiyyət qeyd et
+                  {t('recordAttendance')}
                 </button>}
-                <button type="submit" disabled={updateProfile.isPending || updateGrades.isPending || updateAttendance.isPending} className={buttonClass} data-testid={mode === 'grades' ? 'button-save-grades' : 'button-save-attendance'}>{updateProfile.isPending || updateGrades.isPending || updateAttendance.isPending ? 'Yadda saxlanılır...' : mode === 'grades' ? 'Qiymətləri yadda saxla' : 'Davamiyyəti yadda saxla'}</button>
+                <button type="submit" disabled={updateProfile.isPending || updateGrades.isPending || updateAttendance.isPending} className={buttonClass} data-testid={mode === 'grades' ? 'button-save-grades' : 'button-save-attendance'}>{updateProfile.isPending || updateGrades.isPending || updateAttendance.isPending ? t('saving') : mode === 'grades' ? t('saveGrades') : t('saveAttendance')}</button>
               </div>
             </div>
-          <FormNotice text={notice} error={notice.includes('bilmədi') || notice.includes('arasında')} />
+          <FormNotice text={notice} error={notice.includes(t('gradeNotSaved')) || notice.includes(t('gradeRange')) || notice.includes('bilmədi') || notice.includes('arasında')} />
         </>
       )}
     </form>

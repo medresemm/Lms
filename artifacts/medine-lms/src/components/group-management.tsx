@@ -14,6 +14,7 @@ import {
   useGetAdminTeachers,
 } from '@workspace/api-client-react';
 import { authFetch } from '@/lib/clerk-token';
+import { useI18n } from '@/lib/i18n';
 import { resourceTeacherIds, resourceTeacherLabel, isCoTaught } from '@/lib/co-teachers';
 import {
   filterGroups, groupCapacityLabel, groupHasTeacher, groupIsFull, groupScheduleLabel, matchesStudentSearch,
@@ -65,13 +66,14 @@ export function SetupSteps({ active, onOpenSchedule, onOpenStudents, onOpenTeach
   /** 3-cü addım əlçatan deyilsə (məs. müəllim hesabı) izah. */
   teachersHint?: string;
 }) {
+  const { t } = useI18n();
   const steps: Array<{ n: 1 | 2 | 3; label: string; hint: string; onClick?: () => void }> = [
-    { n: 1, label: 'Cədvəl', hint: 'Cədvəl hazırlama: dərs, gün, saat, kitab', onClick: onOpenSchedule },
-    { n: 2, label: 'Tələbələr', hint: 'Qruplar → Tələbələr: qrup yarat, tələbə əlavə et / çıxar', onClick: onOpenStudents },
-    { n: 3, label: 'Müəllim', hint: teachersHint ?? 'Qruplar → Müəllimlər: qruplara əsas və əlavə müəllim təyin et', onClick: onOpenTeachers },
+    { n: 1, label: t('stepSchedule'), hint: t('stepScheduleHint'), onClick: onOpenSchedule },
+    { n: 2, label: t('stepStudents'), hint: t('stepStudentsHint'), onClick: onOpenStudents },
+    { n: 3, label: t('stepTeacher'), hint: teachersHint ?? t('stepTeacherHint'), onClick: onOpenTeachers },
   ];
   return (
-    <ol className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold" aria-label="Tədris quruluşu addımları" data-testid="setup-steps">
+    <ol className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold" aria-label={t('setupSteps')} data-testid="setup-steps">
       {steps.map((step, index) => {
         const current = step.n === active;
         const content = <><span className={`grid size-5 place-items-center rounded-full text-[10px] ${current ? 'bg-[hsl(var(--primary-foreground))] text-[hsl(var(--primary))]' : 'bg-[hsl(var(--muted))] text-[hsl(var(--primary))]'}`}>{step.n}</span>{step.label}</>;
@@ -99,6 +101,7 @@ function groupTeacherText(group: GroupView) {
 }
 
 export function GroupManagementSection({ view: controlledView, onViewChange, onOpenSchedule }: { view?: GroupsView; onViewChange?: (view: GroupsView) => void; onOpenSchedule?: () => void }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const teachersQuery = useGetAdminTeachers();
   const [data, setData] = useState<GroupsResponse | null>(null);
@@ -192,58 +195,58 @@ export function GroupManagementSection({ view: controlledView, onViewChange, onO
     <section className="space-y-4" data-testid="section-groups">
       <div className="space-y-2">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Tədris quruluşu · {view === 'teachers' ? '3-cü addım' : '2-ci addım'}</p>
-          <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Qruplar · {view === 'teachers' ? 'Müəllimlər' : 'Tələbələr'}</h3>
+          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{view === 'teachers' ? t('groupsStep3') : t('groupsStep2')}</p>
+          <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('tileGroups')} · {view === 'teachers' ? t('stepTeacher') : t('stepStudents')}</h3>
         </div>
         <SetupSteps
           active={view === 'teachers' ? 3 : 2}
           onOpenSchedule={onOpenSchedule}
           onOpenStudents={() => setView('students')}
           onOpenTeachers={canManageTeachers ? () => setView('teachers') : undefined}
-          teachersHint={data && !canManageTeachers ? 'Müəllimləri sahib, idarə heyəti və admin təyin edir.' : undefined}
+          teachersHint={data && !canManageTeachers ? t('groupsTeachersOnly') : undefined}
         />
         <p className="text-xs leading-5 text-[hsl(var(--muted-foreground))]" data-testid="text-groups-intro">
           {view === 'teachers'
-            ? 'Semestrin bütün qrupları: müəllimi olmayanlar əvvəldə göstərilir. Hər qrup üçün əsas müəllimi və istəsəniz birgə dərs keçəcək əlavə müəllimləri seçin. Müəllimi olmayan qrup tələbələrə görünmür.'
+            ? t('groupsIntroTeachers')
             : canManageAll
-              ? 'Semestri seçin: həmin semestrin cədvəldəki dərsləri görünür. Hər dərs üçün qrup yaradın və qrupa həmin semestrin tələbələrini əlavə edin. Müəllim növbəti addımda — «3 Müəllim» — təyin olunur.'
-              : 'Sizin qruplarınız və aktiv semestrin dərsləri. Dərs üçün «Qrup yarat» basın — siz avtomatik əsas müəllim olursunuz; sonra tələbələri əlavə edin.'}
+              ? t('groupsIntroAdmin')
+              : t('groupsIntroSelf')}
         </p>
         {canManageAll && data && !data.groupFlagAvailable && data.groupFlagMessage && <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900" data-testid="text-group-flag-missing">{data.groupFlagMessage}</p>}
       </div>
       <div className="grid gap-2 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="filters-groups">
-        <select aria-label="Semestr" className={selectClass} value={termNumber ?? ''} onChange={(event) => { setTermNumber(event.target.value ? Number(event.target.value) : null); setCourseId(null); setCreatingFor(null); }} data-testid="select-groups-term">
-          <option value="">Bütün semestrlər</option>
-          {terms.map((term) => <option key={term} value={term}>{termLabel(term)}</option>)}
+        <select aria-label={t('semester')} className={selectClass} value={termNumber ?? ''} onChange={(event) => { setTermNumber(event.target.value ? Number(event.target.value) : null); setCourseId(null); setCreatingFor(null); }} data-testid="select-groups-term">
+          <option value="">{t('allSemesters')}</option>
+          {terms.map((term) => <option key={term} value={term}>{term}. {t('termLabel')}</option>)}
         </select>
-        <select aria-label="Fənn" className={selectClass} value={courseId ?? ''} onChange={(event) => setCourseId(event.target.value ? Number(event.target.value) : null)} data-testid="select-groups-course">
-          <option value="">Bütün fənlər</option>
+        <select aria-label={t('allCourses')} className={selectClass} value={courseId ?? ''} onChange={(event) => setCourseId(event.target.value ? Number(event.target.value) : null)} data-testid="select-groups-course">
+          <option value="">{t('allCourses')}</option>
           {courses.map(([id, title]) => <option key={id} value={id}>{title}</option>)}
         </select>
-        <select aria-label="Müəllim" className={selectClass} value={teacherId} onChange={(event) => setTeacherId(event.target.value)} data-testid="select-groups-teacher">
-          <option value="">Bütün müəllimlər</option>
+        <select aria-label={t('roleTeacher')} className={selectClass} value={teacherId} onChange={(event) => setTeacherId(event.target.value)} data-testid="select-groups-teacher">
+          <option value="">{t('allTeachers')}</option>
           {canManageAll && <option value={NO_TEACHER_FILTER}>{NO_TEACHER_LABEL}</option>}
           {teacherOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
         </select>
         <label className="relative">
-          <span className="sr-only">Axtar</span>
-          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Fənn, müəllim, gün..." className={`${selectClass} pl-9`} data-testid="input-groups-search" />
+          <span className="sr-only">{t('search')}</span>
+          <Search size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('searchGroups')} className={`${selectClass} ps-9`} data-testid="input-groups-search" />
         </label>
       </div>
       {!loading && !loadError && canManageAll && termLessons.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5" data-testid="groups-status-summary">
-          <span className="text-[11px] font-bold text-[hsl(var(--muted-foreground))]">{termNumber === null ? 'Bütün semestrlər' : termLabel(termNumber)}:</span>
-          <Badge tone="muted">{termLessons.length} dərs · {termGroups.length} qrup</Badge>
-          {lessonsWithoutGroup > 0 ? <Badge tone="warn">{lessonsWithoutGroup} dərsin qrupu yoxdur</Badge> : <Badge tone="ok">Hər dərsin qrupu var</Badge>}
-          {groupsWithoutStudents > 0 && <Badge tone="warn">{groupsWithoutStudents} qrupda tələbə yoxdur</Badge>}
+          <span className="text-[11px] font-bold text-[hsl(var(--muted-foreground))]">{termNumber === null ? t('allSemesters') : `${termNumber}. ${t('termLabel')}`}:</span>
+          <Badge tone="muted">{termLessons.length} {t('lessonsWord')} · {termGroups.length} {t('groupsWord')}</Badge>
+          {lessonsWithoutGroup > 0 ? <Badge tone="warn">{lessonsWithoutGroup} {t('lessonsWithoutGroup')}</Badge> : <Badge tone="ok">{t('everyLessonHasGroup')}</Badge>}
+          {groupsWithoutStudents > 0 && <Badge tone="warn">{groupsWithoutStudents} {t('groupsWithoutStudents')}</Badge>}
           {termGroups.length > 0 && <Badge tone={teacherSummary.complete ? 'ok' : 'warn'}>{teacherSummary.text}</Badge>}
-          {lessonsWithoutDays > 0 && <Badge tone="warn">{lessonsWithoutDays} dərsin günü/saatı yoxdur</Badge>}
+          {lessonsWithoutDays > 0 && <Badge tone="warn">{lessonsWithoutDays} {t('lessonsWithoutDays')}</Badge>}
         </div>
       )}
       <div aria-live="polite"><NoticeLine notice={notice} /></div>
-      {loading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Qruplar yüklənir...</p>
-        : loadError ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">{loadError} <button type="button" className="ml-2 underline" onClick={() => { setLoading(true); void load(); }}>Yenidən cəhd et</button></p>
+      {loading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('groupsLoading')}</p>
+        : loadError ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">{loadError} <button type="button" className="ms-2 underline" onClick={() => { setLoading(true); void load(); }}>{t('retry')}</button></p>
         : view === 'teachers'
           ? <TeacherAssignmentView
               groups={sortForTeacherAssignment(visibleGroups)}
@@ -253,13 +256,13 @@ export function GroupManagementSection({ view: controlledView, onViewChange, onO
             />
         : !lessons.length ? (
             <div className="rounded-xl border border-dashed border-[hsl(var(--border))] p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">
-              {canManageAll ? <>Cədvəldə hələ dərs yoxdur. Əvvəlcə 1-ci addım: «Cədvəl hazırlama» bölməsində semestrin dərslərini yaradın.{onOpenSchedule && <button type="button" className="ml-2 font-bold text-[hsl(var(--primary))] underline" onClick={onOpenSchedule}>Cədvəl hazırlamanı aç</button>}</> : 'Aktiv semestrin cədvəlində hələ dərs yoxdur və sizə qrup təyin olunmayıb.'}
+              {canManageAll ? <>{t('noLessonsYet')}{onOpenSchedule && <button type="button" className="ms-2 font-bold text-[hsl(var(--primary))] underline" onClick={onOpenSchedule}>{t('openSchedulePrep')}</button>}</> : t('noAssignedGroup')}
             </div>
           )
         : <>
-            <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))]" data-testid="text-groups-count">{visibleLessons.length} dərs{filtersActive && <button type="button" className="ml-2 font-bold text-[hsl(var(--primary))] underline" onClick={() => { setCourseId(null); setTeacherId(''); setSearch(''); }}>Süzgəcləri təmizlə</button>}</p>
+            <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))]" data-testid="text-groups-count">{visibleLessons.length} {t('lessonsWord')}{filtersActive && <button type="button" className="ms-2 font-bold text-[hsl(var(--primary))] underline" onClick={() => { setCourseId(null); setTeacherId(''); setSearch(''); }}>{t('clearFilters')}</button>}</p>
             {visibleLessons.length === 0
-              ? <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">{termLessons.length ? 'Süzgəcə uyğun dərs tapılmadı.' : 'Bu semestrin cədvəlində dərs yoxdur.'}</p>
+              ? <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">{termLessons.length ? t('noFilterLesson') : t('noLessonThisTerm')}</p>
               : <div className="space-y-3" data-testid="list-group-lessons">
                   {visibleLessons.map((lesson) => {
                     const key = `${lesson.courseId}:${lesson.termNumber}`;
@@ -270,16 +273,16 @@ export function GroupManagementSection({ view: controlledView, onViewChange, onO
                       <div key={key} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.15)] p-3" data-testid={`lesson-groups-${lesson.courseId}-${lesson.termNumber}`}>
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="text-sm font-black text-[hsl(var(--primary))]">{lesson.courseTitle} <span className="font-semibold text-[hsl(var(--muted-foreground))]">· {termLabel(lesson.termNumber)}</span></p>
+                            <p className="text-sm font-black text-[hsl(var(--primary))]">{lesson.courseTitle} <span className="font-semibold text-[hsl(var(--muted-foreground))]">· {lesson.termNumber}. {t('termLabel')}</span></p>
                             <p className="mt-0.5 flex items-center gap-1 text-[11px] text-[hsl(var(--muted-foreground))]"><CalendarRange size={12} className="shrink-0" /> {groupScheduleLabel(lesson)}</p>
                             {canManageAll && <div className="mt-1 flex flex-wrap gap-1">
-                              {lesson.groupCount === 0 ? <Badge tone="warn">Qrup yoxdur</Badge> : <Badge tone="ok">{lesson.groupCount} qrup</Badge>}
-                              {empty > 0 && <Badge tone="warn">{empty} qrupda tələbə yoxdur</Badge>}
-                              {noTeacher > 0 && <Badge tone="warn">{noTeacher} qrupda müəllim yoxdur</Badge>}
-                              {!lesson.lessonDays.length && <Badge tone="warn">Gün/saat yoxdur</Badge>}
+                              {lesson.groupCount === 0 ? <Badge tone="warn">{t('noGroup')}</Badge> : <Badge tone="ok">{lesson.groupCount} {t('groupsWord')}</Badge>}
+                              {empty > 0 && <Badge tone="warn">{empty} {t('groupsWithoutStudents')}</Badge>}
+                              {noTeacher > 0 && <Badge tone="warn">{noTeacher} {t('noTeacherInGroup')}</Badge>}
+                              {!lesson.lessonDays.length && <Badge tone="warn">{t('noDayTime')}</Badge>}
                             </div>}
                           </div>
-                          {canCreate && <button type="button" className={smallButton} aria-expanded={creatingFor === key} onClick={() => setCreatingFor((current) => current === key ? null : key)} data-testid={`button-create-group-${lesson.courseId}-${lesson.termNumber}`}><UserPlus size={13} /> Qrup yarat</button>}
+                          {canCreate && <button type="button" className={smallButton} aria-expanded={creatingFor === key} onClick={() => setCreatingFor((current) => current === key ? null : key)} data-testid={`button-create-group-${lesson.courseId}-${lesson.termNumber}`}><UserPlus size={13} /> {t('createGroup')}</button>}
                         </div>
                         {creatingFor === key && data && (
                           <CreateGroupForm
@@ -291,7 +294,7 @@ export function GroupManagementSection({ view: controlledView, onViewChange, onO
                           />
                         )}
                         {lessonGroups.length === 0
-                          ? creatingFor !== key && <p className="mt-2 rounded-lg border border-dashed border-[hsl(var(--border))] p-3 text-center text-xs text-[hsl(var(--muted-foreground))]">Qrup yoxdur{canCreate && <> — <button type="button" className="font-bold text-[hsl(var(--primary))] underline" onClick={() => setCreatingFor(key)}>Qrup yarat</button></>}</p>
+                          ? creatingFor !== key && <p className="mt-2 rounded-lg border border-dashed border-[hsl(var(--border))] p-3 text-center text-xs text-[hsl(var(--muted-foreground))]">{t('noGroup')}{canCreate && <> — <button type="button" className="font-bold text-[hsl(var(--primary))] underline" onClick={() => setCreatingFor(key)}>{t('createGroup')}</button></>}</p>
                           : <div className="mt-2 grid gap-2 md:grid-cols-2">
                               {lessonGroups.map((group) => (
                                 <GroupCard
@@ -328,6 +331,7 @@ function CreateGroupForm({ lesson, mode, teachers, onCancel, onCreated }: {
   onCancel: () => void;
   onCreated: (text: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
@@ -374,38 +378,38 @@ function CreateGroupForm({ lesson, mode, teachers, onCancel, onCreated }: {
   return (
     <div className="mt-3 space-y-2 rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--card))] p-3" data-testid={`form-create-group-${lesson.courseId}-${lesson.termNumber}`}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-black text-[hsl(var(--primary))]">Yeni qrup · tələbələr və tutum</p>
-        <button type="button" className="focus-ring rounded-lg p-1.5 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Bağla" onClick={onCancel}><X size={15} /></button>
+        <p className="text-xs font-black text-[hsl(var(--primary))]">{t('newGroupTitle')}</p>
+        <button type="button" className="focus-ring rounded-lg p-1.5 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={t('close')} onClick={onCancel}><X size={15} /></button>
       </div>
       <p className="text-[11px] text-[hsl(var(--muted-foreground))]">
-        Yalnız {termLabel(lesson.termNumber)} tələbələri göstərilir. Eyni fənn üzrə başqa qrupda olan tələbə seçilə bilmir. Tələbəsiz qrup da yaratmaq olar — sonra əlavə edərsiniz.
-        {mode === 'teacherless' && ' Müəllimi növbəti addımda — «3 Müəllim» — təyin edəcəksiniz.'}
-        {mode === 'self' && ' Siz bu qrupun əsas müəllimi olacaqsınız.'}
+        {t('newGroupHint')}
+        {mode === 'teacherless' && ` ${t('newGroupTeacherNext')}`}
+        {mode === 'self' && ` ${t('newGroupSelf')}`}
       </p>
       {mode === 'withTeacher' && (
-        <label className="block text-[11px] font-bold text-[hsl(var(--primary))]">Müəllim <span className="font-semibold text-amber-800">(müəllimsiz qrup hələ aktiv deyil — verilənlər bazası yenilənməyib)</span>
+        <label className="block text-[11px] font-bold text-[hsl(var(--primary))]">{t('roleTeacher')} <span className="font-semibold text-amber-800">({t('teacherDbNote')})</span>
           <select className={`${selectClass} mt-1`} value={mainTeacher} onChange={(event) => setMainTeacher(event.target.value)} data-testid="select-create-group-teacher">
-            <option value="">Müəllim seçin</option>
+            <option value="">{t('chooseTeacher')}</option>
             {teachers.map((teacher) => <option key={teacher.clerkUserId} value={teacher.clerkUserId}>{teacher.displayName}</option>)}
           </select>
         </label>
       )}
       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
         <label className="relative block">
-          <span className="sr-only">Tələbə axtar</span>
-          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ad, soyad və ya T-nömrə" className={`${selectClass} pl-8`} data-testid="input-create-group-student-search" />
+          <span className="sr-only">{t('search')}</span>
+          <Search size={14} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('searchStudent')} className={`${selectClass} ps-8`} data-testid="input-create-group-student-search" />
         </label>
         <label className="flex items-center gap-2 text-[11px] font-semibold text-[hsl(var(--muted-foreground))]">
-          Tutum
-          <input type="number" min={0} step={1} value={capacity} onChange={(event) => setCapacity(Math.max(0, Math.trunc(Number(event.target.value) || 0)))} className={`${selectClass} w-24`} aria-label="Qrupun tələbə tutumu (0 = limitsiz)" data-testid="input-create-group-capacity" />
-          <span className="whitespace-nowrap">(0 = limitsiz)</span>
+          {t('capacity')}
+          <input type="number" min={0} step={1} value={capacity} onChange={(event) => setCapacity(Math.max(0, Math.trunc(Number(event.target.value) || 0)))} className={`${selectClass} w-24`} aria-label={t('capacity')} data-testid="input-create-group-capacity" />
+          <span className="whitespace-nowrap">({t('unlimited')})</span>
         </label>
       </div>
       <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-[hsl(var(--border))] p-1.5">
         {loadError ? <p className="p-2 text-xs font-semibold text-red-800">{loadError}</p>
-          : candidates === null ? <p className="p-2 text-xs text-[hsl(var(--muted-foreground))]">Tələbələr yüklənir...</p>
-          : rows.length === 0 ? <p className="p-2 text-xs text-[hsl(var(--muted-foreground))]">{candidates.length ? 'Axtarışa uyğun tələbə tapılmadı.' : 'Bu semestrdə aktiv tələbə yoxdur.'}</p>
+          : candidates === null ? <p className="p-2 text-xs text-[hsl(var(--muted-foreground))]">{t('studentsLoading')}</p>
+          : rows.length === 0 ? <p className="p-2 text-xs text-[hsl(var(--muted-foreground))]">{candidates.length ? t('noSearchStudent') : t('noActiveStudent')}</p>
           : rows.map((candidate) => {
             const checked = picked.includes(candidate.profileId);
             const overCapacity = capacity > 0 && !checked && picked.length >= capacity;
@@ -423,8 +427,8 @@ function CreateGroupForm({ lesson, mode, teachers, onCancel, onCreated }: {
       </div>
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-800" role="alert">{error}</p>}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs font-bold text-[hsl(var(--secondary-foreground))]">{picked.length} tələbə seçilib</span>
-        <button type="button" className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" disabled={busy || (mode === 'withTeacher' && !mainTeacher)} onClick={() => void create()} data-testid="button-create-group-submit">{busy ? 'Yaradılır...' : 'Qrupu yarat'}</button>
+        <span className="text-xs font-bold text-[hsl(var(--secondary-foreground))]">{picked.length} {t('studentsPicked')}</span>
+        <button type="button" className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" disabled={busy || (mode === 'withTeacher' && !mainTeacher)} onClick={() => void create()} data-testid="button-create-group-submit">{busy ? t('creatingGroup') : t('createGroupAction')}</button>
       </div>
     </div>
   );

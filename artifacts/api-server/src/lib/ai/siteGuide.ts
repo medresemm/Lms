@@ -400,6 +400,20 @@ export const GUIDE_TOPICS: GuideTopic[] = [
     ],
   },
   {
+    id: "admin-co-teaching",
+    section: "course-content",
+    modes: ["admin"],
+    title: "Bir dərsə bir neçə müəllim (birgə tədris)",
+    keywords: ["bir nece muellim", "iki muellim", "elave muellim", "birge tedris", "komekci muellim", "muellim elave", "muellim cixar", "assistent muellim"],
+    standalone: ["bir nece muellim", "birge tedris", "elave muellim", "iki muellim"],
+    steps: [
+      "«Tədris proqramı» bölməsini açın. Yeni qrup yaradarkən «Müəllim» sahəsində əsas müəllimi seçin, «Əlavə müəllimlər (birgə tədris)» siyahısında digər müəllimləri işarələyin.",
+      "Mövcud qrup üçün «Semestr fənləri» siyahısında qrupun altındakı «Müəllim əlavə et / çıxar» düyməsini basın, müəllimləri işarələyib «Yadda saxla» basın. Ən azı bir müəllim qalmalıdır.",
+      "Birgə müəllimlər eyni tələbələri paylaşır: hamısı dərsi «Mənim cədvəlim»də görür, dərs linki yerləşdirir, davamiyyət yazır, tapşırıq və test verib qiymətləndirir. Tələbələr dərsdə bütün müəllimlərin adını görür.",
+      "Ayrı tələbə qrupu ilə başqa müəllim lazımdırsa, «+ Başqa müəllim əlavə et» düyməsindən istifadə edin — bu, ayrıca qrup yaradır.",
+    ],
+  },
+  {
     id: "admin-messages",
     modes: ["admin"],
     title: "Tələbə mesajlarına və suallarına cavab",

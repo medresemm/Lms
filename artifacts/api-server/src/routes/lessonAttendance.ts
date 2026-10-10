@@ -14,6 +14,7 @@ import {
 } from "@workspace/db";
 import { recordAuditEvent } from "../lib/audit.js";
 import { logger } from "../lib/logger.js";
+import { coTeacherMap, resourceTeacherIds, userTeachesResource } from "../lib/resourceTeachers.js";
 import {
   JOIN_WINDOW_EARLY_MINUTES,
   JOIN_WINDOW_LATE_MINUTES,
@@ -44,7 +45,7 @@ import {
   ownerDisplayNameParts,
   requireTeacher,
   resourceLinkIsExpired,
-  teacherNameMap,
+  resourceTeacherLabels,
   userIsSystemOwner,
 } from "./lms.js";
 
@@ -222,12 +223,12 @@ async function sessionDetail(resource: ResourceRow, date: string) {
     joins,
     records.filter((record) => rosterIds.has(record.profileId)),
   );
-  const teacherNames = resource.teacherClerkUserId ? await teacherNameMap([resource.teacherClerkUserId]) : new Map<string, string>();
+  const teacherLabels = await resourceTeacherLabels([resource]);
   return {
     resourceId: resource.id,
     courseId: resource.courseId,
     courseTitle: courses[0]?.title ?? "Naməlum fənn",
-    teacherName: resource.teacherClerkUserId ? teacherNames.get(resource.teacherClerkUserId) ?? null : null,
+    teacherName: teacherLabels.get(resource.id) ?? null,
     termNumber: resource.termNumber,
     lessonTime: resource.lessonTime,
     sessionDate: date,
@@ -247,7 +248,7 @@ async function loadManagedResource(req: { params: Record<string, unknown> }, res
   const [resource] = await db.select().from(resourcesTable).where(eq(resourcesTable.id, resourceId)).limit(1);
   if (!resource) { res.status(404).json({ error: "Dərs tapılmadı." }); return null; }
   const access = await viewerAccess(userId);
-  if (!access.all && resource.teacherClerkUserId !== userId) {
+  if (!access.all && !await userTeachesResource(userId, resource)) {
     res.status(403).json({ error: "Bu dərsin davamiyyətini yalnız məsul müəllim və ya admin idarə edə bilər." });
     return null;
   }
@@ -262,8 +263,9 @@ router.get("/admin/attendance/lesson-sessions", requireTeacher, async (req, res,
   try {
     const userId = getAuth(req).userId!;
     const access = await viewerAccess(userId);
+    const coTeachers = await coTeacherMap();
     const resources = (await db.select().from(resourcesTable))
-      .filter((resource) => resource.lessonDays.some((day) => lessonTimeForDay(resource.lessonTime, day)) && (access.all || resource.teacherClerkUserId === userId));
+      .filter((resource) => resource.lessonDays.some((day) => lessonTimeForDay(resource.lessonTime, day)) && (access.all || resourceTeacherIds(resource, coTeachers).includes(userId)));
     if (!resources.length) { res.json([]); return; }
     const since = (() => {
       const [year, month, day] = academyToday().date.split("-").map(Number);
@@ -278,8 +280,7 @@ router.get("/admin/attendance/lesson-sessions", requireTeacher, async (req, res,
       db.select().from(studentAttendanceRecordsTable).where(and(inArray(studentAttendanceRecordsTable.courseId, courseIds), gte(studentAttendanceRecordsTable.attendanceDate, since))),
       db.select({ id: coursesTable.id, title: coursesTable.title }).from(coursesTable).where(inArray(coursesTable.id, courseIds)),
     ]);
-    const teacherIds = Array.from(new Set(resources.map((resource) => resource.teacherClerkUserId).filter((id): id is string => Boolean(id))));
-    const teacherNames = await teacherNameMap(teacherIds);
+    const teacherLabels = await resourceTeacherLabels(resources);
     const sessions = resources.flatMap((resource) => {
       const rosterIds = new Set(rosterForResource(resource, allResources, students));
       return recentSessionDates(resource).map((date) => {
@@ -295,7 +296,7 @@ router.get("/admin/attendance/lesson-sessions", requireTeacher, async (req, res,
           resourceId: resource.id,
           courseId: resource.courseId,
           courseTitle: courses.find((course) => course.id === resource.courseId)?.title ?? "Naməlum fənn",
-          teacherName: resource.teacherClerkUserId ? teacherNames.get(resource.teacherClerkUserId) ?? null : null,
+          teacherName: teacherLabels.get(resource.id) ?? null,
           termNumber: resource.termNumber,
           lessonTime: resource.lessonTime,
           sessionDate: date,
@@ -400,7 +401,7 @@ async function loadRollCallResource(req: { params: Record<string, unknown> }, re
   const [resource] = await db.select().from(resourcesTable).where(eq(resourcesTable.id, resourceId)).limit(1);
   if (!resource) { res.status(404).json({ error: "Dərs tapılmadı." }); return null; }
   const access = await rollCallAccess(userId);
-  if (!access.all && resource.teacherClerkUserId !== userId) {
+  if (!access.all && !await userTeachesResource(userId, resource)) {
     res.status(403).json({ error: "Bu dərsin davamiyyətini yalnız məsul müəllim və ya rəhbərlik idarə edə bilər." });
     return null;
   }
@@ -439,7 +440,8 @@ router.get("/admin/attendance/roll-call/lessons", requireTeacher, async (req, re
   try {
     const userId = getAuth(req).userId!;
     const access = await rollCallAccess(userId);
-    const resources = (await db.select().from(resourcesTable)).filter((resource) => access.all || resource.teacherClerkUserId === userId);
+    const coTeachers = await coTeacherMap();
+    const resources = (await db.select().from(resourcesTable)).filter((resource) => access.all || resourceTeacherIds(resource, coTeachers).includes(userId));
     if (!resources.length) { res.json([]); return; }
     const since = (() => {
       const [year, month, day] = academyToday().date.split("-").map(Number);
@@ -454,8 +456,7 @@ router.get("/admin/attendance/roll-call/lessons", requireTeacher, async (req, re
       db.select().from(lessonJoinEventsTable).where(and(inArray(lessonJoinEventsTable.resourceId, resourceIds), gte(lessonJoinEventsTable.sessionDate, since))),
       db.select().from(studentAttendanceRecordsTable).where(and(inArray(studentAttendanceRecordsTable.courseId, courseIds), gte(studentAttendanceRecordsTable.attendanceDate, since))),
     ]);
-    const teacherIds = Array.from(new Set(resources.map((resource) => resource.teacherClerkUserId).filter((id): id is string => Boolean(id))));
-    const teacherNames = await teacherNameMap(teacherIds);
+    const teacherLabels = await resourceTeacherLabels(resources);
     const lessons = resources
       .filter((resource) => courses.some((course) => course.id === resource.courseId))
       .map((resource) => {
@@ -476,7 +477,7 @@ router.get("/admin/attendance/roll-call/lessons", requireTeacher, async (req, re
           courseId: resource.courseId,
           courseTitle: courses.find((course) => course.id === resource.courseId)?.title ?? "Naməlum fənn",
           title: resource.title,
-          teacherName: resource.teacherClerkUserId ? teacherNames.get(resource.teacherClerkUserId) ?? null : null,
+          teacherName: teacherLabels.get(resource.id) ?? null,
           termNumber: resource.termNumber,
           lessonDays: resource.lessonDays,
           lessonTime: resource.lessonTime,

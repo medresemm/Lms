@@ -116,6 +116,10 @@ export interface LearningResource {
   teacherClerkUserId: string | null;
   /** @nullable */
   teacherName: string | null;
+  /** Birgə tədris — əsas müəllimdən başqa qrupun əlavə müəllimləri. */
+  coTeacherClerkUserIds?: string[];
+  /** Qrupun bütün müəllimlərinin adları (əvvəlcə əsas müəllim). */
+  teacherNames?: string[];
   /** @minimum 0 */
   studentCapacity: number;
 }

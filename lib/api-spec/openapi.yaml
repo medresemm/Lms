@@ -2324,6 +2324,14 @@ components:
         isMandatory: { type: boolean }
         teacherClerkUserId: { type: ["string", "null"] }
         teacherName: { type: ["string", "null"] }
+        coTeacherClerkUserIds:
+          type: array
+          description: Birgə tədris — əsas müəllimdən başqa qrupun əlavə müəllimləri.
+          items: { type: string }
+        teacherNames:
+          type: array
+          description: Qrupun bütün müəllimlərinin adları (əvvəlcə əsas müəllim).
+          items: { type: string }
         studentCapacity: { type: number, minimum: 0 }
     AssignmentAttachment:
       type: object

@@ -36,6 +36,7 @@ import {
   studentNotificationsTable,
   studentTeacherChoicesTable,
 } from "@workspace/db";
+import { coTeacherMap, resourceTeacherIds } from "../lib/resourceTeachers.js";
 import {
   assignmentView,
   buildAcademicProfile,
@@ -52,6 +53,7 @@ import {
   getCourses,
   roleForClerkUser,
   teacherNameMap,
+  resourceTeacherLabels,
   loadExamResult,
   loadExamStructure,
   metadataRole,
@@ -690,8 +692,8 @@ function buildAdminContext(permissions: ReadonlySet<string>, isOwner: boolean, r
 
   const resourceTeacherNames = memo(async () => {
     const { resources } = await enrollment();
-    const names = await teacherNameMap(resources.map((resource) => resource.teacherClerkUserId ?? "").filter(Boolean));
-    return new Map(resources.map((resource) => [resource.id, resource.teacherClerkUserId ? names.get(resource.teacherClerkUserId) ?? null : null]));
+    // Birgə tədrisdə bütün müəllimlərin adları («Ad1, Ad2»).
+    return resourceTeacherLabels(resources.filter((resource) => Boolean(resource.teacherClerkUserId)));
   });
 
   const assignmentData = memo(async () => {
@@ -761,10 +763,12 @@ function buildAdminContext(permissions: ReadonlySet<string>, isOwner: boolean, r
       enrollment(),
       canManageUsers ? staffDirectory() : Promise.resolve([]),
     ]);
-    const teacherByResource = new Map(resources.map((resource) => [resource.id, resource.teacherClerkUserId]));
+    // Birgə tədris olunan qruplar hər müəllimin siyahısında və sayında nəzərə alınır.
+    const coTeachers = await coTeacherMap();
+    const teachersByResource = new Map(resources.map((resource) => [resource.id, resourceTeacherIds(resource, coTeachers)]));
     const directoryById = new Map(directory.map(({ user, role: userRole }) => [user.id, { email: user.primaryEmailAddress?.emailAddress ?? null, role: userRole }]));
     return list.map((teacher) => {
-      const teacherLessons = lessons.filter((lesson) => teacherByResource.get(lesson.resourceId) === teacher.clerkUserId);
+      const teacherLessons = lessons.filter((lesson) => teachersByResource.get(lesson.resourceId)?.includes(teacher.clerkUserId));
       const students = new Set(teacherLessons.flatMap((lesson) => resourceStudents.get(lesson.resourceId) ?? []));
       const info = directoryById.get(teacher.clerkUserId);
       return {
@@ -1269,7 +1273,8 @@ router.get("/ai/test-builder/config", noStore, requireAiStaff, requireTestBuilde
     }));
     const seesAll = testBuilderSeesAllGroups({ isOwner: res.locals.aiIsOwner === true, role: res.locals.aiRole });
     const rows = await db.select().from(resourcesTable).orderBy(asc(resourcesTable.termNumber), asc(resourcesTable.id));
-    const own = rows.filter((row) => row.teacherClerkUserId && (seesAll || row.teacherClerkUserId === userId));
+    const coTeachers = await coTeacherMap();
+    const own = rows.filter((row) => row.teacherClerkUserId && (seesAll || resourceTeacherIds(row, coTeachers).includes(userId ?? "")));
     const views = await resourceViews(own);
     res.json({
       books,

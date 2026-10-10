@@ -417,7 +417,7 @@ function drawInfoBox(document: Doc, input: SchedulePdfInput, y: number) {
 
 function lessonParts(lesson: ScheduleLessonRow, showTerm: boolean) {
   const textWidth = contentWidth - timeColumn - 10;
-  const meta = [lesson.teacher ? `Müəllim: ${isolate(lesson.teacher)}` : "Müəllim təyin edilməyib", showTerm && lesson.termLabel ? lesson.termLabel : null]
+  const meta = [lesson.teacher ? `${lesson.teacher.includes(", ") ? "Müəllimlər" : "Müəllim"}: ${isolate(lesson.teacher)}` : "Müəllim təyin edilməyib", showTerm && lesson.termLabel ? lesson.termLabel : null]
     .filter(Boolean).join(" · ");
   return { textWidth, meta };
 }

@@ -21,7 +21,8 @@
     "test:exams": "tsx --test src/lib/examContent.test.ts ../medine-lms/src/lib/exam-text.test.ts",
     "test:account-profile": "tsx --test src/lib/accountProfile.test.ts ../medine-lms/src/lib/account-profile-retry.test.ts",
     "test:schedule-pdf": "tsx --test src/lib/schedulePdf.test.ts",
-    "test:test-builder": "tsx --test src/lib/library/testGenerator.test.ts"
+    "test:test-builder": "tsx --test src/lib/library/testGenerator.test.ts",
+    "test:co-teachers": "tsx --test src/lib/resourceTeachers.test.ts ../medine-lms/src/lib/co-teachers.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1100.0",

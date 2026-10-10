@@ -194,6 +194,8 @@ export const GetCourseResponse = zod.object({
   "isMandatory": zod.boolean(),
   "teacherClerkUserId": zod.string().nullable(),
   "teacherName": zod.string().nullable(),
+  "coTeacherClerkUserIds": zod.array(zod.string()).optional().describe('Birgə tədris — əsas müəllimdən başqa qrupun əlavə müəllimləri.'),
+  "teacherNames": zod.array(zod.string()).optional().describe('Qrupun bütün müəllimlərinin adları (əvvəlcə əsas müəllim).'),
   "studentCapacity": zod.number().min(getCourseResponseTwoResourcesItemStudentCapacityMin)
 }))
 }))
@@ -289,6 +291,8 @@ export const GetResourcesResponseItem = zod.object({
   "isMandatory": zod.boolean(),
   "teacherClerkUserId": zod.string().nullable(),
   "teacherName": zod.string().nullable(),
+  "coTeacherClerkUserIds": zod.array(zod.string()).optional().describe('Birgə tədris — əsas müəllimdən başqa qrupun əlavə müəllimləri.'),
+  "teacherNames": zod.array(zod.string()).optional().describe('Qrupun bütün müəllimlərinin adları (əvvəlcə əsas müəllim).'),
   "studentCapacity": zod.number().min(getResourcesResponseStudentCapacityMin)
 })
 export const GetResourcesResponse = zod.array(GetResourcesResponseItem)
@@ -2434,6 +2438,8 @@ export const GetAdminResourcesResponseItem = zod.object({
   "isMandatory": zod.boolean(),
   "teacherClerkUserId": zod.string().nullable(),
   "teacherName": zod.string().nullable(),
+  "coTeacherClerkUserIds": zod.array(zod.string()).optional().describe('Birgə tədris — əsas müəllimdən başqa qrupun əlavə müəllimləri.'),
+  "teacherNames": zod.array(zod.string()).optional().describe('Qrupun bütün müəllimlərinin adları (əvvəlcə əsas müəllim).'),
   "studentCapacity": zod.number().min(getAdminResourcesResponseStudentCapacityMin)
 })
 export const GetAdminResourcesResponse = zod.array(GetAdminResourcesResponseItem)
@@ -2485,6 +2491,8 @@ export const CreateResourceResponse = zod.object({
   "isMandatory": zod.boolean(),
   "teacherClerkUserId": zod.string().nullable(),
   "teacherName": zod.string().nullable(),
+  "coTeacherClerkUserIds": zod.array(zod.string()).optional().describe('Birgə tədris — əsas müəllimdən başqa qrupun əlavə müəllimləri.'),
+  "teacherNames": zod.array(zod.string()).optional().describe('Qrupun bütün müəllimlərinin adları (əvvəlcə əsas müəllim).'),
   "studentCapacity": zod.number().min(createResourceResponseStudentCapacityMin)
 })
 
@@ -2534,6 +2542,8 @@ export const UpdateResourceResponse = zod.object({
   "isMandatory": zod.boolean(),
   "teacherClerkUserId": zod.string().nullable(),
   "teacherName": zod.string().nullable(),
+  "coTeacherClerkUserIds": zod.array(zod.string()).optional().describe('Birgə tədris — əsas müəllimdən başqa qrupun əlavə müəllimləri.'),
+  "teacherNames": zod.array(zod.string()).optional().describe('Qrupun bütün müəllimlərinin adları (əvvəlcə əsas müəllim).'),
   "studentCapacity": zod.number().min(updateResourceResponseStudentCapacityMin)
 })
 
@@ -2695,6 +2705,8 @@ export const GetAdminTeacherScheduleResponseItem = zod.object({
   "isMandatory": zod.boolean(),
   "teacherClerkUserId": zod.string().nullable(),
   "teacherName": zod.string().nullable(),
+  "coTeacherClerkUserIds": zod.array(zod.string()).optional().describe('Birgə tədris — əsas müəllimdən başqa qrupun əlavə müəllimləri.'),
+  "teacherNames": zod.array(zod.string()).optional().describe('Qrupun bütün müəllimlərinin adları (əvvəlcə əsas müəllim).'),
   "studentCapacity": zod.number().min(getAdminTeacherScheduleResponseStudentCapacityMin)
 })
 export const GetAdminTeacherScheduleResponse = zod.array(GetAdminTeacherScheduleResponseItem)

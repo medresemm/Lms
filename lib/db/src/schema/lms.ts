@@ -71,6 +71,21 @@ export const resourcesTable = pgTable("lms_resources", {
   validTermNumber: check("lms_resources_term_number_check", sql`${table.termNumber} BETWEEN 1 AND 8`),
 }));
 
+/**
+ * Bir müəllim qrupunun (lms_resources sətri) əlavə müəllimləri. Əsas müəllim lms_resources.teacher_clerk_user_id-dədir;
+ * burada yalnız əlavə (köməkçi) müəllimlər saxlanılır. Hamısı eyni tələbələri paylaşır və qrupda eyni hüquqlara malikdir.
+ */
+export const resourceTeachersTable = pgTable("lms_resource_teachers", {
+  id: serial("id").primaryKey(),
+  resourceId: integer("resource_id").notNull(),
+  teacherClerkUserId: text("teacher_clerk_user_id").notNull(),
+  addedByClerkUserId: text("added_by_clerk_user_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  resourceTeacherUnique: uniqueIndex("lms_resource_teachers_resource_teacher_unique").on(table.resourceId, table.teacherClerkUserId),
+  teacherIndex: index("lms_resource_teachers_teacher_idx").on(table.teacherClerkUserId),
+}));
+
 export const studentTeacherChoicesTable = pgTable("lms_student_teacher_choices", {
   id: serial("id").primaryKey(),
   profileId: integer("profile_id").notNull(),

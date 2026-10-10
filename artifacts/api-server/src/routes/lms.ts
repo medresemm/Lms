@@ -25,6 +25,20 @@ import { getApplicationWindowStatus, type ApplicationWindow } from "../lib/appli
 import { isMeetingUrl, lessonTimeForDay } from "../lib/lessonAttendance.js";
 import { buildAccountProfile } from "../lib/accountProfile.js";
 import {
+  coTaughtResourceIds,
+  coTeacherMap,
+  deleteCoTeachersForResource,
+  isMissingResourceTeachersTable,
+  joinTeacherNames,
+  loadCoTeachers,
+  planTeacherSet,
+  replaceCoTeachers,
+  RESOURCE_TEACHERS_TABLE_MISSING_MESSAGE,
+  resourceTeacherIds,
+  teacherNameList,
+  userTeachesResource,
+} from "../lib/resourceTeachers.js";
+import {
   applicationUploadIntentsTable,
   applicationSettingsTable,
   applicationsTable,
@@ -549,10 +563,18 @@ async function userHasTeacherAccess(userId: string) {
   return hasStaffRole(clerkUser?.publicMetadata) || await userIsSystemOwner(userId, clerkUser);
 }
 
+/** SQL şərti: istifadəçinin əsas və ya əlavə müəllim olduğu qruplar. */
+export async function taughtByCondition(userId: string) {
+  const coIds = await coTaughtResourceIds(userId);
+  return coIds.length
+    ? or(eq(resourcesTable.teacherClerkUserId, userId), and(inArray(resourcesTable.id, coIds), sql`${resourcesTable.teacherClerkUserId} IS NOT NULL`))!
+    : eq(resourcesTable.teacherClerkUserId, userId);
+}
+
 async function canManageResourceRoster(userId: string, resource: typeof resourcesTable.$inferSelect) {
   if (await userIsSystemOwner(userId)) return true;
   const clerkUser = await getClerkUser(userId);
-  return metadataRole(clerkUser?.publicMetadata) === "owner_assistant" || resource.teacherClerkUserId === userId;
+  return metadataRole(clerkUser?.publicMetadata) === "owner_assistant" || await userTeachesResource(userId, resource);
 }
 
 export const rolePermissionKeys = [
@@ -804,7 +826,7 @@ export async function userCanEditCourseBooks(userId: string, courseId: number, t
   const [resource] = await db.select({ id: resourcesTable.id }).from(resourcesTable).where(and(
     eq(resourcesTable.courseId, courseId),
     eq(resourcesTable.termNumber, termNumber),
-    eq(resourcesTable.teacherClerkUserId, userId),
+    await taughtByCondition(userId),
   )).limit(1);
   return Boolean(resource);
 }
@@ -1114,7 +1136,9 @@ function toResource(row: typeof resourcesTable.$inferSelect) {
     isMandatory: row.isMandatory,
     teacherClerkUserId: row.teacherClerkUserId,
     studentCapacity: row.studentCapacity,
-    teacherName: null,
+    teacherName: null as string | null,
+    coTeacherClerkUserIds: [] as string[],
+    teacherNames: [] as string[],
   };
 }
 
@@ -1188,12 +1212,26 @@ export async function teacherNameMap(ids: string[]) {
 }
 
 export async function resourceViews(rows: Array<typeof resourcesTable.$inferSelect>) {
-  const ids = Array.from(new Set(rows.map((row) => row.teacherClerkUserId).filter((id): id is string => Boolean(id))));
+  const coTeachers = await coTeacherMap();
+  const ids = Array.from(new Set(rows.flatMap((row) => resourceTeacherIds(row, coTeachers))));
   const names = await teacherNameMap(ids);
-  return rows.map((row) => ({
-    ...toResource(row),
-    teacherName: row.teacherClerkUserId ? names.get(row.teacherClerkUserId) ?? null : null,
-  }));
+  return rows.map((row) => {
+    const teacherIds = resourceTeacherIds(row, coTeachers);
+    return {
+      ...toResource(row),
+      // Birgə tədrisdə bütün müəllimlərin adları vergüllə göstərilir.
+      teacherName: joinTeacherNames(teacherIds, names),
+      coTeacherClerkUserIds: teacherIds.slice(1),
+      teacherNames: teacherNameList(teacherIds, names),
+    };
+  });
+}
+
+/** Qrupların bütün müəllim adları (resourceId → «Ad1, Ad2»). */
+export async function resourceTeacherLabels(rows: Array<{ id: number; teacherClerkUserId: string | null }>) {
+  const coTeachers = await coTeacherMap();
+  const names = await teacherNameMap(rows.flatMap((row) => resourceTeacherIds(row, coTeachers)));
+  return new Map(rows.map((row) => [row.id, joinTeacherNames(resourceTeacherIds(row, coTeachers), names)]));
 }
 
 async function validateTeacherAssignment(teacherClerkUserId: unknown) {
@@ -1458,8 +1496,7 @@ export async function buildAcademicProfile(
   const semesterDates = new Map(semesterDateRows.map((item) => [item.termNumber, item]));
   const grades = new Map(gradeRows.map((grade) => [`${grade.termNumber}:${grade.courseId}`, grade]));
   const selections = new Map(selectionRows.map((selection) => [`${selection.termNumber}:${selection.courseId}`, selection.selected]));
-   const teacherIds = Array.from(new Set(resourceRows.map((resource) => resource.teacherClerkUserId).filter((id): id is string => Boolean(id))));
-   const teacherNames = await teacherNameMap(teacherIds);
+   const teacherLabels = await resourceTeacherLabels(resourceRows.filter((resource) => Boolean(resource.teacherClerkUserId)));
   const semesters = Array.from({ length: 8 }, (_, index) => index + 1)
     .filter((termNumber) => activeTerms.includes(termNumber) && termNumber <= visibleThroughTerm)
     .map((termNumber) => {
@@ -1486,7 +1523,7 @@ export async function buildAcademicProfile(
       return {
         courseId: course.id,
         title: course.title,
-         instructor: resource?.teacherClerkUserId ? teacherNames.get(resource.teacherClerkUserId) ?? course.instructor : course.instructor,
+         instructor: resource?.teacherClerkUserId ? teacherLabels.get(resource.id) ?? course.instructor : course.instructor,
         isMandatory,
         grade: calculatedGrade === null || calculatedGrade === undefined ? null : gradePointsToFiveScale(calculatedGrade),
         credits: course.credits,
@@ -2546,7 +2583,7 @@ async function scheduleLessonInputs(
   const courseIds = Array.from(new Set(lessons.map((resource) => resource.courseId)));
   const [courseRows, names, booksResult, catalog] = await Promise.all([
     db.select().from(coursesTable).where(inArray(coursesTable.id, courseIds)),
-    options.teacherName ? Promise.resolve(new Map<string, string | null>()) : teacherNameMap(lessons.map((resource) => resource.teacherClerkUserId ?? "")),
+    resourceTeacherLabels(lessons),
     loadCourseBooksRows(courseIds).catch(() => ({ available: false, rows: [] as Awaited<ReturnType<typeof loadCourseBooksRows>>["rows"] })),
     fullLibraryCatalog().catch(() => []),
   ]);
@@ -2564,7 +2601,7 @@ async function scheduleLessonInputs(
       subject: course?.title?.trim() || resource.title,
       lessonDays: resource.lessonDays,
       lessonTime: resource.lessonTime,
-      teacher: options.teacherName ? options.teacherName(resource) : resource.teacherClerkUserId ? names.get(resource.teacherClerkUserId) ?? null : null,
+      teacher: options.teacherName ? options.teacherName(resource) : names.get(resource.id) ?? null,
       books,
       termLabel: options.termLabels ? termDetails(resource.termNumber).label : null,
     };
@@ -3487,11 +3524,12 @@ router.get("/admin/lesson-attendance", requireTeacher, async (req, res, next) =>
     const viewerId = getAuth(req).userId;
     const viewer = viewerId ? await getClerkUser(viewerId) : null;
     const viewerRole = metadataRole(viewer?.publicMetadata);
+    const coTeachers = await coTeacherMap();
     const visibleEvents = viewerId && (viewerRole === "admin" || await userIsSystemOwner(viewerId, viewer))
       ? allEvents
       : allEvents.filter((event) => {
         const resource = resourceMap.get(event.resourceId);
-        return Boolean(resource && viewerId && resource.teacherClerkUserId === viewerId);
+        return Boolean(resource && viewerId && resourceTeacherIds(resource, coTeachers).includes(viewerId));
       });
     const events = (await Promise.all(visibleEvents.map(async (event) => {
       const resource = resourceMap.get(event.resourceId);
@@ -3533,7 +3571,7 @@ router.patch("/admin/lesson-attendance/:eventId", requireTeacher, async (req, re
     }
     const clerkUserId = getAuth(req).userId;
     const clerkViewer = clerkUserId ? await getClerkUser(clerkUserId) : null;
-    if (resource.teacherClerkUserId && resource.teacherClerkUserId !== clerkUserId &&
+    if (resource.teacherClerkUserId && !await userTeachesResource(clerkUserId, resource) &&
       metadataRole(clerkViewer?.publicMetadata) !== "admin" && !(clerkUserId && await userIsSystemOwner(clerkUserId, clerkViewer))) {
       res.status(403).json({ error: "Bu dərsin davamiyyətini yalnız məsul müəllim idarə edə bilər." }); return;
     }
@@ -3729,8 +3767,8 @@ router.get("/admin/teacher-courses", requireTeacher, async (req, res, next) => {
     const resources = await db.select({ courseId: resourcesTable.courseId })
       .from(resourcesTable)
       .where(termFilter
-        ? and(eq(resourcesTable.teacherClerkUserId, teacherClerkUserId), termFilter)
-        : eq(resourcesTable.teacherClerkUserId, teacherClerkUserId));
+        ? and(await taughtByCondition(teacherClerkUserId), termFilter)
+        : await taughtByCondition(teacherClerkUserId));
     const courseIds = new Set(resources.map((resource) => resource.courseId));
     const courses = await getCourses();
     res.json(courses.filter((course) => courseIds.has(course.id)));
@@ -3793,7 +3831,7 @@ router.patch("/admin/courses/:courseId", requireTeacher, async (req, res, next) 
     if (role !== "owner" && role !== "owner_assistant") {
       const [assignment] = await db.select({ id: resourcesTable.id })
         .from(resourcesTable)
-        .where(and(eq(resourcesTable.courseId, courseId), eq(resourcesTable.teacherClerkUserId, teacherClerkUserId)))
+        .where(and(eq(resourcesTable.courseId, courseId), await taughtByCondition(teacherClerkUserId)))
         .limit(1);
       if (!assignment) {
         res.status(403).json({ error: "Yalnız sizə təyin olunmuş dərsi redaktə edə bilərsiniz." });
@@ -3939,7 +3977,7 @@ router.get("/admin/courses/:courseId", requireTeacher, async (req, res, next) =>
     if (role !== "owner" && role !== "owner_assistant") {
       const [assignment] = await db.select({ id: resourcesTable.id })
         .from(resourcesTable)
-        .where(and(eq(resourcesTable.courseId, courseId), eq(resourcesTable.teacherClerkUserId, teacherClerkUserId)))
+        .where(and(eq(resourcesTable.courseId, courseId), await taughtByCondition(teacherClerkUserId)))
         .limit(1);
       if (!assignment) {
         res.status(403).json({ error: "Yalnız sizə təyin olunmuş dərsi görə bilərsiniz." });
@@ -4205,10 +4243,13 @@ router.get("/admin/resources", requireTeacher, async (_req, res, next) => {
     const actorId = getAuth(_req).userId;
     const actor = actorId ? await getClerkUser(actorId) : null;
     const actorRole = actor ? roleForClerkUser(actor) : "none";
-    const resources = await db.select().from(resourcesTable).orderBy(asc(resourcesTable.id));
+    const [resources, coTeachers] = await Promise.all([
+      db.select().from(resourcesTable).orderBy(asc(resourcesTable.id)),
+      coTeacherMap(),
+    ]);
     const visibleResources = actorRole === "owner" || actorRole === "owner_assistant"
       ? resources
-      : resources.filter((resource) => resource.teacherClerkUserId === actorId);
+      : resources.filter((resource) => resourceTeacherIds(resource, coTeachers).includes(actorId ?? ""));
     res.json(await resourceViews(visibleResources));
   } catch (error) {
     next(error);
@@ -4247,7 +4288,7 @@ router.get("/admin/teacher-schedule", requireTeacher, async (req, res, next) => 
       return;
     }
     const resources = await db.select().from(resourcesTable)
-      .where(and(eq(resourcesTable.termNumber, termNumber), eq(resourcesTable.teacherClerkUserId, teacherClerkUserId)))
+      .where(and(eq(resourcesTable.termNumber, termNumber), await taughtByCondition(teacherClerkUserId)))
       .orderBy(asc(resourcesTable.id));
     res.json(await resourceViews(resources));
   } catch (error) {
@@ -4264,12 +4305,13 @@ router.get("/admin/teacher-schedule.pdf", requireTeacher, async (req, res, next)
       return;
     }
     const resources = await db.select().from(resourcesTable)
-      .where(eq(resourcesTable.teacherClerkUserId, teacherClerkUserId))
+      .where(await taughtByCondition(teacherClerkUserId))
       .orderBy(asc(resourcesTable.termNumber), asc(resourcesTable.id));
     const clerkUser = await getClerkUser(teacherClerkUserId);
     const teacherName = (clerkUser ? clerkDisplayName(clerkUser) : "") || "Müəllim";
     const terms = Array.from(new Set(resources.filter((resource) => resource.lessonDays.length).map((resource) => resource.termNumber))).sort((a, b) => a - b);
-    const days = buildWeeklySchedule(await scheduleLessonInputs(resources, { teacherName: () => teacherName, termLabels: terms.length > 1 }));
+    // Birgə tədris olunan dərslərdə bütün müəllimlərin adı yazılır.
+    const days = buildWeeklySchedule(await scheduleLessonInputs(resources, { termLabels: terms.length > 1 }));
     const pdf = await buildSchedulePdf({
       title: "Həftəlik dərs cədvəli",
       personLabel: "Müəllim",
@@ -4444,6 +4486,32 @@ router.post("/admin/resources", requireTeacher, async (req, res, next) => {
       res.status(400).json({ error: "Yalnız aktiv müəllim hesabı təyin edilə bilər." });
       return;
     }
+    // Birgə tədris: qrup yaradılarkən əlavə müəllimlər (yalnız sahib / idarə heyəti / admin).
+    const requestedCoTeachers = Array.isArray(req.body?.coTeacherClerkUserIds)
+      ? Array.from(new Set((req.body.coTeacherClerkUserIds as unknown[]).filter((id): id is string => typeof id === "string" && Boolean(id.trim())).map((id) => id.trim())))
+        .filter((id) => id !== assignedTeacherId)
+      : [];
+    if (requestedCoTeachers.length) {
+      const isBoardActor = actorRole === "owner" || actorRole === "owner_assistant" || actorRole === "admin" || Boolean(actorId && await userIsSystemOwner(actorId, actor));
+      if (!isBoardActor) {
+        res.status(403).json({ error: "Qrupa əlavə müəllimi yalnız sahib və idarə heyəti təyin edə bilər." });
+        return;
+      }
+      if (requestedCoTeachers.length > 9) {
+        res.status(400).json({ error: "Bir qrupa ən çox 10 müəllim təyin etmək olar." });
+        return;
+      }
+      for (const id of requestedCoTeachers) {
+        if (!await validateTeacherAssignment(id)) {
+          res.status(400).json({ error: "Əlavə müəllimlərin hamısı aktiv müəllim hesabı olmalıdır." });
+          return;
+        }
+      }
+      if (!(await loadCoTeachers()).available) {
+        res.status(503).json({ error: RESOURCE_TEACHERS_TABLE_MISSING_MESSAGE, code: "resource_teachers_table_missing" });
+        return;
+      }
+    }
     const lessonTime = storedLessonTime(input.lessonDays, req.body?.lessonDayTimes, input.lessonTime);
     if (!lessonTime) {
       res.status(400).json({ error: "Hər seçilmiş gün üçün dərs saatı yazın." });
@@ -4463,9 +4531,26 @@ router.post("/admin/resources", requireTeacher, async (req, res, next) => {
       actorClerkUserId: actorId,
       targetType: "resource",
       targetId: resource.id,
-      details: { courseId: resource.courseId, kind: resource.kind },
+      details: { courseId: resource.courseId, kind: resource.kind, teacherClerkUserId: resource.teacherClerkUserId, coTeacherClerkUserIds: requestedCoTeachers },
       deduplicationKey: `resource.created:${resource.id}`,
     });
+    if (actorId && resource && requestedCoTeachers.length) {
+      try {
+        await replaceCoTeachers(resource.id, requestedCoTeachers, actorId);
+        for (const teacherId of requestedCoTeachers) {
+          await recordAuditEvent({
+            eventType: "resource.teacher_added",
+            actorClerkUserId: actorId,
+            targetType: "resource",
+            targetId: resource.id,
+            details: { courseId: resource.courseId, termNumber: resource.termNumber, teacherClerkUserId: teacherId, mainTeacherClerkUserId: resource.teacherClerkUserId },
+            deduplicationKey: `resource.teacher_added:${resource.id}:${teacherId}:${Date.now()}`,
+          });
+        }
+      } catch (error) {
+        req.log.error({ err: error, resourceId: resource.id }, "Co-teacher assignment failed");
+      }
+    }
     if (actorId && resource) {
       const earlierResources = await db.select({ id: resourcesTable.id }).from(resourcesTable).where(and(eq(resourcesTable.courseId, resource.courseId), ne(resourcesTable.id, resource.id))).limit(1);
       if (!earlierResources.length) {
@@ -4498,7 +4583,7 @@ router.patch("/admin/resources/:resourceId", requireTeacher, async (req, res, ne
       res.status(404).json({ error: "Material tapılmadı." });
       return;
     }
-    if (!canManageAnyResource && existingResource.teacherClerkUserId !== actorId) {
+    if (!canManageAnyResource && !await userTeachesResource(actorId, existingResource)) {
       res.status(403).json({ error: "Yalnız sizə təyin olunmuş dərsin materialını redaktə edə bilərsiniz." });
       return;
     }
@@ -4524,7 +4609,7 @@ router.patch("/admin/resources/:resourceId", requireTeacher, async (req, res, ne
       res.status(400).json({ error: "Hər seçilmiş gün üçün dərs saatı yazın." });
       return;
     }
-    if (!canManageAnyResource && teacherClerkUserId !== actorId) {
+    if (!canManageAnyResource && teacherClerkUserId !== existingResource.teacherClerkUserId) {
       res.status(403).json({ error: "Müəllim təyinatını yalnız sahib və idarə heyəti dəyişə bilər." });
       return;
     }
@@ -4581,6 +4666,15 @@ router.patch("/admin/resources/:resourceId", requireTeacher, async (req, res, ne
     })
      .where(eq(resourcesTable.id, resourceId)).returning();
    if (!resource) { res.status(404).json({ error: "Material tapılmadı." }); return; }
+    // Yeni əsas müəllim əvvəl əlavə müəllim idisə, onu əlavə siyahıdan çıxarırıq (təkrar olmasın).
+    if (teacherClerkUserId !== existingResource.teacherClerkUserId) {
+      const currentCo = (await coTeacherMap()).get(resourceId) ?? [];
+      if (currentCo.includes(teacherClerkUserId) && actorId) {
+        await replaceCoTeachers(resourceId, currentCo.filter((id) => id !== teacherClerkUserId), actorId).catch((error: unknown) => {
+          req.log.error({ err: error, resourceId }, "Co-teacher cleanup failed");
+        });
+      }
+    }
     if (actorId) await recordAuditEvent({
       eventType: "resource.updated",
       actorClerkUserId: actorId,
@@ -4590,6 +4684,85 @@ router.patch("/admin/resources/:resourceId", requireTeacher, async (req, res, ne
       deduplicationKey: `resource.updated:${resourceId}:${Date.now()}`,
     });
      res.json((await resourceViews([resource]))[0]);
+  } catch (error) { next(error); }
+});
+
+// Birgə tədris: qrupun müəllimlərini təyin et (əsas + əlavə). Yalnız sahib / idarə heyəti / admin.
+// Body: { teacherClerkUserIds: string[] } — sıra: əsas müəllim siyahıda qalırsa əsas qalır, yoxsa birinci əsas olur.
+router.put("/admin/resources/:resourceId/teachers", requireTeacher, async (req, res, next) => {
+  try {
+    const resourceId = Number(req.params.resourceId);
+    if (!Number.isInteger(resourceId) || resourceId <= 0) { res.status(400).json({ error: "Qrup seçilməyib." }); return; }
+    const actorId = getAuth(req).userId;
+    const actor = actorId ? await getClerkUser(actorId) : null;
+    const actorRole = actor ? roleForClerkUser(actor) : "none";
+    const isBoard = actorRole === "owner" || actorRole === "owner_assistant" || actorRole === "admin" || Boolean(actorId && await userIsSystemOwner(actorId, actor));
+    if (!actorId || !isBoard) {
+      res.status(403).json({ error: "Qrupun müəllimlərini yalnız sahib və idarə heyəti dəyişə bilər." });
+      return;
+    }
+    const [existing] = await db.select().from(resourcesTable).where(eq(resourcesTable.id, resourceId)).limit(1);
+    if (!existing || !existing.teacherClerkUserId) { res.status(404).json({ error: "Müəllim qrupu tapılmadı." }); return; }
+    const requested = Array.isArray(req.body?.teacherClerkUserIds)
+      ? (req.body.teacherClerkUserIds as unknown[]).filter((id): id is string => typeof id === "string")
+      : null;
+    if (!requested) { res.status(400).json({ error: "Müəllim siyahısı göndərilməyib." }); return; }
+    const state = await loadCoTeachers();
+    const currentCo = state.map.get(resourceId) ?? [];
+    const plan = planTeacherSet(existing.teacherClerkUserId, currentCo, requested);
+    if (!plan.ok) { res.status(400).json({ error: plan.error }); return; }
+    if (!state.available && (plan.coTeacherIds.length || currentCo.length)) {
+      res.status(503).json({ error: RESOURCE_TEACHERS_TABLE_MISSING_MESSAGE, code: "resource_teachers_table_missing" });
+      return;
+    }
+    for (const id of plan.added) {
+      if (!await validateTeacherAssignment(id)) {
+        res.status(400).json({ error: "Yalnız aktiv müəllim hesabı təyin edilə bilər." });
+        return;
+      }
+    }
+    try {
+      if (state.available) await replaceCoTeachers(resourceId, plan.coTeacherIds, actorId);
+    } catch (error) {
+      if (isMissingResourceTeachersTable(error)) {
+        res.status(503).json({ error: RESOURCE_TEACHERS_TABLE_MISSING_MESSAGE, code: "resource_teachers_table_missing" });
+        return;
+      }
+      throw error;
+    }
+    if (plan.mainChanged) {
+      await db.update(resourcesTable).set({ teacherClerkUserId: plan.mainTeacherId }).where(eq(resourcesTable.id, resourceId));
+    }
+    const stamp = Date.now();
+    const base = { courseId: existing.courseId, termNumber: existing.termNumber, mainTeacherClerkUserId: plan.mainTeacherId, teacherClerkUserIds: [plan.mainTeacherId, ...plan.coTeacherIds] };
+    for (const teacherId of plan.added) {
+      await recordAuditEvent({
+        eventType: "resource.teacher_added", actorClerkUserId: actorId, targetType: "resource", targetId: resourceId,
+        details: { ...base, teacherClerkUserId: teacherId }, deduplicationKey: `resource.teacher_added:${resourceId}:${teacherId}:${stamp}`,
+      });
+    }
+    for (const teacherId of plan.removed) {
+      await recordAuditEvent({
+        eventType: "resource.teacher_removed", actorClerkUserId: actorId, targetType: "resource", targetId: resourceId,
+        details: { ...base, teacherClerkUserId: teacherId }, deduplicationKey: `resource.teacher_removed:${resourceId}:${teacherId}:${stamp}`,
+      });
+    }
+    if (plan.mainChanged) {
+      await recordAuditEvent({
+        eventType: "resource.main_teacher_changed", actorClerkUserId: actorId, targetType: "resource", targetId: resourceId,
+        details: { ...base, previousMainTeacherClerkUserId: existing.teacherClerkUserId }, deduplicationKey: `resource.main_teacher_changed:${resourceId}:${stamp}`,
+      });
+    }
+    const [updated] = await db.select().from(resourcesTable).where(eq(resourcesTable.id, resourceId)).limit(1);
+    res.json(updated ? (await resourceViews([updated]))[0] : null);
+  } catch (error) { next(error); }
+});
+
+/** Birgə tədris imkanının vəziyyəti (cədvəl yaradılıbmı) — admin interfeysi üçün. */
+router.get("/admin/resource-teachers/status", requireTeacher, async (_req, res, next) => {
+  try {
+    const state = await loadCoTeachers();
+    res.json({ available: state.available, message: state.available ? null : RESOURCE_TEACHERS_TABLE_MISSING_MESSAGE });
   } catch (error) { next(error); }
 });
 
@@ -4668,7 +4841,7 @@ router.delete("/admin/resources/:resourceId", requireTeacher, async (req, res, n
     const isBoard = actorRole === "owner" || actorRole === "owner_assistant" || Boolean(actorId && await userIsSystemOwner(actorId, actor));
     const [existingResource] = await db.select().from(resourcesTable).where(eq(resourcesTable.id, resourceId)).limit(1);
     if (!existingResource) { res.status(404).json({ error: "Material tapılmadı." }); return; }
-    if (!isBoard && existingResource.teacherClerkUserId !== actorId) {
+    if (!isBoard && !await userTeachesResource(actorId, existingResource)) {
       res.status(403).json({ error: "Yalnız sizə təyin olunmuş dərsin materialını silə bilərsiniz." });
       return;
     }
@@ -4726,6 +4899,9 @@ router.delete("/admin/resources/:resourceId", requireTeacher, async (req, res, n
       } else {
         await tx.delete(resourcesTable).where(eq(resourcesTable.id, resourceId));
       }
+    });
+    await deleteCoTeachersForResource(resourceId).catch((error: unknown) => {
+      req.log.error({ err: error, resourceId }, "Co-teacher cleanup after group delete failed");
     });
     if (actorId) await recordAuditEvent({
       eventType: "resource.deleted",
@@ -4816,7 +4992,8 @@ router.post("/admin/assignments", requireTeacher, async (req, res, next) => {
       courseId: input.courseId,
       resourceId: input.resourceId,
       termNumber: input.termNumber,
-      teacherClerkUserId: resource.teacherClerkUserId,
+      // Birgə tədrisdə tapşırığı yaradan müəllimin adı göstərilir.
+      teacherClerkUserId: await userTeachesResource(actorId, resource) ? actorId : resource.teacherClerkUserId,
       title,
       description,
       dueAt: input.dueAt,
@@ -5077,7 +5254,7 @@ router.post("/admin/exams", requireTeacher, async (req, res, next) => {
       courseId: resource?.courseId ?? 0,
       resourceId: resource?.id ?? 0,
       termNumber: resource?.termNumber ?? 1,
-      teacherClerkUserId: resource?.teacherClerkUserId ?? actorId,
+      teacherClerkUserId: resource && await userTeachesResource(actorId, resource) ? actorId : resource?.teacherClerkUserId ?? actorId,
       title: input.title.trim(),
       description: input.description.trim(),
       status: input.status ?? "open",
@@ -5567,11 +5744,11 @@ router.get("/student/teacher-choices", requireApprovedStudent, async (req, res, 
       )).groupBy(studentTeacherChoicesTable.resourceId)
       : [];
     const activeChoiceCountByResource = new Map(activeChoiceCounts.map((row) => [row.resourceId, Number(row.count)]));
-    const teacherNames = new Map((await activeTeachers()).map((teacher) => [teacher.clerkUserId, teacher.displayName]));
+    const teacherLabels = await resourceTeacherLabels(resources.filter((resource) => resource.teacherClerkUserId));
     res.json(resources.filter((resource) => resource.teacherClerkUserId).map((resource) => ({
       resourceId: resource.id, courseId: resource.courseId, termNumber: resource.termNumber,
       courseTitle: courseNames.get(resource.courseId) ?? "Fənn", teacherClerkUserId: resource.teacherClerkUserId,
-      teacherName: teacherNames.get(resource.teacherClerkUserId as string) ?? "Müəllim",
+      teacherName: teacherLabels.get(resource.id) ?? "Müəllim",
       status: choices.find((choice) => choice.resourceId === resource.id)?.status ?? null,
       studentCapacity: resource.studentCapacity,
       activeChoiceCount: activeChoiceCountByResource.get(resource.id) ?? 0,
@@ -5631,13 +5808,13 @@ router.post("/student/teacher-choices", requireApprovedStudent, async (req, res,
       res.status(result.status).json({ error: result.error });
       return;
     }
-    const [activeChoiceCountRow, courseList, teacherList] = await Promise.all([
+    const [activeChoiceCountRow, courseList, teacherLabels] = await Promise.all([
       db.select({ count: sql<number>`count(*)` }).from(studentTeacherChoicesTable).where(and(
         eq(studentTeacherChoicesTable.resourceId, resource.id),
         or(eq(studentTeacherChoicesTable.status, "pending"), eq(studentTeacherChoicesTable.status, "approved")),
       )),
       getCourses(),
-      activeTeachers(),
+      resourceTeacherLabels([resource]),
     ]);
     const activeChoiceCount = Number(activeChoiceCountRow[0]?.count ?? 0);
     res.status(201).json({
@@ -5646,7 +5823,7 @@ router.post("/student/teacher-choices", requireApprovedStudent, async (req, res,
       termNumber: resource.termNumber,
       courseTitle: courseList.find((course) => course.id === resource.courseId)?.title ?? "Fənn",
       teacherClerkUserId: resource.teacherClerkUserId,
-      teacherName: teacherList.find((teacher) => teacher.clerkUserId === resource.teacherClerkUserId)?.displayName ?? "Müəllim",
+      teacherName: teacherLabels.get(resource.id) ?? "Müəllim",
       status: result.created.status,
       studentCapacity: resource.studentCapacity,
       activeChoiceCount,
@@ -5670,7 +5847,7 @@ router.get("/admin/teacher-choices", requireTeacher, async (req, res, next) => {
       : [];
     const activeChoiceCountByResource = new Map(activeChoiceCounts.map((row) => [row.resourceId, Number(row.count)]));
     const resourceMap = new Map(resources.map((resource) => [resource.id, resource]));
-    const teacherNames = new Map((await activeTeachers()).map((teacher) => [teacher.clerkUserId, teacher.displayName]));
+    const teacherLabels = await resourceTeacherLabels(resources.filter((resource) => resource.teacherClerkUserId));
     const profiles = await db.select().from(studentAcademicProfilesTable);
     const applications = await db.select().from(applicationsTable);
     const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
@@ -5680,7 +5857,7 @@ router.get("/admin/teacher-choices", requireTeacher, async (req, res, next) => {
       const profile = profileMap.get(row.profileId);
       const application = profile ? applicationMap.get(profile.applicationId) : undefined;
        const activeChoiceCount = activeChoiceCountByResource.get(resource.id) ?? 0;
-       return { id: row.id, resourceId: row.resourceId, courseId: resource.courseId, termNumber: resource.termNumber, teacherName: teacherNames.get(resource.teacherClerkUserId as string) ?? "Müəllim", studentName: application ? `${application.firstName} ${application.lastName}` : "Tələbə", status: row.status, createdAt: row.createdAt, studentCapacity: resource.studentCapacity, activeChoiceCount, isFull: resource.studentCapacity > 0 && activeChoiceCount >= resource.studentCapacity };
+       return { id: row.id, resourceId: row.resourceId, courseId: resource.courseId, termNumber: resource.termNumber, teacherName: teacherLabels.get(resource.id) ?? "Müəllim", studentName: application ? `${application.firstName} ${application.lastName}` : "Tələbə", status: row.status, createdAt: row.createdAt, studentCapacity: resource.studentCapacity, activeChoiceCount, isFull: resource.studentCapacity > 0 && activeChoiceCount >= resource.studentCapacity };
     }));
   } catch (error) { next(error); }
 });

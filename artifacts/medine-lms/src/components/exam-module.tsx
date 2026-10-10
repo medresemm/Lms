@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CheckCircle2, ChevronRight, ClipboardList, Eye, FilePlus2, Hourglass, Languages, ListChecks, PenLine, Pencil, Plus, Power, RefreshCw, Send, Trash2, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { teachesResource } from '@/lib/co-teachers';
 import type { AdminExam, AdminExamQuestionsItem, AdminExamSubmission, Exam, ExamResult, LearningResource } from '@workspace/api-client-react';
 import {
   getGetAdminExamsQueryKey,
@@ -167,7 +168,7 @@ function ExamQuestionEditor({ questions, language, onChange }: { questions: Ques
 function ExamForm({ resources, teacherClerkUserId, editing, defaultOnboarding = false, onCancel, onSaved }: { resources: LearningResource[]; teacherClerkUserId?: string; editing: AdminExam | null; defaultOnboarding?: boolean; onCancel: () => void; onSaved: () => void }) {
   const createMutation = useCreateExam();
   const updateMutation = useUpdateExam();
-  const availableResources = teacherClerkUserId ? resources.filter((resource) => resource.teacherClerkUserId === teacherClerkUserId) : resources;
+  const availableResources = teacherClerkUserId ? resources.filter((resource) => teachesResource(resource, teacherClerkUserId)) : resources;
   const [isOnboarding] = useState(editing?.isOnboarding ?? defaultOnboarding);
   const [resourceId, setResourceId] = useState(String(isOnboarding ? '' : editing?.resourceId ?? availableResources[0]?.id ?? ''));
   const [title, setTitle] = useState(editing?.title ?? '');

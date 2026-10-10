@@ -1791,6 +1791,11 @@ function DailyBenefitList({ benefits }: { benefits: DailyBenefit[] }) {
 }
 
 function SchedulePrepSection({ onOpenStudents, onOpenTeachers }: { onOpenStudents?: () => void; onOpenTeachers?: () => void }) {
+  const { t: tr } = useI18n();
+  const dayName = (day: string) => {
+    const key = { monday: 'dayMon', tuesday: 'dayTue', wednesday: 'dayWed', thursday: 'dayThu', friday: 'dayFri', saturday: 'daySat', sunday: 'daySun' }[day];
+    return key ? tr(key as 'dayMon') : day;
+  };
   const coursesQuery = useGetCourses();
   const resourcesQuery = useGetAdminResources();
   const queryClient = useQueryClient();
@@ -1959,86 +1964,87 @@ function SchedulePrepSection({ onOpenStudents, onOpenTeachers }: { onOpenStudent
   return (
     <section className="space-y-5" data-testid="section-schedule-prep">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Tədris quruluşu · 1-ci addım</p>
-        <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Cədvəl hazırlama</h3>
+        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{tr('scheduleStep')}</p>
+        <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{tr('tileSchedulePrep')}</h3>
         <div className="mt-2"><SetupSteps active={1} onOpenStudents={onOpenStudents} onOpenTeachers={onOpenTeachers} /></div>
-        <p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Əvvəlcə hər semestr üçün dərsləri hazırlayın: adı, həftənin günləri və saatı, dərs sayı, növü, PDF, mövzular və Kitabxanadan kitablar. Sonra «Qruplar» bölməsində hər dərs üçün qrup yaradıb tələbələri əlavə edin (2) və müəllim təyin edin (3).</p>
+        <p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{tr('schedulePrepHint')}</p>
       </div>
       <form onSubmit={save} className="space-y-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-4" data-testid="form-schedule-prep">
-        {editingId !== null && <p className="text-xs font-black text-[hsl(var(--secondary-foreground))]" data-testid="text-schedule-prep-editing">Dərs redaktə olunur</p>}
+        {editingId !== null && <p className="text-xs font-black text-[hsl(var(--secondary-foreground))]" data-testid="text-schedule-prep-editing">{tr('editingLesson')}</p>}
         <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
-          <Field label="Semestr">
+          <Field label={tr('semester')}>
             <select className={inputClass} value={termNumber} onChange={(event) => { setTermNumber(Number(event.target.value)); reset(); }} disabled={editingId !== null} data-testid="select-schedule-prep-term">
-              {Array.from({ length: 8 }, (_, index) => index + 1).map((term) => <option key={term} value={term}>{term}-{termSuffixes[term] ?? 'ci'} semestr</option>)}
+              {Array.from({ length: 8 }, (_, index) => index + 1).map((term) => <option key={term} value={term}>{term}. {tr('termLabel')}</option>)}
             </select>
           </Field>
-          <Field label="Dərsin adı">
-            <input required className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Dərsin adını yazın" data-testid="input-schedule-prep-title" />
+          <Field label={tr('lessonName')}>
+            <input required className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={tr('lessonNamePh')} data-testid="input-schedule-prep-title" />
           </Field>
         </div>
-        <Field label="Həftənin dərs günləri və saatı" hint={editingId !== null ? 'Dəyişsəniz, bu dərsin bütün qruplarına tətbiq olunur.' : 'İstəyə bağlıdır; sonra da əlavə etmək olar. Hər günün saatı ayrı yazılır.'}>
+        <Field label={tr('weekDaysTimes')} hint={editingId !== null ? tr('weekDaysEditHint') : tr('weekDaysHint')}>
           <div className="grid gap-1.5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 sm:grid-cols-2" data-testid="schedule-prep-days">
-            {lessonDayOptions.map(([value, label]) => {
+            {lessonDayOptions.map(([value]) => {
               const selected = lessonDays.includes(value);
+              const label = dayName(value);
               return (
                 <div key={value} className="flex min-h-10 flex-wrap items-center gap-2">
                   <label className="flex min-w-36 items-center gap-2 text-xs font-semibold text-[hsl(var(--primary))]">
                     <input type="checkbox" checked={selected} onChange={(event) => setLessonDays((current) => event.target.checked ? [...current, value] : current.filter((day) => day !== value))} data-testid={`checkbox-schedule-prep-day-${value}`} />
                     {label}
                   </label>
-                  {selected && <input required type="time" className={`${inputClass} max-w-36 py-2`} value={dayTimes[value] ?? ''} onChange={(event) => setDayTimes((current) => ({ ...current, [value]: event.target.value }))} aria-label={`${label} saatı`} data-testid={`input-schedule-prep-time-${value}`} />}
+                  {selected && <input required type="time" className={`${inputClass} max-w-36 py-2`} value={dayTimes[value] ?? ''} onChange={(event) => setDayTimes((current) => ({ ...current, [value]: event.target.value }))} aria-label={label} data-testid={`input-schedule-prep-time-${value}`} />}
                 </div>
               );
             })}
           </div>
         </Field>
         <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Dərs sayı" hint="0 və ya daha böyük tam ədəd">
+          <Field label={tr('lessonTotal')} hint={tr('lessonCountHint')}>
             <input type="number" min={0} step={1} className={inputClass} value={totalLessons} onChange={(event) => setTotalLessons(Math.max(0, Math.trunc(Number(event.target.value) || 0)))} data-testid="input-schedule-prep-total-lessons" />
           </Field>
-          <Field label="Dərsin növü" hint="İxtiyari dərsi tələbə özü cədvəlindən çıxara bilər.">
+          <Field label={tr('lessonKind')} hint={tr('lessonKindHint')}>
             <select className={inputClass} value={isMandatory ? 'mandatory' : 'optional'} onChange={(event) => setIsMandatory(event.target.value === 'mandatory')} data-testid="select-schedule-prep-requirement">
-              <option value="mandatory">İcbari dərs</option>
-              <option value="optional">İxtiyari dərs</option>
+              <option value="mandatory">{tr('mandatoryLesson')}</option>
+              <option value="optional">{tr('optionalLesson')}</option>
             </select>
           </Field>
-          <Field label="PDF linki" hint="İstəyə bağlıdır.">
+          <Field label={tr('pdfLink')} hint={tr('optionalField')}>
             <input type="url" inputMode="url" className={inputClass} value={pdfUrl} onChange={(event) => setPdfUrl(event.target.value)} placeholder="https://" disabled={!detailsReady} data-testid="input-schedule-prep-pdf-url" />
           </Field>
         </div>
-        <Field label="Mövzular" hint="İstəyə bağlıdır. Hər mövzunu yeni sətirdə yazın; tələbələr dərsin səhifəsində görür.">
-          <textarea rows={4} className={`${inputClass} resize-y`} value={topics} onChange={(event) => setTopics(event.target.value)} placeholder={'Məsələn:\nTəcvidə giriş\nMəxrəclər'} disabled={!detailsReady} data-testid="textarea-schedule-prep-topics" />
+        <Field label={tr('topics')} hint={tr('topicsHint')}>
+          <textarea rows={4} className={`${inputClass} resize-y`} value={topics} onChange={(event) => setTopics(event.target.value)} disabled={!detailsReady} data-testid="textarea-schedule-prep-topics" />
         </Field>
-        <Field label="Dərs kitabları (Kitabxanadan)" hint="İstəyə bağlıdır. Bir neçə kitab seçə, hər kitab üçün mündəricatdan bab və ya səhifə aralığı göstərə bilərsiniz.">
+        <Field label={tr('courseBooksLabel')} hint={tr('courseBooksHint')}>
           <div className="space-y-2" data-testid="schedule-prep-books">
             {!booksAvailable
-              ? <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900" data-testid="text-schedule-prep-books-unavailable">{catalog.error || courseBooks.message || 'Dərs kitabları hələ aktiv deyil.'}</p>
+              ? <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900" data-testid="text-schedule-prep-books-unavailable">{catalog.error || courseBooks.message || tr('booksUnavailable')}</p>
               : booksLoading || !bookDraftsReady
-                ? <p className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]"><RefreshCw size={13} className="animate-spin" /> Kitabxana yüklənir…</p>
+                ? <p className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]"><RefreshCw size={13} className="animate-spin" /> {tr('libraryLoading')}</p>
                 : <>
-                    {bookDrafts.length === 0 && <p className="text-xs text-[hsl(var(--muted-foreground))]">Kitab seçilməyib.</p>}
+                    {bookDrafts.length === 0 && <p className="text-xs text-[hsl(var(--muted-foreground))]">{tr('noBookSelected')}</p>}
                     <CourseBookDraftsFields drafts={bookDrafts} onChange={setBookDrafts} books={libraryBooks} courseTitle={title} testIdPrefix="schedule-prep-book" />
                   </>}
           </div>
         </Field>
         <div className="flex flex-wrap justify-end gap-2">
-          {editingId !== null && <button type="button" onClick={reset} className="focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-[hsl(var(--muted-foreground))]">Ləğv et</button>}
-          <button type="submit" className={buttonClass} disabled={isSaving} data-testid="button-save-schedule-prep">{isSaving ? 'Yadda saxlanılır...' : editingId === null ? 'Dərs əlavə et' : 'Dəyişiklikləri saxla'}</button>
+          {editingId !== null && <button type="button" onClick={reset} className="focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-[hsl(var(--muted-foreground))]">{tr('cancel')}</button>}
+          <button type="submit" className={buttonClass} disabled={isSaving} data-testid="button-save-schedule-prep">{isSaving ? tr('saving') : editingId === null ? tr('addLesson') : tr('saveChanges')}</button>
         </div>
       </form>
       {notice && <FormNotice text={notice} error={notice.includes('bil') || notice.includes('mütləq') || notice.includes('silinmə') || notice.includes('artıq var') || notice.includes('bağlıdır') || notice.includes('saxlanılmadı') || notice.includes('aktiv deyil') || notice.includes('tapılmadı') || notice.includes('düzgün deyil')} />}
       <div className="space-y-2" data-testid="list-schedule-prep">
-        {resourcesQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Siyahı yüklənir...</p> : lessons.length ? lessons.map((lesson) => {
+        {resourcesQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{tr('listLoading')}</p> : lessons.length ? lessons.map((lesson) => {
           const courseTitle = coursesQuery.data?.find((course) => course.id === lesson.courseId)?.title ?? lesson.title;
           const bookCount = bookCountFor(lesson.courseId);
           return (
             <div key={lesson.courseId} className={`rounded-xl border bg-[hsl(var(--card))] px-4 py-3 ${editingId === lesson.id ? 'border-[hsl(var(--primary))]' : 'border-[hsl(var(--border))]'}`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm font-bold text-[hsl(var(--primary))]">{courseTitle}<span className="ml-2 text-[11px] font-semibold text-[hsl(var(--muted-foreground))]">{(() => { const rows = (resourcesQuery.data ?? []).filter((resource) => resource.courseId === lesson.courseId && resource.termNumber === termNumber); const source = rows.find((resource) => !resource.teacherClerkUserId) ?? rows[0]; return source?.lessonDays.length ? source.lessonDays.map((day) => `${lessonDayOptions.find(([value]) => value === day)?.[1] ?? day} ${parseDayTimes(source.lessonTime, [day])[day] || ''}`.trim()).join(', ') : 'gün/saat yoxdur'; })()}</span>{bookCount > 0 && <span className="ml-2 rounded-full bg-[hsl(var(--secondary)/.45)] px-2 py-0.5 text-[10px] font-bold text-[hsl(var(--secondary-foreground))]">{bookCount} kitab</span>}</p>
+                <p className="text-sm font-bold text-[hsl(var(--primary))]">{courseTitle}<span className="ml-2 text-[11px] font-semibold text-[hsl(var(--muted-foreground))]">{(() => { const rows = (resourcesQuery.data ?? []).filter((resource) => resource.courseId === lesson.courseId && resource.termNumber === termNumber); const source = rows.find((resource) => !resource.teacherClerkUserId) ?? rows[0]; return source?.lessonDays.length ? source.lessonDays.map((day) => `${dayName(day)} ${parseDayTimes(source.lessonTime, [day])[day] || ''}`.trim()).join(', ') : tr('noDayTime'); })()}</span>{bookCount > 0 && <span className="ms-2 rounded-full bg-[hsl(var(--secondary)/.45)] px-2 py-0.5 text-[10px] font-bold text-[hsl(var(--secondary-foreground))]">{bookCount} {tr('bookWord')}</span>}</p>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" className={`focus-ring inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--secondary-foreground))] hover:bg-[hsl(var(--muted))] ${booksCourseId === lesson.courseId ? 'bg-[hsl(var(--muted))]' : ''}`} onClick={() => { if (booksCourseId === lesson.courseId) void courseBooks.reload(); setBooksCourseId((current) => current === lesson.courseId ? null : lesson.courseId); }} aria-expanded={booksCourseId === lesson.courseId} data-testid={`button-schedule-prep-books-${lesson.courseId}`}><BookMarked size={14} /> Kitablar</button>
-                  <button type="button" className="focus-ring rounded-lg px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" onClick={() => startEdit(lesson, courseTitle)} data-testid={`button-schedule-prep-edit-${lesson.courseId}`}>Redaktə et</button>
-                  <button type="button" className="focus-ring rounded-lg px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--muted))]" onClick={() => void remove(lesson.id)}>Sil</button>
+                  <button type="button" className={`focus-ring inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--secondary-foreground))] hover:bg-[hsl(var(--muted))] ${booksCourseId === lesson.courseId ? 'bg-[hsl(var(--muted))]' : ''}`} onClick={() => { if (booksCourseId === lesson.courseId) void courseBooks.reload(); setBooksCourseId((current) => current === lesson.courseId ? null : lesson.courseId); }} aria-expanded={booksCourseId === lesson.courseId} data-testid={`button-schedule-prep-books-${lesson.courseId}`}><BookMarked size={14} /> {tr('books')}</button>
+                  <button type="button" className="focus-ring rounded-lg px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" onClick={() => startEdit(lesson, courseTitle)} data-testid={`button-schedule-prep-edit-${lesson.courseId}`}>{tr('edit')}</button>
+                  <button type="button" className="focus-ring rounded-lg px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--muted))]" onClick={() => void remove(lesson.id)}>{tr('delete')}</button>
                 </div>
               </div>
               {booksCourseId === lesson.courseId && (

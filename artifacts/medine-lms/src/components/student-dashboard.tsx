@@ -755,6 +755,7 @@ function SemesterResources({ resources, isLoading, courseNames }: { resources: L
 }
 
 function PasswordChangeCard() {
+  const { t } = useI18n();
   const { user, isLoaded } = useUser();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -771,21 +772,21 @@ function PasswordChangeCard() {
       await user.updatePassword({ currentPassword, newPassword, signOutOfOtherSessions: false });
       setCurrentPassword('');
       setNewPassword('');
-      setNotice('Şifrəniz uğurla yeniləndi. Cari sessiyanız açıq qalır.');
+      setNotice(t('passwordUpdated'));
     } catch {
       setIsError(true);
-      setNotice('Şifrə yenilənmədi. Mövcud şifrəni və yeni şifrə qaydalarını yoxlayın.');
+      setNotice(t('passwordFailed'));
     } finally {
       setIsSubmitting(false);
     }
   };
   return (
     <section className="mt-6 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)]" data-testid="section-password-change">
-      <div className="flex items-start gap-3"><div className="rounded-xl bg-[hsl(var(--accent)/.3)] p-2.5 text-[hsl(var(--primary))]"><Settings2 size={18} /></div><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">Hesab təhlükəsizliyi</p><h3 className="mt-1 font-serif text-xl text-[hsl(var(--primary))]">Şifrəni dəyiş</h3><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Yeni şifrəniz yalnız Clerk tərəfindən təhlükəsiz şəkildə emal olunur.</p></div></div>
+      <div className="flex items-start gap-3"><div className="rounded-xl bg-[hsl(var(--accent)/.3)] p-2.5 text-[hsl(var(--primary))]"><Settings2 size={18} /></div><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{t('accountSecurity')}</p><h3 className="mt-1 font-serif text-xl text-[hsl(var(--primary))]">{t('changePassword')}</h3><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('passwordSecurityHint')}</p></div></div>
       <form onSubmit={submit} className="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
-        <label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Mövcud şifrə</span><input required type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" data-testid="input-current-password" /></label>
-        <label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Yeni şifrə</span><input required minLength={8} type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" data-testid="input-new-password" /></label>
-        <button type="submit" disabled={!isLoaded || isSubmitting} className="focus-ring rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" data-testid="button-change-password">{isSubmitting ? 'Yenilənir...' : 'Yenilə'}</button>
+        <label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('currentPassword')}</span><input required type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" data-testid="input-current-password" /></label>
+        <label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('newPassword')}</span><input required minLength={8} type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" data-testid="input-new-password" /></label>
+        <button type="submit" disabled={!isLoaded || isSubmitting} className="focus-ring rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" data-testid="button-change-password">{isSubmitting ? t('updating') : t('refresh')}</button>
       </form>
       {notice && <p className={`mt-4 rounded-xl px-3.5 py-3 text-xs font-semibold ${isError ? 'bg-[hsl(var(--destructive)/.08)] text-[hsl(var(--destructive))]' : 'bg-[hsl(var(--secondary)/.45)] text-[hsl(var(--secondary-foreground))]'}`} role="status">{notice}</p>}
     </section>
@@ -798,6 +799,7 @@ type OwnProfile = {
 };
 
 function OwnProfileCard({ onClose }: { onClose: () => void }) {
+  const { t } = useI18n();
   const [profile, setProfile] = useState<OwnProfile | null>(null);
   const [form, setForm] = useState<OwnProfile>({ firstName: '', lastName: '', username: null, email: '', phone: '', birthDate: '', arabicLevel: 'Orta' });
   const [isLoading, setIsLoading] = useState(true);
@@ -825,15 +827,15 @@ function OwnProfileCard({ onClose }: { onClose: () => void }) {
     finally { setIsSaving(false); }
   };
   return <section className="mt-6 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)]" data-testid="section-own-profile-edit">
-    <div className="flex items-start justify-between gap-3"><div className="flex items-start gap-3"><div className="rounded-xl bg-[hsl(var(--accent)/.3)] p-2.5 text-[hsl(var(--primary))]"><Settings2 size={18} /></div><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">Mənim hesabım</p><h3 className="mt-1 font-serif text-xl text-[hsl(var(--primary))]">Məlumatlarımı düzəlt</h3><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Ad, əlaqə və müraciət məlumatlarınızı yeniləyə bilərsiniz.</p></div></div><button type="button" onClick={onClose} className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" data-testid="button-close-profile-edit">Bağla</button></div>
+    <div className="flex items-start justify-between gap-3"><div className="flex items-start gap-3"><div className="rounded-xl bg-[hsl(var(--accent)/.3)] p-2.5 text-[hsl(var(--primary))]"><Settings2 size={18} /></div><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{t('myAccount')}</p><h3 className="mt-1 font-serif text-xl text-[hsl(var(--primary))]">{t('editProfile')}</h3><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('profileHint')}</p></div></div><button type="button" onClick={onClose} className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" data-testid="button-close-profile-edit">{t('close')}</button></div>
     {isLoading ? <div className="mt-5 h-24 animate-pulse rounded-xl bg-[hsl(var(--muted))]" /> : profile && <form onSubmit={(event) => void submit(event)} className="mt-5 grid gap-4 sm:grid-cols-2">
-      <label><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Ad</span><input required className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} /></label>
-      <label><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Soyad</span><input required className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} /></label>
-      <label><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">E-poçt</span><input required type="email" readOnly title="E-poçt ünvanı buradan dəyişdirilə bilməz." className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.45)] px-3.5 py-3 text-sm outline-none" value={form.email} /></label>
-      <label><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Telefon</span><input required placeholder="+994501234567" className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
-      <label><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Doğum tarixi</span><input required type="date" className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} /></label>
-      <label><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Ərəb dili səviyyəsi</span><select required className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" value={form.arabicLevel} onChange={(event) => setForm({ ...form, arabicLevel: event.target.value as OwnProfile['arabicLevel'] })}><option>Zəif</option><option>Orta</option><option>Yaxşı</option><option>Əla</option></select></label>
-      <div className="flex items-end"><button type="submit" disabled={isSaving} className="focus-ring rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50">{isSaving ? 'Yadda saxlanılır...' : 'Dəyişiklikləri yadda saxla'}</button></div>
+      <label><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('firstName')}</span><input required className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} /></label>
+      <label><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('lastName')}</span><input required className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} /></label>
+      <label><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('email')}</span><input required type="email" readOnly title={t('emailLocked')} className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.45)] px-3.5 py-3 text-sm outline-none" value={form.email} /></label>
+      <label><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('phone')}</span><input required placeholder="+994501234567" className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
+      <label><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('birthDate')}</span><input required type="date" className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} /></label>
+      <label><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('arabicLevel')}</span><select required className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" value={form.arabicLevel} onChange={(event) => setForm({ ...form, arabicLevel: event.target.value as OwnProfile['arabicLevel'] })}><option value="Zəif">{t('levelWeak')}</option><option value="Orta">{t('levelMid')}</option><option value="Yaxşı">{t('levelGood')}</option><option value="Əla">{t('levelExcellent')}</option></select></label>
+      <div className="flex items-end"><button type="submit" disabled={isSaving} className="focus-ring rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50">{isSaving ? t('saving') : t('saveProfile')}</button></div>
     </form>}
     {notice && <p className={`mt-4 rounded-xl px-3.5 py-3 text-xs font-semibold ${isError ? 'bg-[hsl(var(--destructive)/.08)] text-[hsl(var(--destructive))]' : 'bg-[hsl(var(--secondary)/.45)] text-[hsl(var(--secondary-foreground))]'}`} role="status">{notice}</p>}
   </section>;

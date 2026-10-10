@@ -29,7 +29,7 @@ export type LibraryBook = {
 
 export type LibraryUploadsInfo =
   | { available: true; maxPdfBytes: number; maxPages: number; subjects: string[] }
-  | { available: false; reason: 'table' | 'storage' | 'error'; message: string; maxPdfBytes: number; maxPages: number; subjects: string[] };
+  | { available: false; reason: 'table' | 'storage' | 'error'; message: string; detail?: string | null; maxPdfBytes: number; maxPages: number; subjects: string[] };
 
 type CatalogState = { books: LibraryBook[]; token: string; expiresAt: number; canManage: boolean; uploads: LibraryUploadsInfo | null };
 

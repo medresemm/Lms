@@ -129,6 +129,7 @@ function UploadsNotice({ uploads }: { uploads: LibraryUploadsInfo }) {
   return (
     <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900" data-testid="library-uploads-unavailable">
       {uploads.message}
+      {uploads.detail && <span className="mt-1 block opacity-80" data-testid="library-uploads-unavailable-detail">Yoxlama: {uploads.detail}</span>}
     </div>
   );
 }

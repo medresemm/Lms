@@ -57,6 +57,8 @@ import {
 import { logger } from "../lib/logger.js";
 import { requireApprovedStudentOrTeacher, requireLibraryManager, userCanEditCourseBooks, userCanManageLibrary } from "./lms.js";
 
+import { describeTableDiagnostics, libraryTablesDiagnostics } from "../lib/library/tableDiagnostics.js";
+
 const router: IRouter = Router();
 
 const noStore: RequestHandler = (_req, res, next) => {
@@ -298,10 +300,18 @@ router.get("/library/course-books", noStore, requireApprovedStudentOrTeacher, as
       fullLibraryCatalog(),
     ]);
     const userId = getAuth(req).userId as string;
+    const canManageAll = await userCanManageLibrary(userId).catch(() => false);
+    let detail: string | null = null;
+    if (!available && canManageAll) {
+      detail = await libraryTablesDiagnostics()
+        .then((diag) => describeTableDiagnostics(diag, "lms_course_books"))
+        .catch(() => null);
+    }
     res.json({
       available,
       message: available ? null : COURSE_BOOKS_TABLE_MISSING_MESSAGE,
-      canManageAll: await userCanManageLibrary(userId).catch(() => false),
+      detail,
+      canManageAll,
       items: rows.map((row) => ({ courseId: row.courseId, termNumber: row.termNumber, books: resolveCourseBooks(row.books, catalog) })),
     });
   } catch (error) {

@@ -6,7 +6,9 @@ import { libraryStorageConfigured, s3LibraryStore, type LibraryObjectStore } fro
 import { findAssetPath } from "../assets.js";
 import { LIBRARY_BOOKS, type LibraryBook } from "./catalog.js";
 import { registerLibraryTexts, registeredLibraryTextVersion } from "./search.js";
+import { describeTableDiagnostics, libraryTablesDiagnostics } from "./tableDiagnostics.js";
 import {
+  describeDbError,
   isMissingTableError,
   parseUploadedText,
   uploadKeys,
@@ -17,7 +19,7 @@ import {
 
 export type UploadsStatus =
   | { available: true }
-  | { available: false; reason: "table" | "storage" | "error"; message: string };
+  | { available: false; reason: "table" | "storage" | "error"; message: string; detail?: string | null };
 
 export const UPLOADS_TABLE_MISSING_MESSAGE =
   "Kitab yükləmə hələ aktiv deyil: verilənlər bazasında «lms_library_books» cədvəli yaradılmayıb. Sahib bazanın ehtiyat nüsxəsini aldıqdan sonra cədvəli yaratmalıdır.";
@@ -34,8 +36,11 @@ export function builtinCatalog(): CatalogBook[] {
   });
 }
 
-let cache: { at: number; books: CatalogBook[]; status: UploadsStatus } | null = null;
+let cache: { at: number; ttl: number; books: CatalogBook[]; status: UploadsStatus } | null = null;
+/** Cədvəl mövcud olanda 30 san. keş; «yoxdur» və ya xəta nəticəsi yalnız qısa müddət saxlanılır ki,
+ *  sahib cədvəli yaradan kimi isti (warm) serverless instansiyalar da dərhal görsün. */
 const CACHE_MS = 30_000;
+const MISSING_CACHE_MS = 5_000;
 
 export function invalidateUploadedBooks() {
   cache = null;
@@ -45,10 +50,20 @@ export function libraryStore(): LibraryObjectStore | null {
   return libraryStorageConfigured() ? s3LibraryStore : null;
 }
 
-/** Yüklənmiş kitablar (30 san. keş). Xəta olsa daxili kataloqa təsir etmir. */
+async function tableMissingDetail(): Promise<string | null> {
+  try {
+    return describeTableDiagnostics(await libraryTablesDiagnostics(), "lms_library_books");
+  } catch (error) {
+    console.error("[library] cədvəl diaqnostikası alınmadı:", describeDbError(error));
+    return null;
+  }
+}
+
+/** Yüklənmiş kitablar (keşlə). Xəta olsa daxili kataloqa təsir etmir. */
 export async function loadUploadedBooks(force = false): Promise<{ books: CatalogBook[]; status: UploadsStatus }> {
-  if (!force && cache && Date.now() - cache.at < CACHE_MS) return cache;
+  if (!force && cache && Date.now() - cache.at < cache.ttl) return { books: cache.books, status: cache.status };
   let result: { books: CatalogBook[]; status: UploadsStatus };
+  let ttl = CACHE_MS;
   try {
     const rows = await db.select().from(libraryBooksTable).orderBy(desc(libraryBooksTable.createdAt));
     const books = rows.map((row) => uploadedRowToBook(row as UploadedBookRow));
@@ -56,16 +71,17 @@ export async function loadUploadedBooks(force = false): Promise<{ books: Catalog
       ? { books, status: { available: true } }
       : { books: [], status: { available: false, reason: "storage", message: UPLOADS_STORAGE_MISSING_MESSAGE } };
   } catch (error) {
-    result = isMissingTableError(error)
-      ? { books: [], status: { available: false, reason: "table", message: UPLOADS_TABLE_MISSING_MESSAGE } }
-      : { books: [], status: { available: false, reason: "error", message: "Yüklənmiş kitablar hazırda oxunmadı. Bir az sonra yenidən cəhd edin." } };
-    // Müvəqqəti xətanı uzun müddət keşləməyək.
-    if (result.status.available === false && result.status.reason === "error") {
-      cache = { ...result, at: Date.now() - CACHE_MS + 5_000 };
-      return result;
+    ttl = MISSING_CACHE_MS;
+    if (isMissingTableError(error, "lms_library_books")) {
+      const detail = await tableMissingDetail();
+      console.warn("[library] lms_library_books oxunmadı (42P01):", describeDbError(error), detail ?? "");
+      result = { books: [], status: { available: false, reason: "table", message: UPLOADS_TABLE_MISSING_MESSAGE, detail } };
+    } else {
+      console.error("[library] lms_library_books oxunarkən xəta:", describeDbError(error));
+      result = { books: [], status: { available: false, reason: "error", message: "Yüklənmiş kitablar hazırda oxunmadı. Bir az sonra yenidən cəhd edin." } };
     }
   }
-  cache = { ...result, at: Date.now() };
+  cache = { ...result, at: Date.now(), ttl };
   return result;
 }
 

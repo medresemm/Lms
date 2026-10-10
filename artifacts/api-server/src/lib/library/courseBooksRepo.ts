@@ -5,20 +5,13 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { LibraryBook } from "./catalog.js";
 import type { CourseBookEntry, CourseBooksRow } from "./courseBooks.js";
 import { builtinCatalog, loadUploadedBooks } from "./uploadedBooks.js";
-import { isMissingTableError } from "./uploads.js";
+import { describeDbError, isMissingTableError } from "./uploads.js";
 
 export const COURSE_BOOKS_TABLE_MISSING_MESSAGE =
   "Dərs kitabları hələ aktiv deyil: verilənlər bazasında «lms_course_books» cədvəli yaradılmayıb. Sahib bazanın ehtiyat nüsxəsini aldıqdan sonra cədvəli yaratmalıdır.";
 
 export function isMissingCourseBooksTable(error: unknown) {
-  if (isMissingTableError(error)) return true;
-  let current: unknown = error;
-  for (let depth = 0; current && depth < 5; depth += 1) {
-    const message = (current as { message?: unknown }).message;
-    if (typeof message === "string" && /lms_course_books/.test(message) && /does not exist/.test(message)) return true;
-    current = (current as { cause?: unknown }).cause;
-  }
-  return false;
+  return isMissingTableError(error, "lms_course_books");
 }
 
 /** Bütün kitablar (daxili + yüklənmiş) — dərs kitablarının yoxlanması və göstərilməsi üçün. */
@@ -36,7 +29,11 @@ export async function loadCourseBooksRows(courseIds?: number[]): Promise<{ avail
       rows: rows.map((row) => ({ courseId: row.courseId, termNumber: row.termNumber, books: Array.isArray(row.books) ? row.books as CourseBookEntry[] : [] })),
     };
   } catch (error) {
-    if (isMissingCourseBooksTable(error)) return { available: false, rows: [] };
+    if (isMissingCourseBooksTable(error)) {
+      console.warn("[library] lms_course_books oxunmadı (42P01):", describeDbError(error));
+      return { available: false, rows: [] };
+    }
+    console.error("[library] lms_course_books oxunarkən xəta:", describeDbError(error));
     throw error;
   }
 }

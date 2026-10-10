@@ -18,7 +18,7 @@ export type CourseBooksItem = { courseId: number; termNumber: number; books: Cou
 const siteBase = import.meta.env.BASE_URL.replace(/\/$/, '');
 export const MAX_BOOKS_PER_LESSON = 8;
 
-type State = { available: boolean; message: string | null; items: CourseBooksItem[] };
+type State = { available: boolean; message: string | null; detail?: string | null; items: CourseBooksItem[] };
 
 export function useCourseBooks(courseId?: number | null) {
   const { getToken } = useAuth();
@@ -35,7 +35,7 @@ export function useCourseBooks(courseId?: number | null) {
       const response = await fetch(`${siteBase}/api/library/course-books${query}`, { headers: token ? { authorization: `Bearer ${token}` } : {}, cache: 'no-store' });
       const data = await response.json().catch(() => null) as (Partial<State> & { error?: string }) | null;
       if (!response.ok || !data || !Array.isArray(data.items)) throw new Error(data?.error || 'Dərs kitablarını yükləmək mümkün olmadı.');
-      setState({ available: data.available !== false, message: data.message ?? null, items: data.items });
+      setState({ available: data.available !== false, message: data.message ?? null, detail: data.detail ?? null, items: data.items });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Dərs kitablarını yükləmək mümkün olmadı.');
     } finally {
@@ -50,7 +50,7 @@ export function useCourseBooks(courseId?: number | null) {
     return rows.sort((a, b) => a.termNumber - b.termNumber);
   }, [state]);
 
-  return { available: state?.available ?? true, message: state?.message ?? null, items: state?.items ?? [], booksFor, error, loading, reload: load };
+  return { available: state?.available ?? true, message: state?.message ?? null, detail: state?.detail ?? null, items: state?.items ?? [], booksFor, error, loading, reload: load };
 }
 
 export async function saveCourseBooksApi(getToken: () => Promise<string | null>, courseId: number, termNumber: number, books: CourseBookEntry[]) {

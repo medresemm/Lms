@@ -16,7 +16,7 @@
     "test:research": "tsx --test src/lib/ai/research.test.ts",
     "test:ai-modes": "tsx --test src/lib/ai/adminRouting.test.ts",
     "test:ai-student-external": "tsx --test src/lib/ai/studentExternal.test.ts",
-    "test:library": "tsx --test src/lib/library/library.test.ts src/lib/library/courseBooks.test.ts src/lib/library/resourceBooks.test.ts ../medine-lms/src/lib/resource-books.test.ts",
+    "test:library": "tsx --test src/lib/library/library.test.ts src/lib/library/missingTable.test.ts src/lib/library/courseBooks.test.ts src/lib/library/resourceBooks.test.ts ../medine-lms/src/lib/resource-books.test.ts",
     "test:ai-polish": "tsx --test src/lib/ai/aiPolish.test.ts ../medine-lms/src/lib/aiPolish.test.ts",
     "test:exams": "tsx --test src/lib/examContent.test.ts ../medine-lms/src/lib/exam-text.test.ts",
     "test:account-profile": "tsx --test src/lib/accountProfile.test.ts ../medine-lms/src/lib/account-profile-retry.test.ts",

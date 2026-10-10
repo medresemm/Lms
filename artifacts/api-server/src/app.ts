@@ -11,6 +11,7 @@ import {
 } from "./middlewares/clerkProxyMiddleware.js";
 import router from "./routes/index.js";
 import { logger } from "./lib/logger.js";
+import { libraryTablesDiagnostics } from "./lib/library/tableDiagnostics.js";
 
 const app: Express = express();
 
@@ -77,6 +78,13 @@ app.get("/api/healthz", async (req, res) => {
       8000,
     );
     report.db = { ok: true, ms: Date.now() - dbStarted, ...result.rows[0] };
+    try {
+      const diag = await withTimeout(libraryTablesDiagnostics(), 8000);
+      report.libraryTables = { database: diag.database, searchPath: diag.searchPath, inPublic: diag.inPublic, foundInSchemas: diag.foundInSchemas };
+    } catch (error) {
+      const err = error as { code?: string; message?: string };
+      report.libraryTables = { ok: false, code: err.code ?? "unknown", message: String(err.message ?? "").slice(0, 200) };
+    }
   } catch (error) {
     const err = error as { code?: string; message?: string };
     report.db = { ok: false, ms: Date.now() - dbStarted, code: err.code ?? "unknown", message: String(err.message ?? "").slice(0, 200) };

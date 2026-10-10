@@ -40,3 +40,12 @@ CREATE TABLE IF NOT EXISTS "lms_course_books" (
 CREATE UNIQUE INDEX IF NOT EXISTS "lms_course_books_course_term_unique" ON "lms_course_books" USING btree ("course_id","term_number");
 
 COMMIT;
+
+-- Yoxlama (SQL Editor-da, saytın DATABASE_URL-dəki layihədə işə salın):
+--   SELECT current_database(), current_setting('search_path'),
+--          to_regclass('public.lms_library_books') AS library_books,
+--          to_regclass('public.lms_course_books')  AS course_books;
+--   SELECT n.nspname, c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+--    WHERE c.relname IN ('lms_library_books', 'lms_course_books');
+-- Hər iki to_regclass NULL-dursa, cədvəllər bu bazada yoxdur (başqa layihə və ya COMMIT olunmayıb).
+-- Canlı server tərəfdən: https://www.madinahacademy.net/api/healthz?deep=1 → "libraryTables".

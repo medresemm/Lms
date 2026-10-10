@@ -139,7 +139,7 @@ export function CourseBooksEditor({ courseId, termNumber, courseTitle }: { cours
   }, [books, courseTitle]);
 
   if (!current.available) {
-    return <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900" data-testid="text-course-books-unavailable">{current.message ?? 'Dərs kitabları hələ aktiv deyil.'}</p>;
+    return <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900" data-testid="text-course-books-unavailable">{current.message ?? 'Dərs kitabları hələ aktiv deyil.'}{current.detail && <span className="mt-1 block font-normal opacity-80" data-testid="text-course-books-unavailable-detail">Yoxlama: {current.detail}</span>}</p>;
   }
   if (current.loading || catalog.loading || drafts === null) {
     return <p className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]"><Loader2 size={13} className="animate-spin" /> Kitablar yüklənir…</p>;

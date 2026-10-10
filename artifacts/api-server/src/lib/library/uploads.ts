@@ -198,14 +198,39 @@ export function uploadedRowToBook(row: UploadedBookRow): CatalogBook {
   };
 }
 
-/** Postgres «relation does not exist» (cədvəl hələ yaradılmayıb). */
-export function isMissingTableError(error: unknown): boolean {
+/**
+ * Postgres «relation does not exist» (42P01) — yalnız göstərilən cədvəl üçün.
+ * Başqa cədvəlin yoxluğu, «column ... does not exist» (42703), icazə (42501), bağlantı və s. xətalar
+ * «cədvəl yaradılmayıb» kimi yozulmur — onlar ayrıca «error» kimi qaytarılır və serverdə log edilir.
+ */
+export function isMissingTableError(error: unknown, table = "lms_library_books"): boolean {
+  const relationPattern = /relation "(?:[\w$]+\.)?([\w$]+)" does not exist/i;
   let current: unknown = error;
-  for (let depth = 0; current && depth < 5; depth += 1) {
+  for (let depth = 0; current && depth < 6; depth += 1) {
     const candidate = current as { code?: unknown; message?: unknown; cause?: unknown };
-    if (candidate.code === "42P01") return true;
-    if (typeof candidate.message === "string" && /lms_library_books/.test(candidate.message) && /does not exist/.test(candidate.message)) return true;
+    const message = typeof candidate.message === "string" ? candidate.message : "";
+    const relation = relationPattern.exec(message)?.[1];
+    if (candidate.code === "42P01") {
+      // Mesajda cədvəl adı varsa, məhz bizim cədvəl olmalıdır; ad yoxdursa kod kifayətdir.
+      if (!relation || relation === table) return true;
+      return false;
+    }
+    if (relation === table && candidate.code === undefined) return true;
     current = candidate.cause;
   }
   return false;
+}
+
+/** Server log-u üçün xətanın qısa təsviri (kod + mesaj, zəncir boyu). Parol və s. olmur — yalnız Postgres mesajı. */
+export function describeDbError(error: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; current && depth < 6; depth += 1) {
+    const candidate = current as { code?: unknown; message?: unknown; cause?: unknown };
+    const code = typeof candidate.code === "string" ? candidate.code : "";
+    const message = typeof candidate.message === "string" ? candidate.message.slice(0, 300) : String(current).slice(0, 300);
+    parts.push(code ? `[${code}] ${message}` : message);
+    current = candidate.cause;
+  }
+  return parts.join(" <- ");
 }

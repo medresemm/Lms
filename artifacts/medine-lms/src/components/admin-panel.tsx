@@ -2666,6 +2666,7 @@ function studentTermLabel(termNumber: number) {
 }
 
 function StudentDirectory({ filter, onClose, canEdit, embedded = false, focusStudentId }: { filter: StudentDirectoryFilter; onClose: () => void; canEdit: boolean; embedded?: boolean; focusStudentId?: number | null }) {
+  const { t, locale } = useI18n();
   const studentsQuery = useGetAdminStudents();
   const deleteStudent = useDeleteAdminStudent();
   const queryClient = useQueryClient();
@@ -2682,8 +2683,8 @@ function StudentDirectory({ filter, onClose, canEdit, embedded = false, focusStu
   const [approvingScheduleProfileId, setApprovingScheduleProfileId] = useState<number | null>(null);
   const students = studentsQuery.data ?? [];
   const terms = filter === 1 ? [1, 2] : filter === 2 ? [3, 4] : filter === 3 ? [5, 6] : filter === 4 ? [7, 8] : [1, 2, 3, 4, 5, 6, 7, 8];
-  const title = filter === 'all' ? 'Ümumi tələbələr' : `${filter}-cü tədris ili tələbələri`;
-  const formatDate = (value: string) => new Intl.DateTimeFormat('az-AZ', { dateStyle: 'medium' }).format(new Date(value));
+  const title = filter === 'all' ? t('allStudents') : `${t((['year1', 'year2', 'year3', 'year4'] as const)[filter - 1] ?? 'year1')} · ${t('yearStudents')}`;
+  const formatDate = (value: string) => new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'az-AZ', { dateStyle: 'medium' }).format(new Date(value));
   const normalizedSearch = search.trim().toLocaleLowerCase('az-AZ');
   const filteredStudents = students.filter((student) => {
     if (filter !== 'all' && student.courseYear !== filter) return false;
@@ -2787,12 +2788,12 @@ function StudentDirectory({ filter, onClose, canEdit, embedded = false, focusStu
   };
   const deleteStudentAccount = (student: (typeof students)[number]) => {
     const fullName = `${student.firstName} ${student.lastName}`;
-    const reason = window.prompt(`${fullName} hesabının silinmə səbəbini yazın (məcburidir):`, '');
+    const reason = window.prompt(`${fullName}: ${t('deleteReason')}`, '');
     if (reason === null || !reason.trim()) {
-      setNotice('Silinmə səbəbi yazılmadan hesab silinə bilməz.');
+      setNotice(t('deleteReasonRequired'));
       return;
     }
-    if (!window.confirm(`${fullName} hesabını deaktiv etmək istəyirsiniz? Bu əməliyyat geri qaytarıla bilməz.`)) return;
+    if (!window.confirm(`${fullName}: ${t('confirmDeactivate')}`)) return;
     setNotice('');
     deleteStudent.mutate({ profileId: student.profileId, data: { reason: reason.trim() } }, {
       onSuccess: async () => {
@@ -2800,9 +2801,9 @@ function StudentDirectory({ filter, onClose, canEdit, embedded = false, focusStu
           queryClient.invalidateQueries({ queryKey: getGetAdminStudentsQueryKey() }),
           queryClient.invalidateQueries({ queryKey: getGetAdminAcademicProfilesQueryKey() }),
         ]);
-        setNotice(`${fullName} hesabı silindi.`);
+        setNotice(`${fullName}: ${t('accountDeleted')}`);
       },
-      onError: () => setNotice('Tələbə hesabı silinə bilmədi. Bir qədər sonra yenidən cəhd edin.'),
+      onError: () => setNotice(t('accountNotDeleted')),
     });
   };
   return (
@@ -2810,43 +2811,43 @@ function StudentDirectory({ filter, onClose, canEdit, embedded = false, focusStu
       <div className={`mx-auto max-w-4xl rounded-[26px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-lg)] md:p-8 ${embedded ? 'shadow-[var(--shadow-xs)]' : ''}`}>
         <div className="flex items-start justify-between gap-4 border-b border-[hsl(var(--border))] pb-5">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--secondary-foreground))]">Akademik kataloq</p>
+            <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--secondary-foreground))]">{t('catalog')}</p>
             <h2 id="student-directory-title" className="mt-1 font-serif text-3xl text-[hsl(var(--primary))]">{title}</h2>
-            <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Yalnız təsdiqlənmiş tələbələr göstərilir.</p>
+            <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{t('approvedOnly')}</p>
           </div>
-          <button type="button" onClick={onClose} className="focus-ring rounded-xl p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Pəncərəni bağla"><X size={20} /></button>
+          <button type="button" onClick={onClose} className="focus-ring rounded-xl p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={t('closeWindow')}><X size={20} /></button>
         </div>
         <div className="mt-5">
-          <label htmlFor="student-directory-search" className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Tələbə axtar</label>
-          <input id="student-directory-search" className={inputClass} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ad, soyad, tələbə nömrəsi, email və ya telefon..." data-testid="input-student-search" />
+          <label htmlFor="student-directory-search" className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('searchStudents')}</label>
+          <input id="student-directory-search" className={inputClass} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('searchStudentsPh')} data-testid="input-student-search" />
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.28)] p-3" data-testid="student-bulk-actions">
           <label className="inline-flex items-center gap-2 text-xs font-bold text-[hsl(var(--primary))]">
             <input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleSelection} disabled={!visibleProfileIds.length} data-testid="checkbox-select-all-students" />
-            Hamısını seç
+            {t('selectAll')}
           </label>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">{selectedProfileIds.length} tələbə seçilib</span>
-            <button type="button" onClick={() => void bulkPromote()} disabled={!canEdit || !selectedProfileIds.length || bulkBusy !== null} className="focus-ring inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-bulk-promote"><GraduationCap size={14} /> {bulkBusy === 'promotion' ? 'Keçirilir...' : 'Semestrə keçir'}</button>
-            <button type="button" onClick={() => setNotificationOpen((current) => !current)} disabled={!selectedProfileIds.length || bulkBusy !== null} className="focus-ring inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--secondary-foreground))] px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-open-bulk-notification"><Send size={14} /> Bildiriş göndər</button>
+            <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">{selectedProfileIds.length} {t('studentsPicked')}</span>
+            <button type="button" onClick={() => void bulkPromote()} disabled={!canEdit || !selectedProfileIds.length || bulkBusy !== null} className="focus-ring inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-bulk-promote"><GraduationCap size={14} /> {bulkBusy === 'promotion' ? t('promoting') : t('promoteSemester')}</button>
+            <button type="button" onClick={() => setNotificationOpen((current) => !current)} disabled={!selectedProfileIds.length || bulkBusy !== null} className="focus-ring inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--secondary-foreground))] px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-open-bulk-notification"><Send size={14} /> {t('sendNotice')}</button>
           </div>
         </div>
         {notificationOpen && <form onSubmit={sendBulkNotification} className="mt-3 space-y-3 rounded-xl border border-[hsl(var(--secondary-foreground)/.25)] bg-[hsl(var(--secondary)/.25)] p-4" data-testid="form-bulk-notification">
-          <p className="text-xs font-bold text-[hsl(var(--primary))]">{selectedProfileIds.length} seçilmiş tələbəyə bildiriş</p>
-          <input required maxLength={160} className={inputClass} value={notificationForm.title} onChange={(event) => setNotificationForm((current) => ({ ...current, title: event.target.value }))} placeholder="Bildiriş başlığı" data-testid="input-bulk-notification-title" />
-          <textarea required maxLength={5000} rows={3} className={`${inputClass} resize-y`} value={notificationForm.body} onChange={(event) => setNotificationForm((current) => ({ ...current, body: event.target.value }))} placeholder="Bildiriş mətni" data-testid="textarea-bulk-notification-body" />
+          <p className="text-xs font-bold text-[hsl(var(--primary))]">{selectedProfileIds.length} {t('noticeToSelected')}</p>
+          <input required maxLength={160} className={inputClass} value={notificationForm.title} onChange={(event) => setNotificationForm((current) => ({ ...current, title: event.target.value }))} placeholder={t('noticeTitle')} data-testid="input-bulk-notification-title" />
+          <textarea required maxLength={5000} rows={3} className={`${inputClass} resize-y`} value={notificationForm.body} onChange={(event) => setNotificationForm((current) => ({ ...current, body: event.target.value }))} placeholder={t('noticeBody')} data-testid="textarea-bulk-notification-body" />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <select className={`${inputClass} max-w-xs`} value={notificationForm.destination} onChange={(event) => setNotificationForm((current) => ({ ...current, destination: event.target.value }))} data-testid="select-bulk-notification-destination">
-              <option value="home">Tələbə panelində</option><option value="gmail">Gmail ilə</option><option value="both">Panel və Gmail</option>
+              <option value="home">{t('destPanel')}</option><option value="gmail">{t('destGmail')}</option><option value="both">{t('destBoth')}</option>
             </select>
-            <button type="submit" disabled={bulkBusy !== null} className={buttonClass} data-testid="button-send-bulk-notification">{bulkBusy === 'notification' ? 'Göndərilir...' : 'Göndər'}</button>
+            <button type="submit" disabled={bulkBusy !== null} className={buttonClass} data-testid="button-send-bulk-notification">{bulkBusy === 'notification' ? t('sending') : t('send')}</button>
           </div>
         </form>}
-        {notice && <p className={`mt-3 rounded-xl p-3 text-xs font-semibold ${notice.includes('silinə bilmədi') ? 'bg-[hsl(var(--destructive)/.08)] text-[hsl(var(--destructive))]' : 'bg-[hsl(var(--secondary)/.45)] text-[hsl(var(--secondary-foreground))]'}`}>{notice}</p>}
+        {notice && <p className={`mt-3 rounded-xl p-3 text-xs font-semibold ${notice.includes(t('accountNotDeleted')) || notice.includes('bilmədi') ? 'bg-[hsl(var(--destructive)/.08)] text-[hsl(var(--destructive))]' : 'bg-[hsl(var(--secondary)/.45)] text-[hsl(var(--secondary-foreground))]'}`}>{notice}</p>}
         {studentsQuery.isLoading ? (
           <div className="mt-6 space-y-3">{[1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-2xl bg-[hsl(var(--muted))]" />)}</div>
         ) : studentsQuery.isError ? (
-          <p className="mt-6 rounded-2xl border border-[hsl(var(--destructive)/.2)] bg-[hsl(var(--destructive)/.05)] p-5 text-sm font-semibold text-[hsl(var(--destructive))]">Tələbə siyahısı yüklənə bilmədi.</p>
+          <p className="mt-6 rounded-2xl border border-[hsl(var(--destructive)/.2)] bg-[hsl(var(--destructive)/.05)] p-5 text-sm font-semibold text-[hsl(var(--destructive))]">{t('listFailed')}</p>
         ) : (
           <div className="mt-6 space-y-5">
             {terms.map((termNumber) => {
@@ -2854,35 +2855,35 @@ function StudentDirectory({ filter, onClose, canEdit, embedded = false, focusStu
               return (
                 <section key={termNumber} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.22)] p-4" aria-labelledby={`student-term-${termNumber}`}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 id={`student-term-${termNumber}`} className="font-bold text-[hsl(var(--primary))]">{studentTermLabel(termNumber)}</h3>
-                    <span className="rounded-full bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-[10px] font-bold text-[hsl(var(--secondary-foreground))]">{termStudents.length} tələbə</span>
+                    <h3 id={`student-term-${termNumber}`} className="font-bold text-[hsl(var(--primary))]">{termNumber}. {t('termLabel')}</h3>
+                    <span className="rounded-full bg-[hsl(var(--secondary)/.6)] px-2.5 py-1 text-[10px] font-bold text-[hsl(var(--secondary-foreground))]">{termStudents.length} {t('studentWord')}</span>
                   </div>
                   {termStudents.length ? (
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
                       {termStudents.map((student) => (
                         <article key={student.profileId} onClick={() => setSelectedStudentId(student.profileId)} className="cursor-pointer rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 transition hover:-translate-y-0.5 hover:border-[hsl(var(--secondary-foreground)/.45)] hover:shadow-[var(--shadow-sm)]" data-testid={`student-directory-item-${student.profileId}`}>
                             <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-start gap-2"><input type="checkbox" checked={selectedProfileIds.includes(student.profileId)} onChange={() => toggleStudentSelection(student.profileId)} onClick={(event) => event.stopPropagation()} aria-label={`${formatFullName(student.firstName, student.lastName)} seç`} data-testid={`checkbox-select-student-${student.profileId}`} /><div><h4 className="font-bold text-[hsl(var(--primary))]">{formatFullName(student.firstName, student.lastName)}</h4><span className="text-[10px] font-semibold text-[hsl(var(--muted-foreground))]">Tələbə № T{String(student.studentNumber).padStart(4, '0')}</span></div></div>
-                              <div className="flex items-center gap-1"><button type="button" onClick={(event) => { event.stopPropagation(); setEditingStudentUserId(student.clerkUserId); }} disabled={!canEdit} className="focus-ring rounded-lg px-2 py-1 text-[10px] font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] disabled:hidden" data-testid={`button-edit-student-${student.profileId}`}>Düzənlə</button><button type="button" onClick={(event) => { event.stopPropagation(); deleteStudentAccount(student); }} disabled={deleteStudent.isPending} className="focus-ring rounded-lg px-2 py-1 text-[10px] font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.08)] disabled:opacity-50" data-testid={`button-delete-student-${student.profileId}`}>Hesabı sil</button></div>
+                              <div className="flex items-start gap-2"><input type="checkbox" checked={selectedProfileIds.includes(student.profileId)} onChange={() => toggleStudentSelection(student.profileId)} onClick={(event) => event.stopPropagation()} aria-label={formatFullName(student.firstName, student.lastName)} data-testid={`checkbox-select-student-${student.profileId}`} /><div><h4 className="font-bold text-[hsl(var(--primary))]">{formatFullName(student.firstName, student.lastName)}</h4><span className="text-[10px] font-semibold text-[hsl(var(--muted-foreground))]">{t('studentNo')} T{String(student.studentNumber).padStart(4, '0')}</span></div></div>
+                              <div className="flex items-center gap-1"><button type="button" onClick={(event) => { event.stopPropagation(); setEditingStudentUserId(student.clerkUserId); }} disabled={!canEdit} className="focus-ring rounded-lg px-2 py-1 text-[10px] font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] disabled:hidden" data-testid={`button-edit-student-${student.profileId}`}>{t('editShort')}</button><button type="button" onClick={(event) => { event.stopPropagation(); deleteStudentAccount(student); }} disabled={deleteStudent.isPending} className="focus-ring rounded-lg px-2 py-1 text-[10px] font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.08)] disabled:opacity-50" data-testid={`button-delete-student-${student.profileId}`}>{t('deleteAccount')}</button></div>
                           </div>
                           <dl className="mt-3 space-y-1.5 text-xs text-[hsl(var(--muted-foreground))]">
-                            <div className="flex justify-between gap-3"><dt>Email</dt><dd className="text-right font-semibold text-[hsl(var(--primary))]">{student.email}</dd></div>
-                            <div className="flex justify-between gap-3"><dt>Telefon</dt><dd className="font-semibold text-[hsl(var(--primary))]">{student.phone}</dd></div>
-                            <div className="flex justify-between gap-3"><dt>Qeydiyyat tarixi</dt><dd className="font-semibold text-[hsl(var(--primary))]">{formatDate(student.registeredAt)}</dd></div>
+                            <div className="flex justify-between gap-3"><dt>{t('email')}</dt><dd className="text-right font-semibold text-[hsl(var(--primary))]">{student.email}</dd></div>
+                            <div className="flex justify-between gap-3"><dt>{t('phone')}</dt><dd className="font-semibold text-[hsl(var(--primary))]">{student.phone}</dd></div>
+                            <div className="flex justify-between gap-3"><dt>{t('registeredAt')}</dt><dd className="font-semibold text-[hsl(var(--primary))]">{formatDate(student.registeredAt)}</dd></div>
                           </dl>
                            <div className="mt-4 border-t border-[hsl(var(--border))] pt-3">
-                             <p className="mb-2 text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">Dərs cədvəlinə giriş</p>
-                              {scheduleAccessLoading ? <span className="text-xs text-[hsl(var(--muted-foreground))]">Status yoxlanılır...</span> : <button type="button" onClick={(event) => { event.stopPropagation(); void updateScheduleAccess(student.profileId, formatFullName(student.firstName, student.lastName), !scheduleAccess[student.profileId]); }} disabled={approvingScheduleProfileId === student.profileId} className={`focus-ring inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50 ${scheduleAccess[student.profileId] ? 'border border-emerald-300 bg-emerald-100 text-emerald-800' : 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]'}`} data-testid={`${scheduleAccess[student.profileId] ? 'button-revoke-schedule-access' : 'button-approve-schedule-access'}-${student.profileId}`}><CheckCircle2 size={14} /> {approvingScheduleProfileId === student.profileId ? 'Yadda saxlanılır...' : scheduleAccess[student.profileId] ? 'Təsdiqlənib · geri al' : 'Cədvələ girişi təsdiqlə'}</button>}
+                             <p className="mb-2 text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{t('scheduleEntry')}</p>
+                              {scheduleAccessLoading ? <span className="text-xs text-[hsl(var(--muted-foreground))]">{t('statusChecking')}</span> : <button type="button" onClick={(event) => { event.stopPropagation(); void updateScheduleAccess(student.profileId, formatFullName(student.firstName, student.lastName), !scheduleAccess[student.profileId]); }} disabled={approvingScheduleProfileId === student.profileId} className={`focus-ring inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50 ${scheduleAccess[student.profileId] ? 'border border-emerald-300 bg-emerald-100 text-emerald-800' : 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]'}`} data-testid={`${scheduleAccess[student.profileId] ? 'button-revoke-schedule-access' : 'button-approve-schedule-access'}-${student.profileId}`}><CheckCircle2 size={14} /> {approvingScheduleProfileId === student.profileId ? t('saving') : scheduleAccess[student.profileId] ? t('accessApproved') : t('approveAccess')}</button>}
                            </div>
                           {editingStudentUserId === student.clerkUserId && <UserProfileEditor inline user={{ id: student.clerkUserId, firstName: student.firstName, lastName: student.lastName, username: student.username, email: student.email, role: 'none' }} onClose={() => setEditingStudentUserId(null)} onSaved={async () => { setEditingStudentUserId(null); await studentsQuery.refetch(); }} />}
                         </article>
                       ))}
                     </div>
-                  ) : <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Bu semestrdə tələbə yoxdur.</p>}
+                  ) : <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">{t('noStudentThisTerm')}</p>}
                 </section>
               );
             })}
-            {!students.length && <p className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-7 text-center text-sm text-[hsl(var(--muted-foreground))]">Təsdiqlənmiş tələbə tapılmadı.</p>}
+            {!students.length && <p className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-7 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noApprovedStudent')}</p>}
           </div>
         )}
         {selectedStudentId !== null && <StudentDetail profileId={selectedStudentId} onClose={() => setSelectedStudentId(null)} />}

@@ -617,13 +617,14 @@ type SystemStatistics = {
 };
 
 function StatisticCircles({ statistics, compact = false }: { statistics: SystemStatistics; compact?: boolean }) {
+  const { t } = useI18n();
   const items = [
-    { label: 'Müəllim', value: statistics.teachers, className: 'bg-sky-100 text-sky-900' },
-    { label: 'Hazırkı tələbə', value: statistics.currentStudents, className: 'bg-emerald-100 text-emerald-900' },
-    { label: 'Bitirmiş tələbə', value: statistics.graduatedStudents, className: 'bg-amber-100 text-amber-950' },
+    { id: 'teachers', label: t('statTeachers'), value: statistics.teachers, className: 'bg-sky-100 text-sky-900' },
+    { id: 'current', label: t('statCurrent'), value: statistics.currentStudents, className: 'bg-emerald-100 text-emerald-900' },
+    { id: 'graduated', label: t('statGraduated'), value: statistics.graduatedStudents, className: 'bg-amber-100 text-amber-950' },
   ];
   return <div className={`grid ${compact ? 'grid-cols-3 gap-2' : 'gap-4 sm:grid-cols-3'}`} data-testid="system-statistics-circles">
-    {items.map((item) => <div key={item.label} className="flex flex-col items-center gap-2 text-center">
+    {items.map((item) => <div key={item.id} className="flex flex-col items-center gap-2 text-center">
       <div className={`${compact ? 'h-16 w-16 text-xl' : 'h-24 w-24 text-3xl'} flex items-center justify-center rounded-full font-black ${item.className}`}>{item.value}</div>
       <span className="text-xs font-bold text-[hsl(var(--primary))]">{item.label}</span>
     </div>)}
@@ -1374,13 +1375,14 @@ function TeachersScheduleLinksAction({ onClick }: { onClick: () => void }) {
 }
 
 function GraduationSection() {
+  const { t } = useI18n();
   const query = useGetGraduationCandidates();
   const graduateStudent = useGraduateStudent();
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState('');
 
   const graduate = (profileId: number, name: string) => {
-    if (!window.confirm(`${name} tələbəsini məzun kimi qeyd etmək istəyirsiniz?`)) return;
+    if (!window.confirm(`${name}: ${t('gradConfirm')}`)) return;
     setNotice('');
     graduateStudent.mutate({ profileId }, {
       onSuccess: async () => {
@@ -1391,9 +1393,9 @@ function GraduationSection() {
           queryClient.invalidateQueries({ queryKey: getGetAdminAcademicProfilesQueryKey() }),
           queryClient.invalidateQueries({ queryKey: getGetSystemStatisticsQueryKey() }),
         ]);
-        setNotice(`${name} məzun kimi qeyd edildi.`);
+        setNotice(`${name}: ${t('gradDone')}`);
       },
-      onError: (error) => setNotice(error instanceof Error ? error.message : 'Tələbə məzun kimi qeyd edilə bilmədi.'),
+      onError: (error) => setNotice(error instanceof Error ? error.message : t('gradFail')),
     });
   };
 
@@ -1401,29 +1403,29 @@ function GraduationSection() {
     <section className="rounded-2xl border border-[hsl(var(--accent)/.55)] bg-[hsl(var(--accent)/.12)] p-5" data-testid="section-graduation">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">Məzuniyyət</p>
-          <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Təxərrüc et</h3>
-          <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Aktiv semestr cütlüyünə uyğun son semestrdə olan tələbələr burada göstərilir.</p>
-          <div className="mt-3 flex flex-wrap gap-2" aria-label="Məzuniyyət səviyyələri">
-            {graduationCategoryLegend.map((item) => <span key={item.label} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold ${item.className}`} title={`GPA ${item.range}`}>
+          <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">{t('gradEyebrow')}</p>
+          <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('gradTitle')}</h3>
+          <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('gradHint')}</p>
+          <div className="mt-3 flex flex-wrap gap-2" aria-label={t('gradLevels')}>
+            {graduationCategoryLegend.map((item, index) => <span key={item.label} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold ${item.className}`} title={`GPA ${item.range}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${item.dotClassName}`} aria-hidden="true" />
-              {item.label} <span className="font-medium opacity-75">({item.range})</span>
+              {[t('levelWeak'), t('levelMid'), t('levelExcellent'), t('levelHonors')][index]} <span className="font-medium opacity-75">({item.range})</span>
             </span>)}
           </div>
         </div>
-        {query.data && <span className="rounded-full bg-[hsl(var(--card))] px-3 py-1.5 text-xs font-bold text-[hsl(var(--primary))]">{query.data.graduationTerm}-ci semestr</span>}
+        {query.data && <span className="rounded-full bg-[hsl(var(--card))] px-3 py-1.5 text-xs font-bold text-[hsl(var(--primary))]">{query.data.graduationTerm}. {t('semester')}</span>}
       </div>
       {notice && <p className="mt-4 rounded-xl bg-[hsl(var(--secondary)/.45)] p-3 text-xs font-semibold text-[hsl(var(--secondary-foreground))]" aria-live="polite">{notice}</p>}
-      {query.isLoading ? <p className="mt-5 text-sm text-[hsl(var(--muted-foreground))]">Məzun namizədləri yüklənir...</p>
-        : query.isError ? <p className="mt-5 rounded-xl border border-[hsl(var(--destructive)/.2)] bg-[hsl(var(--destructive)/.06)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">Məzun namizədləri yüklənə bilmədi.</p>
+      {query.isLoading ? <p className="mt-5 text-sm text-[hsl(var(--muted-foreground))]">{t('gradLoading')}</p>
+        : query.isError ? <p className="mt-5 rounded-xl border border-[hsl(var(--destructive)/.2)] bg-[hsl(var(--destructive)/.06)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">{t('gradLoadFail')}</p>
           : query.data?.students.length ? <div className="mt-5 grid gap-3 md:grid-cols-2">{query.data.students.map((student) => {
             const name = formatFullName(student.firstName, student.lastName);
             return <article key={student.profileId} className="flex items-center justify-between gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`graduation-candidate-${student.profileId}`}>
-              <div><h4 className="font-bold text-[hsl(var(--primary))]">{name}</h4><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Tələbə № T{String(student.studentNumber).padStart(4, '0')} · {student.email}</p></div>
-              <button type="button" onClick={() => graduate(student.profileId, name)} disabled={graduateStudent.isPending} className={`${buttonClass} shrink-0 px-3 py-2 text-xs`} data-testid={`button-graduate-${student.profileId}`}><GraduationCap size={15} /> Təxərrüc et</button>
+              <div><h4 className="font-bold text-[hsl(var(--primary))]">{name}</h4><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('studentNo')} T{String(student.studentNumber).padStart(4, '0')} · {student.email}</p></div>
+              <button type="button" onClick={() => graduate(student.profileId, name)} disabled={graduateStudent.isPending} className={`${buttonClass} shrink-0 px-3 py-2 text-xs`} data-testid={`button-graduate-${student.profileId}`}><GraduationCap size={15} /> {t('gradTitle')}</button>
             </article>;
           })}</div>
-          : <p className="mt-5 rounded-xl border border-dashed border-[hsl(var(--border))] p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">{query.data?.graduationTerm}-ci semestrdə təxərrüc ediləcək tələbə yoxdur.</p>}
+          : <p className="mt-5 rounded-xl border border-dashed border-[hsl(var(--border))] p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">{query.data?.graduationTerm}. {t('semester')}: {t('noGraduates')}</p>}
     </section>
   );
 }
@@ -1507,6 +1509,7 @@ function AnnouncementForm({ onSaved }: { onSaved: () => void }) {
 }
 
 function StudentNotificationForm() {
+  const { t } = useI18n();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [targetTerms, setTargetTerms] = useState<number[]>([1]);
@@ -1528,27 +1531,27 @@ function StudentNotificationForm() {
   const send = async (event: FormEvent) => {
     event.preventDefault();
     setNotice('');
-    if (!targetTerms.length) { setNotice('Ən azı bir semestr seçin.'); return; }
+    if (!targetTerms.length) { setNotice(t('pickTerm')); return; }
     setSaving(true);
     try {
       const response = await fetch(apiUrl('/admin/student-notifications'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, body, targetTerms, destination }) });
       const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error || 'Bildiriş göndərilmədi.');
+      if (!response.ok) throw new Error(result.error || t('noticeNotSent'));
       setTitle('');
       setBody('');
-      setNotice('Bildiriş seçilmiş semestr tələbələrinə göndərildi.');
+      setNotice(t('noticeSent'));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Bildiriş göndərilmədi.');
+      setNotice(error instanceof Error ? error.message : t('noticeNotSent'));
     } finally { setSaving(false); }
   };
   return <form onSubmit={send} className="space-y-5" data-testid="form-create-student-notification">
-    <div><p className="font-serif text-3xl font-bold leading-tight tracking-[-.03em] text-[hsl(var(--primary))] sm:text-4xl">Tələbələrə bildiriş</p><p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Bildiriş tələbə səhifəsinə daxil olduqda əsas mesaj kimi açılacaq.</p></div>
-    <Field label="Başlıq"><input required maxLength={160} className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Məsələn: Vacib cədvəl dəyişikliyi" data-testid="input-student-notification-title" /></Field>
-    <Field label="Mesaj"><textarea required maxLength={5000} rows={6} className={`${inputClass} resize-y`} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Tələbələrə göndəriləcək mesajı yazın." data-testid="textarea-student-notification-body" /></Field>
-    <div><p className="mb-2 text-xs font-bold text-[hsl(var(--primary))]">Hədəf semestrlər</p>{activeTerms.length ? <><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{activeTerms.map((term) => <label key={term} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-bold ${targetTerms.includes(term) ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent)/.22)]' : 'border-[hsl(var(--border))]'}`}><input type="checkbox" checked={targetTerms.includes(term)} onChange={() => toggleTerm(term)} />{term}-ci semestr</label>)}</div><button type="button" onClick={() => setTargetTerms(targetTerms.length === activeTerms.length ? [] : activeTerms)} className={`focus-ring mt-3 inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-black shadow-[0_3px_0_hsl(37_83%_52%)] transition hover:-translate-y-0.5 ${targetTerms.length === activeTerms.length ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent))] text-[hsl(var(--primary))]' : 'border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.16)] text-[hsl(var(--primary))]'}`}><CheckCircle2 size={15} />{targetTerms.length === activeTerms.length ? 'Bütün aktiv semestrlər seçildi · Seçimi təmizlə' : 'Bütün aktiv semestrləri seç'}</button></> : <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-3 text-xs text-[hsl(var(--muted-foreground))]">Hazırda aktiv semestr yoxdur.</p>}</div>
-    <Field label="Bildiriş hara getsin?"><select className={inputClass} value={destination} onChange={(event) => setDestination(event.target.value as typeof destination)} data-testid="select-student-notification-destination"><option value="home">Tələbənin ana səhifəsinə</option><option value="gmail">Tələbənin Gmail ünvanına</option><option value="both">Həm ana səhifəsinə, həm Gmail-ə</option></select></Field>
-    <div className="flex justify-end"><button type="submit" disabled={saving} className={buttonClass} data-testid="button-send-student-notification"><Send size={16} /> {saving ? 'Göndərilir...' : 'Bildirişi göndər'}</button></div>
-    <FormNotice text={notice} error={notice.includes('göndərilmədi') || notice.includes('seçin')} />
+    <div><p className="font-serif text-3xl font-bold leading-tight tracking-[-.03em] text-[hsl(var(--primary))] sm:text-4xl">{t('notifyTitle')}</p><p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('notifyHint')}</p></div>
+    <Field label={t('artTitle')}><input required maxLength={160} className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={t('notifyTitlePh')} data-testid="input-student-notification-title" /></Field>
+    <Field label={t('notifyBody')}><textarea required maxLength={5000} rows={6} className={`${inputClass} resize-y`} value={body} onChange={(event) => setBody(event.target.value)} placeholder={t('notifyBodyPh')} data-testid="textarea-student-notification-body" /></Field>
+    <div><p className="mb-2 text-xs font-bold text-[hsl(var(--primary))]">{t('targetTerms')}</p>{activeTerms.length ? <><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{activeTerms.map((term) => <label key={term} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-bold ${targetTerms.includes(term) ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent)/.22)]' : 'border-[hsl(var(--border))]'}`}><input type="checkbox" checked={targetTerms.includes(term)} onChange={() => toggleTerm(term)} />{term}. {t('semester')}</label>)}</div><button type="button" onClick={() => setTargetTerms(targetTerms.length === activeTerms.length ? [] : activeTerms)} className={`focus-ring mt-3 inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-black shadow-[0_3px_0_hsl(37_83%_52%)] transition hover:-translate-y-0.5 ${targetTerms.length === activeTerms.length ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent))] text-[hsl(var(--primary))]' : 'border-[hsl(var(--accent)/.7)] bg-[hsl(var(--accent)/.16)] text-[hsl(var(--primary))]'}`}><CheckCircle2 size={15} />{targetTerms.length === activeTerms.length ? t('allTermsSelected') : t('selectAllTerms')}</button></> : <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-3 text-xs text-[hsl(var(--muted-foreground))]">{t('noActiveTerms')}</p>}</div>
+    <Field label={t('notifyWhere')}><select className={inputClass} value={destination} onChange={(event) => setDestination(event.target.value as typeof destination)} data-testid="select-student-notification-destination"><option value="home">{t('destHome')}</option><option value="gmail">{t('destGmail')}</option><option value="both">{t('destBoth')}</option></select></Field>
+    <div className="flex justify-end"><button type="submit" disabled={saving} className={buttonClass} data-testid="button-send-student-notification"><Send size={16} /> {saving ? t('sending') : t('sendNotice')}</button></div>
+    <FormNotice text={notice} error={notice.includes(t('noticeNotSent')) || notice.includes(t('pickTerm')) || notice.includes('göndərilmədi') || notice.includes('seçin')} />
   </form>;
 }
 
@@ -3524,6 +3527,7 @@ function UserProfileHistory({ userId }: { userId: string }) {
 }
 
 function UserProfileEditor({ user, onClose, onSaved, readOnly = false, inline = false, canViewHistory = false }: { user: AdminUser; onClose: () => void; onSaved?: () => Promise<void>; readOnly?: boolean; inline?: boolean; canViewHistory?: boolean }) {
+  const { t } = useI18n();
   const profileQuery = useGetAdminUserProfile(user.id);
   const updateProfile = useUpdateAdminUserProfile();
   const queryClient = useQueryClient();
@@ -3558,51 +3562,52 @@ function UserProfileEditor({ user, onClose, onSaved, readOnly = false, inline = 
       ]);
        await onSaved?.();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'İstifadəçi məlumatları yadda saxlanılmadı.');
+      setNotice(error instanceof Error ? error.message : t('profileNotSaved'));
     }
   };
   return <div className={inline ? 'mt-4 rounded-xl border-2 border-[hsl(var(--accent)/.65)] bg-[hsl(var(--accent)/.12)] p-4' : 'fixed inset-0 z-50 flex items-center justify-center bg-[hsl(var(--primary)/.5)] px-4 py-6 backdrop-blur-sm'} role="dialog" aria-modal={!inline} aria-labelledby="user-profile-editor-title">
     <form onSubmit={(event) => void submit(event)} className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-sm)]">
       <div className="flex items-start justify-between gap-4">
-         <div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">İstifadəçi məlumatları</p><h4 id="user-profile-editor-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{readOnly ? 'Məlumatlara baxış' : 'Məlumatları düzəlt'}</h4><p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{readOnly ? 'Bu məlumatlar yalnız görüntüləmə üçündür.' : 'Ad, əlaqə və müraciət məlumatlarını yeniləyin. Rol bu bölmədən dəyişdirilmir.'}</p></div>
-        <button type="button" onClick={onClose} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Bağla"><X size={18} /></button>
+         <div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--secondary-foreground))]">{t('userInfo')}</p><h4 id="user-profile-editor-title" className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{readOnly ? t('viewInfo') : t('editDetails')}</h4><p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{readOnly ? t('viewOnly') : t('editInfoHint')}</p></div>
+        <button type="button" onClick={onClose} className="focus-ring rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={t('close')}><X size={18} /></button>
       </div>
-      {profileQuery.isLoading ? <p className="mt-6 text-sm text-[hsl(var(--muted-foreground))]">Məlumatlar yüklənir...</p> : profileQuery.isError ? <p className="mt-6 rounded-xl bg-[hsl(var(--destructive)/.08)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]">İstifadəçi məlumatları yüklənə bilmədi.</p> : <div className="mt-5 grid gap-4 sm:grid-cols-2">
-         <Field label="Ad"><input required={!readOnly} disabled={readOnly} className={inputClass} value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} /></Field>
-         <Field label="Soyad"><input required={!readOnly} disabled={readOnly} className={inputClass} value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} /></Field>
-         <Field label="E-poçt"><input required={!readOnly} disabled={readOnly} type="email" className={inputClass} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
+      {profileQuery.isLoading ? <p className="mt-6 text-sm text-[hsl(var(--muted-foreground))]">{t('loading')}</p> : profileQuery.isError ? <p className="mt-6 rounded-xl bg-[hsl(var(--destructive)/.08)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]">{t('profileLoadFail')}</p> : <div className="mt-5 grid gap-4 sm:grid-cols-2">
+         <Field label={t('firstName')}><input required={!readOnly} disabled={readOnly} className={inputClass} value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} /></Field>
+         <Field label={t('lastName')}><input required={!readOnly} disabled={readOnly} className={inputClass} value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} /></Field>
+         <Field label={t('email')}><input required={!readOnly} disabled={readOnly} type="email" className={inputClass} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
          {staffOnly
-           ? <p className="rounded-xl bg-[hsl(var(--muted)/.6)] p-3 text-xs leading-5 text-[hsl(var(--muted-foreground))] sm:col-span-2" data-testid="text-profile-staff-only">Bu hesabın tələbə müraciəti yoxdur (məsələn, Clerk panelindən yaradılmış müəllim hesabı). Burada ad, soyad və e-poçt dəyişdirilir; ad rol kartlarında, müəllim seçicilərində, cədvəllərdə və AI-da göstərilir.</p>
+           ? <p className="rounded-xl bg-[hsl(var(--muted)/.6)] p-3 text-xs leading-5 text-[hsl(var(--muted-foreground))] sm:col-span-2" data-testid="text-profile-staff-only">{t('staffOnlyNote')}</p>
            : <>
-         <Field label="Telefon"><input required={!readOnly} disabled={readOnly} className={inputClass} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="+994501234567" /></Field>
-         <Field label="Doğum tarixi"><input required={!readOnly} disabled={readOnly} type="date" className={inputClass} value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} /></Field>
-         <Field label="Ərəb dili səviyyəsi"><select required={!readOnly} disabled={readOnly} className={inputClass} value={form.arabicLevel} onChange={(event) => setForm({ ...form, arabicLevel: event.target.value as AdminUserProfileInput['arabicLevel'] })}><option value="Zəif">Zəif</option><option value="Orta">Orta</option><option value="Yaxşı">Yaxşı</option><option value="Əla">Əla</option></select></Field>
+         <Field label={t('phone')}><input required={!readOnly} disabled={readOnly} className={inputClass} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="+994501234567" /></Field>
+         <Field label={t('birthDate')}><input required={!readOnly} disabled={readOnly} type="date" className={inputClass} value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} /></Field>
+         <Field label={t('arabicLevel')}><select required={!readOnly} disabled={readOnly} className={inputClass} value={form.arabicLevel} onChange={(event) => setForm({ ...form, arabicLevel: event.target.value as AdminUserProfileInput['arabicLevel'] })}><option value="Zəif">{t('levelWeak')}</option><option value="Orta">{t('levelMid')}</option><option value="Yaxşı">{t('levelGood')}</option><option value="Əla">{t('levelExcellent')}</option></select></Field>
            </>}
       </div>}
        {canViewHistory && <UserProfileHistory userId={user.id} />}
       {notice && <p className="mt-4 rounded-xl bg-[hsl(var(--destructive)/.08)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]">{notice}</p>}
-       <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} className="focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-[hsl(var(--muted-foreground))]">{readOnly ? 'Bağla' : 'Ləğv et'}</button>{!readOnly && <button type="submit" disabled={profileQuery.isLoading || profileQuery.isError || updateProfile.isPending} className={buttonClass}>{updateProfile.isPending ? 'Yadda saxlanılır...' : 'Dəyişiklikləri yadda saxla'}</button>}</div>
+       <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} className="focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-[hsl(var(--muted-foreground))]">{readOnly ? t('close') : t('cancel')}</button>{!readOnly && <button type="submit" disabled={profileQuery.isLoading || profileQuery.isError || updateProfile.isPending} className={buttonClass}>{updateProfile.isPending ? t('saving') : t('saveChanges')}</button>}</div>
     </form>
   </div>;
 }
 
 function StudentDeletionAudit() {
+  const { t, locale } = useI18n();
   const auditQuery = useGetAdminStudentDeletionAudit({ query: { queryKey: getGetAdminStudentDeletionAuditQueryKey() } });
-  const formatDate = (value: string) => new Intl.DateTimeFormat('az-AZ', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  const formatDate = (value: string) => new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'az-AZ', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
   return (
     <section className="mt-6 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5" data-testid="student-deletion-audit">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Audit tarixçəsi</p>
-        <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Silinmiş tələbələr</h3>
+        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('auditEyebrow')}</p>
+        <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('deletedStudents')}</h3>
       </div>
-      {auditQuery.isLoading ? <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">Tarixçə yüklənir...</p> :
-        auditQuery.isError ? <p className="mt-4 text-sm font-semibold text-[hsl(var(--destructive))]">Silinmə tarixçəsi yüklənə bilmədi.</p> :
+      {auditQuery.isLoading ? <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">{t('historyLoading')}</p> :
+        auditQuery.isError ? <p className="mt-4 text-sm font-semibold text-[hsl(var(--destructive))]">{t('historyFail')}</p> :
         auditQuery.data?.length ? <div className="mt-4 space-y-3">{auditQuery.data.map((entry) => <article key={entry.id} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.3)] p-4">
           <div className="flex flex-wrap justify-between gap-2"><p className="font-bold text-[hsl(var(--primary))]">{entry.studentName}</p><time className="text-xs text-[hsl(var(--muted-foreground))]">{formatDate(entry.deletedAt)}</time></div>
-          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{entry.email} · Silən: {entry.deletedByName}</p>
+          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{entry.email} · {t('deletedBy')}: {entry.deletedByName}</p>
           <p className="mt-3 text-sm leading-6">{entry.reason}</p>
         </article>)}</div> :
-        <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">Hələ silinmiş tələbə yoxdur.</p>}
+        <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">{t('noDeleted')}</p>}
     </section>
   );
 }

@@ -10,15 +10,9 @@ import type { AdminUserProfileRole } from './adminUserProfileRole';
 
 export interface AdminUserProfile {
   id: string;
-  /**
-     * @minLength 1
-     * @maxLength 100
-     */
+  /** @maxLength 100 */
   firstName: string;
-  /**
-     * @minLength 1
-     * @maxLength 100
-     */
+  /** @maxLength 100 */
   lastName: string;
   /**
      * @maxLength 100
@@ -37,4 +31,6 @@ export interface AdminUserProfile {
   arabicLevel: AdminUserProfileArabicLevel;
   role: AdminUserProfileRole;
   rolePermissions: string[];
+  /** False for accounts without an application/student row (e.g. staff created directly in Clerk); phone, birth date and Arabic level are then optional and not stored. */
+  hasApplication?: boolean;
 }

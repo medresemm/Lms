@@ -23,7 +23,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { getApplicationWindowStatus, type ApplicationWindow } from "../lib/applicationWindow.js";
 import { isMeetingUrl, lessonTimeForDay } from "../lib/lessonAttendance.js";
-import { buildAccountProfile } from "../lib/accountProfile.js";
+import { buildAccountProfile, buildAdminUserProfile, profileInputError } from "../lib/accountProfile.js";
 import { rosterIdsToKeep, staffIdsFrom } from "../lib/studentVisibility.js";
 import { candidateStatus, managesAllGroups, planRosterAdd } from "../lib/groupRoster.js";
 import { flaggedGroupIds, groupFlagAvailable, GROUP_FLAG_MISSING_MESSAGE, isGroupRow, isScheduleRow, setGroupFlag, studentVisibleRows } from "../lib/resourceGroups.js";
@@ -476,6 +476,7 @@ export async function getClerkDirectory(): Promise<ClerkUser[]> {
   if (clerkDirectoryCache && clerkDirectoryCache.expiresAt > Date.now()) return clerkDirectoryCache.value;
   if (clerkDirectoryRequest) return clerkDirectoryRequest;
 
+  const generation = clerkDirectoryGeneration;
   clerkDirectoryRequest = (async () => {
     const users: ClerkUser[] = [];
     for (let offset = 0; ; offset += 100) {
@@ -483,18 +484,20 @@ export async function getClerkDirectory(): Promise<ClerkUser[]> {
       users.push(...page.data);
       if (page.data.length < 100) break;
     }
-    clerkDirectoryCache = { expiresAt: Date.now() + clerkCacheTtlMs, value: users };
+    if (generation === clerkDirectoryGeneration) clerkDirectoryCache = { expiresAt: Date.now() + clerkCacheTtlMs, value: users };
     return users;
   })().finally(() => {
-    clerkDirectoryRequest = null;
+    if (generation === clerkDirectoryGeneration) clerkDirectoryRequest = null;
   });
   return clerkDirectoryRequest;
 }
 
 /** Rol dəyişəndən dərhal sonra köhnə keşlənmiş Clerk məlumatı istifadə olunmasın. */
 export function invalidateClerkUserCaches(userId?: string) {
-  if (userId) clerkUserCache.delete(userId);
+  if (userId) { clerkUserCache.delete(userId); clerkUserRequests.delete(userId); }
   clerkDirectoryCache = null;
+  clerkDirectoryGeneration += 1;
+  clerkDirectoryRequest = null;
 }
 
 function configuredAdminUserIds() {
@@ -633,6 +636,7 @@ const clerkUserCache = new Map<string, { expiresAt: number; value: ClerkUser | n
 const clerkUserRequests = new Map<string, Promise<ClerkUser | null>>();
 let clerkDirectoryCache: { expiresAt: number; value: ClerkUser[] } | null = null;
 let clerkDirectoryRequest: Promise<ClerkUser[]> | null = null;
+let clerkDirectoryGeneration = 0;
 const sharedPermissionsCache = new Map<string, { expiresAt: number; value: RolePermission[] }>();
 const sharedPermissionsRequests = new Map<string, Promise<RolePermission[]>>();
 const resourceLinkLifetimeMs = 2 * 60 * 60 * 1000;
@@ -1181,6 +1185,15 @@ export function clerkDisplayName(user: NonNullable<Awaited<ReturnType<typeof get
   return [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || "Müəllim";
 }
 
+/** Admin seçiciləri üçün ad: Clerk adı/soyadı, yoxdursa istifadəçi adı, o da yoxdursa e-poçt. */
+export function clerkStaffPickerName(user: NonNullable<Awaited<ReturnType<typeof getClerkUser>>>) {
+  return [user.firstName, user.lastName].map((part) => part?.trim()).filter(Boolean).join(" ")
+    || user.username?.trim()
+    || user.primaryEmailAddress?.emailAddress
+    || user.emailAddresses?.[0]?.emailAddress
+    || "Müəllim";
+}
+
 export async function activeTeachers() {
   const users = await getClerkDirectory();
   const applicationRows = users.length
@@ -1209,7 +1222,7 @@ export async function activeTeachers() {
       const role = roleForClerkUser(user);
       const displayName = role === "owner"
         ? applicationNames.get(user.id) || "Fərman İsayev"
-        : applicationNames.get(user.id) || clerkDisplayName(user) || "Müəllim";
+        : applicationNames.get(user.id) || clerkStaffPickerName(user);
       const [firstName, ...lastNameParts] = displayName.split(/\s+/);
       return {
         clerkUserId: user.id,
@@ -2086,7 +2099,7 @@ router.get("/account/profile", async (req, res, next) => {
           : [];
     // Yeni hesabda (müraciət sətri hələ yazılmayıb, Clerk-də ad yoxdur) boş sahələr sxemi pozmasın deyə
     // profil təhlükəsiz qurucu ilə yığılır; uyğunsuzluq qalarsa 500 yox, ehtiyat cavab qaytarılır.
-    const profile = buildAccountProfile({ userId, clerkUser, application, role, rolePermissions });
+    const profile = { ...buildAccountProfile({ userId, clerkUser, application, role, rolePermissions }), hasApplication: Boolean(application) };
     const parsed = GetAdminUserProfileResponse.safeParse(profile);
     if (!parsed.success) {
       req.log.warn({ issues: parsed.error.issues.map((issue) => issue.path.join(".")) }, "account profile failed response schema");
@@ -2110,11 +2123,14 @@ router.patch("/account/profile", async (req, res, next) => {
       res.status(400).json({ error: "E-poçt ünvanı buradan dəyişdirilə bilməz." });
       return;
     }
+    const inputError = profileInputError(input, Boolean(application));
+    if (inputError) { res.status(400).json({ error: inputError }); return; }
     const updatedClerkUser = await clerkClient.users.updateUser(userId, {
-      firstName: input.firstName,
-      lastName: input.lastName,
-      username: input.username || undefined,
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
+      username: input.username?.trim() || undefined,
     });
+    invalidateClerkUserCaches(userId);
     const finalClerkUser = updatedClerkUser;
     if (application) {
       await db.update(applicationsTable).set({
@@ -2127,9 +2143,9 @@ router.patch("/account/profile", async (req, res, next) => {
       lastName: finalClerkUser.lastName ?? input.lastName,
       username: finalClerkUser.username ?? input.username,
       email: finalClerkUser.primaryEmailAddress?.emailAddress ?? input.email,
-      phone: input.phone,
-      birthDate: input.birthDate,
-      arabicLevel: input.arabicLevel,
+      phone: application ? input.phone : previousProfile.phone,
+      birthDate: application ? input.birthDate : previousProfile.birthDate,
+      arabicLevel: application ? input.arabicLevel : previousProfile.arabicLevel,
     } satisfies UserProfileSnapshot;
     const profileDiff = userProfileDiff(previousProfile, updatedProfile);
     if (profileDiff.changedFields.length) await recordAuditEvent({
@@ -2140,11 +2156,24 @@ router.patch("/account/profile", async (req, res, next) => {
       details: profileDiff,
       deduplicationKey: `user.profile.updated:${userId}:${finalClerkUser.updatedAt ?? Date.now()}`,
     });
-    res.json(UpdateAdminUserProfileResponse.parse({
-      id: userId, firstName: finalClerkUser.firstName ?? input.firstName, lastName: finalClerkUser.lastName ?? input.lastName,
-      username: finalClerkUser.username ?? input.username, email: finalClerkUser.primaryEmailAddress?.emailAddress ?? input.email,
-      phone: input.phone, birthDate: input.birthDate, arabicLevel: input.arabicLevel, role: roleForClerkUser(finalClerkUser),
-    }));
+    const ownRole = roleForClerkUser(finalClerkUser);
+    const ownPermissions = ownRole === "owner"
+      ? [...rolePermissionKeys]
+      : ownRole === "admin" || ownRole === "teacher" || ownRole === "supervisor" || ownRole === "owner_assistant"
+        ? await permissionsForClerkUser(finalClerkUser, ownRole)
+        : [];
+    const ownProfile = {
+      ...buildAccountProfile({
+        userId,
+        clerkUser: finalClerkUser,
+        application: application ? { ...application, firstName: input.firstName, lastName: input.lastName, username: input.username ?? "", phone: input.phone, birthDate: input.birthDate, arabicLevel: input.arabicLevel } : undefined,
+        role: ownRole,
+        rolePermissions: ownPermissions,
+      }),
+      hasApplication: Boolean(application),
+    };
+    const parsedOwn = UpdateAdminUserProfileResponse.safeParse(ownProfile);
+    res.json(parsedOwn.success ? parsedOwn.data : ownProfile);
   } catch (error) { next(error); }
 });
 
@@ -6942,18 +6971,14 @@ router.get("/admin/users/:userId/profile", requireOwnerOrAssistant, async (req, 
       : role === "admin" || role === "teacher" || role === "supervisor" || role === "owner_assistant"
         ? await permissionsForClerkUser(clerkUser, role)
           : [];
-    res.json(GetAdminUserProfileResponse.parse({
-      id: clerkUser.id,
-      firstName: clerkUser.firstName || application?.firstName || "",
-      lastName: clerkUser.lastName || application?.lastName || "",
-      username: clerkUser.username || application?.username || null,
-      email: clerkUser.primaryEmailAddress?.emailAddress || application?.email || "",
-      phone: application?.phone ?? "",
-      birthDate: application?.birthDate ?? "",
-      arabicLevel: application?.arabicLevel ?? "Orta",
-      role,
-      rolePermissions,
-    }));
+    // Clerk panelindən birbaşa yaradılmış heyət hesablarında müraciət sətri və ad/soyad olmur;
+    // əvvəllər sxem (ad minLength: 1) pozulur və 500 qaytarılırdı. İndi təhlükəsiz qurucu istifadə olunur.
+    const profile = buildAdminUserProfile({ userId: clerkUser.id, clerkUser, application, role, rolePermissions });
+    const parsed = GetAdminUserProfileResponse.safeParse(profile);
+    if (!parsed.success) {
+      req.log.warn({ issues: parsed.error.issues.map((issue) => issue.path.join(".")) }, "admin user profile failed response schema");
+    }
+    res.json(parsed.success ? parsed.data : profile);
   } catch (error) { next(error); }
 });
 
@@ -6968,11 +6993,13 @@ router.patch("/admin/users/:userId/profile", requireOwnerOrAssistant, async (req
       return;
     }
     const [application] = await db.select().from(applicationsTable).where(eq(applicationsTable.clerkUserId, userId)).limit(1);
+    const inputError = profileInputError(input, Boolean(application));
+    if (inputError) { res.status(400).json({ error: inputError }); return; }
     const previousProfile = userProfileSnapshot(clerkUser, application);
     let updatedClerkUser = await clerkClient.users.updateUser(userId, {
-      firstName: input.firstName,
-      lastName: input.lastName,
-      username: input.username || undefined,
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
+      username: input.username?.trim() || undefined,
     });
     const currentEmail = normalizedEmail(clerkUser.primaryEmailAddress?.emailAddress);
     if (currentEmail !== normalizedEmail(input.email)) {
@@ -6994,10 +7021,12 @@ router.patch("/admin/users/:userId/profile", requireOwnerOrAssistant, async (req
         primaryEmailAddressID: emailAddress.id,
       });
     }
+    // Ad hər yerdə (rol kartları, müəllim seçiciləri, cədvəllər, AI) Clerk keşindən oxunur — dərhal yenilənsin.
+    invalidateClerkUserCaches(userId);
     if (application) {
       await db.update(applicationsTable).set({
-        firstName: input.firstName,
-        lastName: input.lastName,
+        firstName: input.firstName.trim(),
+        lastName: input.lastName.trim(),
         username: input.username || "",
         email: input.email,
         phone: input.phone,
@@ -7006,14 +7035,15 @@ router.patch("/admin/users/:userId/profile", requireOwnerOrAssistant, async (req
       }).where(eq(applicationsTable.id, application.id));
     }
     const actorId = getAuth(req).userId;
+    // Müraciəti olmayan hesabda telefon/doğum tarixi/səviyyə saxlanılmır — tarixçədə saxta dəyişiklik görünməsin.
     const updatedProfile = {
       firstName: updatedClerkUser.firstName ?? input.firstName,
       lastName: updatedClerkUser.lastName ?? input.lastName,
       username: updatedClerkUser.username ?? input.username,
       email: updatedClerkUser.primaryEmailAddress?.emailAddress ?? input.email,
-      phone: input.phone,
-      birthDate: input.birthDate,
-      arabicLevel: input.arabicLevel,
+      phone: application ? input.phone : previousProfile.phone,
+      birthDate: application ? input.birthDate : previousProfile.birthDate,
+      arabicLevel: application ? input.arabicLevel : previousProfile.arabicLevel,
     } satisfies UserProfileSnapshot;
     const profileDiff = userProfileDiff(previousProfile, updatedProfile);
     if (actorId && profileDiff.changedFields.length) await recordAuditEvent({
@@ -7024,17 +7054,21 @@ router.patch("/admin/users/:userId/profile", requireOwnerOrAssistant, async (req
       details: profileDiff,
       deduplicationKey: `user.profile.updated:${userId}:${updatedClerkUser.updatedAt ?? Date.now()}`,
     });
-    res.json(UpdateAdminUserProfileResponse.parse({
-      id: updatedClerkUser.id,
-      firstName: updatedClerkUser.firstName ?? "",
-      lastName: updatedClerkUser.lastName ?? "",
-      username: updatedClerkUser.username ?? null,
-      email: updatedClerkUser.primaryEmailAddress?.emailAddress ?? input.email,
-      phone: input.phone,
-      birthDate: input.birthDate,
-      arabicLevel: input.arabicLevel,
-      role: roleForClerkUser(updatedClerkUser),
-    }));
+    const updatedRole = roleForClerkUser(updatedClerkUser);
+    const updatedPermissions = updatedRole === "owner"
+      ? [...rolePermissionKeys]
+      : updatedRole === "admin" || updatedRole === "teacher" || updatedRole === "supervisor" || updatedRole === "owner_assistant"
+        ? await permissionsForClerkUser(updatedClerkUser, updatedRole)
+        : [];
+    const responseProfile = buildAdminUserProfile({
+      userId: updatedClerkUser.id,
+      clerkUser: updatedClerkUser,
+      application: application ? { ...application, firstName: input.firstName, lastName: input.lastName, username: input.username ?? "", email: input.email, phone: input.phone, birthDate: input.birthDate, arabicLevel: input.arabicLevel } : undefined,
+      role: updatedRole,
+      rolePermissions: updatedPermissions,
+    });
+    const parsedResponse = UpdateAdminUserProfileResponse.safeParse(responseProfile);
+    res.json(parsedResponse.success ? parsedResponse.data : responseProfile);
   } catch (error) { next(error); }
 });
 

@@ -3113,8 +3113,9 @@ const roleLabels: Record<AdminUser['role'], string> = {
 const formatTeacherNumber = (index: number) => `M${String(index + 1).padStart(2, '0')}`;
 const formatSupervisorNumber = (index: number) => `B${String(index + 1).padStart(3, '0')}`;
 const formatOwnerAssistantNumber = (index: number) => `NK${index + 1}`;
-const adminUserName = (user: Pick<AdminUser, 'firstName' | 'lastName' | 'username'>) =>
-  [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.username || 'İstifadəçi';
+// Adı olmayan hesab (məs. Clerk panelindən yaradılmış müəllim) «İstifadəçi» əvəzinə e-poçtla göstərilir.
+const adminUserName = (user: Pick<AdminUser, 'firstName' | 'lastName' | 'username'> & { email?: string | null }) =>
+  [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.username || user.email || 'İstifadəçi';
 const roleBadgeClass = (role: AdminUser['role']) => {
   if (role === 'owner') return 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]';
   if (role === 'teacher' || role === 'admin') return 'bg-[hsl(var(--primary)/.86)] text-[hsl(var(--primary-foreground))]';
@@ -3525,6 +3526,9 @@ function UserProfileHistory({ userId }: { userId: string }) {
 function UserProfileEditor({ user, onClose, onSaved, readOnly = false, inline = false, canViewHistory = false }: { user: AdminUser; onClose: () => void; onSaved?: () => Promise<void>; readOnly?: boolean; inline?: boolean; canViewHistory?: boolean }) {
   const profileQuery = useGetAdminUserProfile(user.id);
   const updateProfile = useUpdateAdminUserProfile();
+  const queryClient = useQueryClient();
+  // Clerk panelindən birbaşa yaradılmış heyət hesabı: müraciət (tələbə profili) yoxdur — telefon, doğum tarixi və səviyyə saxlanılmır.
+  const staffOnly = profileQuery.data?.hasApplication === false;
   const [form, setForm] = useState<AdminUserProfileInput>({
     firstName: '', lastName: '', username: null, email: '', phone: '', birthDate: '', arabicLevel: 'Orta',
   });
@@ -3545,7 +3549,13 @@ function UserProfileEditor({ user, onClose, onSaved, readOnly = false, inline = 
     event.preventDefault();
     setNotice('');
     try {
-      await updateProfile.mutateAsync({ userId: user.id, data: form });
+      await updateProfile.mutateAsync({ userId: user.id, data: staffOnly ? { ...form, phone: '', birthDate: '', arabicLevel: 'Orta' } : form });
+      // Ad müəllim seçicilərində, qruplarda və cədvəllərdə də dərhal yenilənsin.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetAdminUserProfileQueryKey(user.id) }),
+        queryClient.invalidateQueries({ queryKey: getGetAdminTeachersQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetAdminUsersQueryKey() }),
+      ]);
        await onSaved?.();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'İstifadəçi məlumatları yadda saxlanılmadı.');
@@ -3561,9 +3571,13 @@ function UserProfileEditor({ user, onClose, onSaved, readOnly = false, inline = 
          <Field label="Ad"><input required={!readOnly} disabled={readOnly} className={inputClass} value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} /></Field>
          <Field label="Soyad"><input required={!readOnly} disabled={readOnly} className={inputClass} value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} /></Field>
          <Field label="E-poçt"><input required={!readOnly} disabled={readOnly} type="email" className={inputClass} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
+         {staffOnly
+           ? <p className="rounded-xl bg-[hsl(var(--muted)/.6)] p-3 text-xs leading-5 text-[hsl(var(--muted-foreground))] sm:col-span-2" data-testid="text-profile-staff-only">Bu hesabın tələbə müraciəti yoxdur (məsələn, Clerk panelindən yaradılmış müəllim hesabı). Burada ad, soyad və e-poçt dəyişdirilir; ad rol kartlarında, müəllim seçicilərində, cədvəllərdə və AI-da göstərilir.</p>
+           : <>
          <Field label="Telefon"><input required={!readOnly} disabled={readOnly} className={inputClass} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="+994501234567" /></Field>
          <Field label="Doğum tarixi"><input required={!readOnly} disabled={readOnly} type="date" className={inputClass} value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} /></Field>
          <Field label="Ərəb dili səviyyəsi"><select required={!readOnly} disabled={readOnly} className={inputClass} value={form.arabicLevel} onChange={(event) => setForm({ ...form, arabicLevel: event.target.value as AdminUserProfileInput['arabicLevel'] })}><option value="Zəif">Zəif</option><option value="Orta">Orta</option><option value="Yaxşı">Yaxşı</option><option value="Əla">Əla</option></select></Field>
+           </>}
       </div>}
        {canViewHistory && <UserProfileHistory userId={user.id} />}
       {notice && <p className="mt-4 rounded-xl bg-[hsl(var(--destructive)/.08)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]">{notice}</p>}

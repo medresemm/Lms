@@ -1170,15 +1170,9 @@ export const AdminUserProfileRole = {
 
 export interface AdminUserProfile {
   id: string;
-  /**
-     * @minLength 1
-     * @maxLength 100
-     */
+  /** @maxLength 100 */
   firstName: string;
-  /**
-     * @minLength 1
-     * @maxLength 100
-     */
+  /** @maxLength 100 */
   lastName: string;
   /**
      * @maxLength 100
@@ -1197,6 +1191,8 @@ export interface AdminUserProfile {
   arabicLevel: AdminUserProfileArabicLevel;
   role: AdminUserProfileRole;
   rolePermissions: string[];
+  /** False for accounts without an application/student row (e.g. staff created directly in Clerk); phone, birth date and Arabic level are then optional and not stored. */
+  hasApplication?: boolean;
 }
 
 export type AdminUserProfileInputArabicLevel = typeof AdminUserProfileInputArabicLevel[keyof typeof AdminUserProfileInputArabicLevel];
@@ -1230,12 +1226,9 @@ export interface AdminUserProfileInput {
      * @pattern ^[^@\s]+@[^@\s]+\.[^@\s]+$
      */
   email: string;
-  /** @pattern ^\+994\d{9}$ */
+  /** @pattern ^$|^\+994\d{9}$ */
   phone: string;
-  /**
-     * @minLength 1
-     * @maxLength 20
-     */
+  /** @maxLength 20 */
   birthDate: string;
   arabicLevel: AdminUserProfileInputArabicLevel;
 }

@@ -1,15 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { GetAdminUserProfileResponse } from "@workspace/api-zod";
-import { buildAccountProfile, PROFILE_NAME_PLACEHOLDER } from "./accountProfile.js";
+import { buildAccountProfile, buildAdminUserProfile, profileInputError, PROFILE_NAME_PLACEHOLDER } from "./accountProfile.js";
+import { UpdateAdminUserProfileBody } from "@workspace/api-zod";
 
 const freshClerkUser = { firstName: null, lastName: null, username: null, primaryEmailAddress: { emailAddress: "yeni.abituriyent@example.com" } };
 
 test("fresh applicant without application row and without Clerk names yields a schema-valid profile (was 500)", () => {
-  // Köhnə davranışın təkrarı: boş ad sxemdə xəta verirdi.
-  const legacy = { id: "user_1", firstName: "", lastName: "", username: null, email: "yeni.abituriyent@example.com", phone: "", birthDate: "", arabicLevel: "Orta", role: "none", rolePermissions: [] };
-  assert.equal(GetAdminUserProfileResponse.safeParse(legacy).success, false);
-
   const profile = buildAccountProfile({ userId: "user_1", clerkUser: freshClerkUser, application: undefined, role: "none", rolePermissions: [] });
   const parsed = GetAdminUserProfileResponse.safeParse(profile);
   assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues));
@@ -35,4 +32,36 @@ test("legacy phone, unknown arabic level and missing email are sanitized instead
   });
   assert.equal(GetAdminUserProfileResponse.safeParse(profile).success, true);
   assert.deepEqual([profile.firstName, profile.phone, profile.arabicLevel, profile.email], ["Aynur", "", "Orta", "aynur@example.com"]);
+});
+
+// Clerk panelindən birbaşa yaradılmış müəllim hesabı (user_3KWB...): müraciət yoxdur, Clerk-də ad/soyad boşdur.
+const clerkCreatedTeacher = { firstName: null, lastName: null, username: null, primaryEmailAddress: { emailAddress: "adayev.farhad@gmail.com" }, emailAddresses: [{ emailAddress: "adayev.farhad@gmail.com" }] };
+
+test("admin profile for a Clerk-created teacher without application/names is schema-valid with empty names (was 500)", () => {
+  const profile = buildAdminUserProfile({ userId: "user_3KWBBqzsE9aLqjRojZKNpSMjpsG", clerkUser: clerkCreatedTeacher, application: undefined, role: "teacher", rolePermissions: ["schedule"] });
+  const parsed = GetAdminUserProfileResponse.safeParse(profile);
+  assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues));
+  assert.equal(profile.firstName, "");
+  assert.equal(profile.lastName, "");
+  assert.equal(profile.email, "adayev.farhad@gmail.com");
+  assert.equal(profile.phone, "");
+  assert.equal(profile.hasApplication, false);
+  assert.equal(parsed.data?.hasApplication, false);
+});
+
+test("admin profile keeps Clerk names and application flag", () => {
+  const profile = buildAdminUserProfile({ userId: "u", clerkUser: { ...clerkCreatedTeacher, firstName: " Fərhad ", lastName: "Adayev" }, application: { phone: "+994501234567", birthDate: "2000-01-01", arabicLevel: "Əla" }, role: "teacher", rolePermissions: [] });
+  assert.deepEqual([profile.firstName, profile.lastName, profile.hasApplication, profile.arabicLevel], ["Fərhad", "Adayev", true, "Əla"]);
+});
+
+test("staff save without application needs only names; application-backed save still needs phone and birth date", () => {
+  const staffBody = { firstName: "Fərhad", lastName: "Adayev", username: null, email: "adayev.farhad@gmail.com", phone: "", birthDate: "", arabicLevel: "Orta" };
+  assert.equal(UpdateAdminUserProfileBody.safeParse(staffBody).success, true);
+  assert.equal(profileInputError(staffBody, false), null);
+  assert.match(profileInputError(staffBody, true) ?? "", /Telefon/);
+  assert.match(profileInputError({ ...staffBody, phone: "+994501234567" }, true) ?? "", /Doğum/);
+  assert.equal(profileInputError({ ...staffBody, phone: "+994501234567", birthDate: "2000-01-01" }, true), null);
+  assert.match(profileInputError({ ...staffBody, firstName: "  " }, false) ?? "", /Ad və soyad/);
+  assert.equal(UpdateAdminUserProfileBody.safeParse({ ...staffBody, firstName: "" }).success, false);
+  assert.equal(UpdateAdminUserProfileBody.safeParse({ ...staffBody, phone: "0501234567" }).success, false);
 });

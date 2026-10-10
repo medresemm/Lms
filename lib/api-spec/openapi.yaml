@@ -2986,8 +2986,8 @@ components:
       required: [id, firstName, lastName, username, email, phone, birthDate, arabicLevel, role, rolePermissions]
       properties:
         id: { type: string }
-        firstName: { type: string, minLength: 1, maxLength: 100 }
-        lastName: { type: string, minLength: 1, maxLength: 100 }
+        firstName: { type: string, maxLength: 100 }
+        lastName: { type: string, maxLength: 100 }
         username: { type: ["string", "null"], maxLength: 100 }
         email: { type: string, pattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$', maxLength: 320 }
         phone: { type: string, pattern: '^$|^\+994\d{9}$' }
@@ -2997,6 +2997,9 @@ components:
         rolePermissions:
           type: array
           items: { type: string }
+        hasApplication:
+          type: boolean
+          description: False for accounts without an application/student row (e.g. staff created directly in Clerk); phone, birth date and Arabic level are then optional and not stored.
     AdminUserProfileInput:
       type: object
       required: [firstName, lastName, username, email, phone, birthDate, arabicLevel]
@@ -3005,8 +3008,8 @@ components:
         lastName: { type: string, minLength: 1, maxLength: 100 }
         username: { type: ["string", "null"], maxLength: 100 }
         email: { type: string, pattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$', maxLength: 320 }
-        phone: { type: string, pattern: '^\+994\d{9}$' }
-        birthDate: { type: string, minLength: 1, maxLength: 20 }
+        phone: { type: string, pattern: '^$|^\+994\d{9}$' }
+        birthDate: { type: string, maxLength: 20 }
         arabicLevel: { type: string, enum: [Zəif, Orta, Yaxşı, Əla] }
     UserProfileHistoryEntry:
       type: object

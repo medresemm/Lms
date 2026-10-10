@@ -28,12 +28,9 @@ export interface AdminUserProfileInput {
      * @pattern ^[^@\s]+@[^@\s]+\.[^@\s]+$
      */
   email: string;
-  /** @pattern ^\+994\d{9}$ */
+  /** @pattern ^$|^\+994\d{9}$ */
   phone: string;
-  /**
-     * @minLength 1
-     * @maxLength 20
-     */
+  /** @maxLength 20 */
   birthDate: string;
   arabicLevel: AdminUserProfileInputArabicLevel;
 }

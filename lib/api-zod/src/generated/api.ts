@@ -2011,15 +2011,16 @@ export const getOwnUserProfileResponseBirthDateMax = 20;
 
 export const GetOwnUserProfileResponse = zod.object({
   "id": zod.string(),
-  "firstName": zod.string().min(1).max(getOwnUserProfileResponseFirstNameMax),
-  "lastName": zod.string().min(1).max(getOwnUserProfileResponseLastNameMax),
+  "firstName": zod.string().max(getOwnUserProfileResponseFirstNameMax),
+  "lastName": zod.string().max(getOwnUserProfileResponseLastNameMax),
   "username": zod.string().max(getOwnUserProfileResponseUsernameMax).nullable(),
   "email": zod.string().max(getOwnUserProfileResponseEmailMax).regex(getOwnUserProfileResponseEmailRegExp),
   "phone": zod.string().regex(getOwnUserProfileResponsePhoneRegExp),
   "birthDate": zod.string().max(getOwnUserProfileResponseBirthDateMax),
   "arabicLevel": zod.enum(['Zəif', 'Orta', 'Yaxşı', 'Əla']),
   "role": zod.enum(['none', 'owner', 'teacher', 'supervisor', 'owner_assistant', 'admin']),
-  "rolePermissions": zod.array(zod.string())
+  "rolePermissions": zod.array(zod.string()),
+  "hasApplication": zod.boolean().optional().describe('False for accounts without an application\/student row (e.g. staff created directly in Clerk); phone, birth date and Arabic level are then optional and not stored.')
 })
 
 
@@ -2036,7 +2037,7 @@ export const updateOwnUserProfileBodyEmailMax = 320;
 
 
 export const updateOwnUserProfileBodyEmailRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
-export const updateOwnUserProfileBodyPhoneRegExp = new RegExp('^\\+994\\d{9}$');
+export const updateOwnUserProfileBodyPhoneRegExp = new RegExp('^$|^\\+994\\d{9}$');
 export const updateOwnUserProfileBodyBirthDateMax = 20;
 
 
@@ -2047,7 +2048,7 @@ export const UpdateOwnUserProfileBody = zod.object({
   "username": zod.string().max(updateOwnUserProfileBodyUsernameMax).nullable(),
   "email": zod.string().max(updateOwnUserProfileBodyEmailMax).regex(updateOwnUserProfileBodyEmailRegExp),
   "phone": zod.string().regex(updateOwnUserProfileBodyPhoneRegExp),
-  "birthDate": zod.string().min(1).max(updateOwnUserProfileBodyBirthDateMax),
+  "birthDate": zod.string().max(updateOwnUserProfileBodyBirthDateMax),
   "arabicLevel": zod.enum(['Zəif', 'Orta', 'Yaxşı', 'Əla'])
 })
 
@@ -2068,15 +2069,16 @@ export const updateOwnUserProfileResponseBirthDateMax = 20;
 
 export const UpdateOwnUserProfileResponse = zod.object({
   "id": zod.string(),
-  "firstName": zod.string().min(1).max(updateOwnUserProfileResponseFirstNameMax),
-  "lastName": zod.string().min(1).max(updateOwnUserProfileResponseLastNameMax),
+  "firstName": zod.string().max(updateOwnUserProfileResponseFirstNameMax),
+  "lastName": zod.string().max(updateOwnUserProfileResponseLastNameMax),
   "username": zod.string().max(updateOwnUserProfileResponseUsernameMax).nullable(),
   "email": zod.string().max(updateOwnUserProfileResponseEmailMax).regex(updateOwnUserProfileResponseEmailRegExp),
   "phone": zod.string().regex(updateOwnUserProfileResponsePhoneRegExp),
   "birthDate": zod.string().max(updateOwnUserProfileResponseBirthDateMax),
   "arabicLevel": zod.enum(['Zəif', 'Orta', 'Yaxşı', 'Əla']),
   "role": zod.enum(['none', 'owner', 'teacher', 'supervisor', 'owner_assistant', 'admin']),
-  "rolePermissions": zod.array(zod.string())
+  "rolePermissions": zod.array(zod.string()),
+  "hasApplication": zod.boolean().optional().describe('False for accounts without an application\/student row (e.g. staff created directly in Clerk); phone, birth date and Arabic level are then optional and not stored.')
 })
 
 
@@ -3680,15 +3682,16 @@ export const getAdminUserProfileResponseBirthDateMax = 20;
 
 export const GetAdminUserProfileResponse = zod.object({
   "id": zod.string(),
-  "firstName": zod.string().min(1).max(getAdminUserProfileResponseFirstNameMax),
-  "lastName": zod.string().min(1).max(getAdminUserProfileResponseLastNameMax),
+  "firstName": zod.string().max(getAdminUserProfileResponseFirstNameMax),
+  "lastName": zod.string().max(getAdminUserProfileResponseLastNameMax),
   "username": zod.string().max(getAdminUserProfileResponseUsernameMax).nullable(),
   "email": zod.string().max(getAdminUserProfileResponseEmailMax).regex(getAdminUserProfileResponseEmailRegExp),
   "phone": zod.string().regex(getAdminUserProfileResponsePhoneRegExp),
   "birthDate": zod.string().max(getAdminUserProfileResponseBirthDateMax),
   "arabicLevel": zod.enum(['Zəif', 'Orta', 'Yaxşı', 'Əla']),
   "role": zod.enum(['none', 'owner', 'teacher', 'supervisor', 'owner_assistant', 'admin']),
-  "rolePermissions": zod.array(zod.string())
+  "rolePermissions": zod.array(zod.string()),
+  "hasApplication": zod.boolean().optional().describe('False for accounts without an application\/student row (e.g. staff created directly in Clerk); phone, birth date and Arabic level are then optional and not stored.')
 })
 
 
@@ -3709,7 +3712,7 @@ export const updateAdminUserProfileBodyEmailMax = 320;
 
 
 export const updateAdminUserProfileBodyEmailRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
-export const updateAdminUserProfileBodyPhoneRegExp = new RegExp('^\\+994\\d{9}$');
+export const updateAdminUserProfileBodyPhoneRegExp = new RegExp('^$|^\\+994\\d{9}$');
 export const updateAdminUserProfileBodyBirthDateMax = 20;
 
 
@@ -3720,7 +3723,7 @@ export const UpdateAdminUserProfileBody = zod.object({
   "username": zod.string().max(updateAdminUserProfileBodyUsernameMax).nullable(),
   "email": zod.string().max(updateAdminUserProfileBodyEmailMax).regex(updateAdminUserProfileBodyEmailRegExp),
   "phone": zod.string().regex(updateAdminUserProfileBodyPhoneRegExp),
-  "birthDate": zod.string().min(1).max(updateAdminUserProfileBodyBirthDateMax),
+  "birthDate": zod.string().max(updateAdminUserProfileBodyBirthDateMax),
   "arabicLevel": zod.enum(['Zəif', 'Orta', 'Yaxşı', 'Əla'])
 })
 
@@ -3741,15 +3744,16 @@ export const updateAdminUserProfileResponseBirthDateMax = 20;
 
 export const UpdateAdminUserProfileResponse = zod.object({
   "id": zod.string(),
-  "firstName": zod.string().min(1).max(updateAdminUserProfileResponseFirstNameMax),
-  "lastName": zod.string().min(1).max(updateAdminUserProfileResponseLastNameMax),
+  "firstName": zod.string().max(updateAdminUserProfileResponseFirstNameMax),
+  "lastName": zod.string().max(updateAdminUserProfileResponseLastNameMax),
   "username": zod.string().max(updateAdminUserProfileResponseUsernameMax).nullable(),
   "email": zod.string().max(updateAdminUserProfileResponseEmailMax).regex(updateAdminUserProfileResponseEmailRegExp),
   "phone": zod.string().regex(updateAdminUserProfileResponsePhoneRegExp),
   "birthDate": zod.string().max(updateAdminUserProfileResponseBirthDateMax),
   "arabicLevel": zod.enum(['Zəif', 'Orta', 'Yaxşı', 'Əla']),
   "role": zod.enum(['none', 'owner', 'teacher', 'supervisor', 'owner_assistant', 'admin']),
-  "rolePermissions": zod.array(zod.string())
+  "rolePermissions": zod.array(zod.string()),
+  "hasApplication": zod.boolean().optional().describe('False for accounts without an application\/student row (e.g. staff created directly in Clerk); phone, birth date and Arabic level are then optional and not stored.')
 })
 
 

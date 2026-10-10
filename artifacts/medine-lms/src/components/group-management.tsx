@@ -101,7 +101,7 @@ function groupTeacherText(group: GroupView, t: (key: MessageKey) => string) {
   return groupHasTeacher(group) ? `${isCoTaught(group) ? t('teachersLabel') : t('roleTeacher')}: ${resourceTeacherLabel(group)}` : t('noTeacherAssigned');
 }
 
-function scheduleText(group: { lessonDays: string[]; lessonTime: string | null }, t: (key: MessageKey) => string) {
+function scheduleText(group: { lessonDays: string[]; lessonTime?: string | null }, t: (key: MessageKey) => string) {
   if (!group.lessonDays.length) return t('noDaySet');
   const dayKey: Record<string, MessageKey> = { monday: 'dayMon', tuesday: 'dayTue', wednesday: 'dayWed', thursday: 'dayThu', friday: 'dayFri', saturday: 'daySat', sunday: 'daySun' };
   const order = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -171,11 +171,13 @@ export function GroupManagementSection({ view: controlledView, onViewChange, onO
   const termLessons = lessons.filter((lesson) => termNumber === null || lesson.termNumber === termNumber);
   const termGroups = groups.filter((group) => termNumber === null || group.termNumber === termNumber);
   const courses = useMemo(() => Array.from(new Map(termLessons.map((lesson) => [lesson.courseId, lesson.courseTitle])).entries()).sort((a, b) => a[1].localeCompare(b[1], 'az')), [termLessons]);
+  // Müəllim filtri: «Müəllim» rolundakı BÜTÜN hesablar (qrupu olmayanlar da) + qruplarda görünən digər müəllimlər.
   const teacherOptions = useMemo(() => {
     const map = new Map<string, string>();
+    for (const teacher of teachersQuery.data ?? []) map.set(teacher.clerkUserId, teacher.displayName);
     for (const group of groups) {
       const ids = resourceTeacherIds(group);
-      ids.forEach((id, index) => map.set(id, group.teacherNames?.[index] ?? teachersQuery.data?.find((teacher) => teacher.clerkUserId === id)?.displayName ?? 'Müəllim'));
+      ids.forEach((id, index) => { if (!map.has(id)) map.set(id, group.teacherNames?.[index] || 'Müəllim'); });
     }
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], 'az'));
   }, [groups, teachersQuery.data]);

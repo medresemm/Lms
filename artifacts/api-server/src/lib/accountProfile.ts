@@ -84,3 +84,37 @@ export function buildAccountProfile<Role extends string>(input: {
     rolePermissions: rolePermissions.filter((permission): permission is string => typeof permission === "string"),
   };
 }
+
+// Admin «Məlumatları düzəlt» pəncərəsi üçün profil.
+// Clerk panelindən birbaşa yaradılmış heyət hesablarında (müəllim və s.) müraciət sətri yoxdur və Clerk-də ad/soyad boşdur.
+// Əvvəllər belə hesablarda cavab sxemi (ad minLength: 1) pozulur və GET 500 qaytarırdı.
+// Burada ad/soyad boş qala bilər (admin formada özü yazsın deyə — yer tutucu «—» formaya düşməsin),
+// qalan sahələr isə sxemə uyğun təhlükəsiz dəyərlərə endirilir.
+export function buildAdminUserProfile<Role extends string>(input: {
+  userId: string;
+  clerkUser: AccountProfileClerkUser;
+  application: AccountProfileApplication;
+  role: Role;
+  rolePermissions: string[];
+}): AccountProfile<Role> & { hasApplication: boolean } {
+  const base = buildAccountProfile(input);
+  const { clerkUser, application } = input;
+  return {
+    ...base,
+    firstName: firstNonEmpty(100, clerkUser.firstName, application?.firstName),
+    lastName: firstNonEmpty(100, clerkUser.lastName, application?.lastName),
+    hasApplication: Boolean(application),
+  };
+}
+
+export type ProfileInputExtras = { phone: string; birthDate: string };
+
+// Müraciəti (tələbə profili) olan hesablarda telefon və doğum tarixi məcburidir.
+// Müraciəti olmayan heyət hesablarında bu sahələr saxlanılmır, ona görə boş qala bilər.
+export function profileInputError(input: ProfileInputExtras & { firstName: string; lastName: string }, hasApplication: boolean): string | null {
+  if (!input.firstName.trim() || !input.lastName.trim()) return "Ad və soyad boş ola bilməz.";
+  if (!hasApplication) return null;
+  if (!PHONE_PATTERN.test(input.phone.trim())) return "Telefon nömrəsi +994XXXXXXXXX formatında olmalıdır.";
+  if (!input.birthDate.trim()) return "Doğum tarixi daxil edilməlidir.";
+  return null;
+}

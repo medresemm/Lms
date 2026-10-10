@@ -93,6 +93,10 @@ test("admin site guide", async () => {
   assert.match((await ask("Mesajlara necə cavab verim?", adminContext())).reply, /«Məsləhətləşmə \/ Əlaqə»/);
   assert.match((await ask("Admin paneldən necə istifadə edim?", adminContext())).reply, /Admin paneldən istifadə/);
   assert.doesNotMatch((await ask("Tapşırığı necə göndərim?", adminContext())).reply, /Ev tapşırığını göndərmək/);
+  const reply = async (q: string) => { const a = await ask(q, adminContext()); return [a.reply, JSON.stringify(a.blocks ?? [])].join("\n"); };
+  assert.match(await reply("Tədris proqramı harada?"), /Cədvəl hazırlama[\s\S]*Qruplar/);
+  assert.match(await reply("Dərslərim harada?"), /«Dərslərim»/);
+  assert.match(await reply("Mövzuları harada yazım?"), /«Mövzular»/);
 });
 
 test("admin fuzzy student search tolerates typos, order and transliteration", async () => {
@@ -192,8 +196,8 @@ test("admin guide lists only the sections the current account actually has", asy
   assert.match(owner, /«Statistika»[\s\S]*«Audit tarixçəsi»/);
   // Müəllim: İstifadəçi rolları / Cədvəl hazırlama yoxdur.
   const teacher = text(await ask("Admin paneldən necə istifadə edim?", adminContext(["schedule", "assignments", "students"], { role: "teacher" })));
-  assert.match(teacher, /«Tədris proqramı»[\s\S]*«Mədrəsə Kitabxanası»/);
-  assert.doesNotMatch(teacher, /İstifadəçi rolları|Cədvəl hazırlama|Statistika/);
+  assert.match(teacher, /«Qruplar»[\s\S]*«Mədrəsə Kitabxanası»/);
+  assert.doesNotMatch(teacher, /İstifadəçi rolları|Cədvəl hazırlama|Statistika|«Tədris proqramı»/);
   // Bölmə yoxdursa, addımlar yerinə qısa izah.
   const noAnnouncements = text(await ask("Elanı necə yayımlayım?", adminContext(["students"], { role: "owner_assistant" })));
   assert.match(noAnnouncements, /«Yeni elan» bölməsi sizin hesabınızda açıq deyil/);

@@ -4,22 +4,29 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Regression: global CSS used to hide the whole «Semestr fənləri» block with
-// display:none, which made «Müəllim əlavə et / çıxar» and «Qrupu sil»
-// invisible and unclickable in Tədris proqramı.
+// «Tədris proqramı» bölməsi ləğv olunub: qrup əməliyyatları «Qruplar» bölməsindədir
+// və heç bir qlobal CSS qaydası onları gizlətmir.
 const here = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(resolve(here, "../index.css"), "utf8");
 const panel = readFileSync(resolve(here, "../components/admin-panel.tsx"), "utf8");
+const groups = readFileSync(resolve(here, "../components/group-management.tsx"), "utf8");
 
-test("no global CSS rule hides the semester groups block", () => {
-  assert.doesNotMatch(css, /section-semester-management"\]\s*>\s*div\.mt-8/);
+test("no global CSS rule hides group blocks and the old curriculum rules are gone", () => {
   assert.ok(!css.includes("section-semester-groups"));
+  assert.ok(!css.includes("section-semester-management"));
+  assert.ok(!css.includes("section-selected-subjects"));
 });
 
-test("group actions are rendered inside the semester groups block", () => {
-  const start = panel.indexOf('data-testid="section-semester-groups"');
-  assert.ok(start > -1);
-  const block = panel.slice(start, start + 12_000);
-  assert.ok(block.includes("button-delete-resource-group-"));
-  assert.ok(block.includes("button-edit-group-teachers-"));
+test("the Tədris proqramı tile and its legacy forms are removed", () => {
+  assert.ok(!panel.includes("'course-content'"));
+  assert.ok(!panel.includes("Tədris proqramı"));
+  for (const dead of ["function ResourceForm", "function ResourceList", "function CourseForm", "function CourseLessonCountForm", "section-semester-groups"]) {
+    assert.ok(!panel.includes(dead), dead);
+  }
+});
+
+test("group actions live in «Qruplar» cards", () => {
+  for (const marker of ["button-group-delete-", "button-group-edit-teachers-", "button-group-links-", "button-group-add-students-", "button-group-remove-"]) {
+    assert.ok(groups.includes(marker), marker);
+  }
 });

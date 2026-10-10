@@ -67,6 +67,9 @@ export const resourcesTable = pgTable("lms_resources", {
   isMandatory: boolean("is_mandatory").notNull().default(true),
   teacherClerkUserId: text("teacher_clerk_user_id"),
   studentCapacity: integer("student_capacity").notNull().default(0),
+  // DİQQƏT: «is_group» sütunu (lib/db/manual-sql/2026-10-10-resource-group-flag.sql) burada qəsdən yoxdur —
+  // SQL işə salınmamış bazada hər select xəta verərdi. Ona artifacts/api-server/src/lib/resourceGroups.ts
+  // xam SQL ilə müraciət edir və sütun yoxdursa əvvəlki qaydaya qayıdır.
 }, (table) => ({
   validTermNumber: check("lms_resources_term_number_check", sql`${table.termNumber} BETWEEN 1 AND 8`),
 }));

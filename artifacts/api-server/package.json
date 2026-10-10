@@ -25,7 +25,7 @@
     "test:co-teachers": "tsx --test src/lib/resourceTeachers.test.ts ../medine-lms/src/lib/co-teachers.test.ts",
     "test:student-visibility": "tsx --test src/lib/studentVisibility.test.ts ../medine-lms/src/lib/staff-student-note.test.ts",
     "test:frontend-admin": "tsx --test ../medine-lms/src/lib/clerk-token.test.ts ../medine-lms/src/lib/semester-groups-visibility.test.ts",
-    "test:groups": "tsx --test src/lib/groupRoster.test.ts ../medine-lms/src/lib/groups.test.ts ../medine-lms/src/lib/schedule-prep-books.test.ts"
+    "test:groups": "tsx --test src/lib/groupRoster.test.ts src/lib/resourceGroups.test.ts ../medine-lms/src/lib/groups.test.ts ../medine-lms/src/lib/schedule-prep-books.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1100.0",

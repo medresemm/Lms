@@ -26,6 +26,7 @@ import { isMeetingUrl, lessonTimeForDay } from "../lib/lessonAttendance.js";
 import { buildAccountProfile } from "../lib/accountProfile.js";
 import { rosterIdsToKeep, staffIdsFrom } from "../lib/studentVisibility.js";
 import { candidateStatus, managesAllGroups, planRosterAdd } from "../lib/groupRoster.js";
+import { flaggedGroupIds, groupFlagAvailable, GROUP_FLAG_MISSING_MESSAGE, isGroupRow, isScheduleRow, setGroupFlag, studentVisibleRows } from "../lib/resourceGroups.js";
 import { validateCourseBooks, type CourseBookEntry } from "../lib/library/courseBooks.js";
 import { COURSE_BOOKS_TABLE_MISSING_MESSAGE, isMissingCourseBooksTable, saveCourseBooks } from "../lib/library/courseBooksRepo.js";
 import {
@@ -2570,17 +2571,8 @@ async function studentScheduleResources(profileId: number, termNumber: number) {
     .where(and(eq(studentTeacherChoicesTable.profileId, profileId), eq(studentTeacherChoicesTable.status, "approved")));
   const approvedResourceIds = new Set(approvedChoices.map((choice) => choice.resourceId));
   const removedCourseIds = new Set(selections.filter((selection) => !selection.selected).map((selection) => selection.courseId));
-  const grouped = new Map<number, typeof resources>();
-  for (const resource of resources) {
-    if (removedCourseIds.has(resource.courseId) || !resource.teacherClerkUserId) continue;
-    const group = grouped.get(resource.courseId) ?? [];
-    group.push(resource);
-    grouped.set(resource.courseId, group);
-  }
-  return Array.from(grouped.values()).flatMap((group) => {
-    const assigned = group.filter((resource) => approvedResourceIds.has(resource.id));
-    return assigned.length ? assigned : group.length === 1 ? group : [];
-  });
+  // Müəllimsiz qruplar (is_group) və cədvəl sətirləri tələbəyə görünmür; qayda resourceGroupsCore.ts-dədir.
+  return studentVisibleRows(resources, approvedResourceIds, removedCourseIds, await flaggedGroupIds());
 }
 
 router.get("/resources", requireApprovedStudent, async (req, res, next) => {
@@ -2948,6 +2940,8 @@ function scheduledLessonStartUtc(date: string, time: string) {
 }
 
 export async function studentMayAttendResource(profileId: number, resource: typeof resourcesTable.$inferSelect) {
+  // Müəllimi olmayan sətir (cədvəl dərsi və ya müəllimsiz qrup) tələbəyə görünmür — müəllim təyin olunana qədər.
+  if (!resource.teacherClerkUserId) return false;
   const [selection] = await db.select({ selected: studentCourseSelectionsTable.selected })
     .from(studentCourseSelectionsTable)
     .where(and(
@@ -3862,7 +3856,8 @@ router.patch("/admin/courses/:courseId", requireTeacher, async (req, res, next) 
     }
     const clerkUser = await getClerkUser(teacherClerkUserId);
     const role = clerkUser ? roleForClerkUser(clerkUser) : "none";
-    if (role !== "owner" && role !== "owner_assistant") {
+    // Sahib, idarə heyəti və admin istənilən dərsin linklərini dəyişir («Qruplar» → «Linklər»); müəllim yalnız öz dərsini.
+    if (role !== "owner" && role !== "owner_assistant" && role !== "admin") {
       const [assignment] = await db.select({ id: resourcesTable.id })
         .from(resourcesTable)
         .where(and(eq(resourcesTable.courseId, courseId), await taughtByCondition(teacherClerkUserId)))
@@ -4008,7 +4003,7 @@ router.get("/admin/courses/:courseId", requireTeacher, async (req, res, next) =>
       res.status(400).json({ error: "Dərs nömrəsi düzgün deyil." });
       return;
     }
-    if (role !== "owner" && role !== "owner_assistant") {
+    if (role !== "owner" && role !== "owner_assistant" && role !== "admin") {
       const [assignment] = await db.select({ id: resourcesTable.id })
         .from(resourcesTable)
         .where(and(eq(resourcesTable.courseId, courseId), await taughtByCondition(teacherClerkUserId)))
@@ -4380,6 +4375,39 @@ function parseLessonSchedule(body: unknown): { ok: true; value: { lessonDays: st
   return { ok: true, value: { lessonDays: days, lessonTime } };
 }
 
+type LessonDetails = { course: { totalLessons?: number; pdfUrl?: string | null; curriculum?: string[] }; isMandatory?: boolean };
+
+/**
+ * «Cədvəl hazırlama» formasının əlavə sahələri (hamısı istəyə bağlı; göndərilməyən sahəyə toxunulmur):
+ * totalLessons (dərs sayı), isMandatory (icbari / ixtiyari), pdfUrl (dərsin PDF linki), curriculum (mövzular).
+ */
+function parseLessonDetails(body: unknown): { ok: true; value: LessonDetails } | { ok: false; error: string } {
+  const input = (body ?? {}) as { totalLessons?: unknown; isMandatory?: unknown; pdfUrl?: unknown; curriculum?: unknown };
+  const value: LessonDetails = { course: {} };
+  if (input.totalLessons !== undefined) {
+    const total = Number(input.totalLessons);
+    if (!Number.isInteger(total) || total < 0 || total > 1000) return { ok: false, error: "Dərs sayı 0 və ya müsbət tam ədəd olmalıdır." };
+    value.course.totalLessons = total;
+  }
+  if (input.isMandatory !== undefined) {
+    if (typeof input.isMandatory !== "boolean") return { ok: false, error: "Dərsin növü düzgün seçilməyib." };
+    value.isMandatory = input.isMandatory;
+  }
+  if (input.pdfUrl !== undefined) {
+    const raw = input.pdfUrl === null ? "" : typeof input.pdfUrl === "string" ? input.pdfUrl.trim() : null;
+    if (raw === null || raw.length > 2000) return { ok: false, error: "PDF linki düzgün deyil." };
+    if (raw && !/^https:\/\/\S+$/i.test(raw) && !coursePdfObjectPathPattern.test(raw)) return { ok: false, error: "PDF linki https:// ilə başlamalıdır." };
+    value.course.pdfUrl = raw || null;
+  }
+  if (input.curriculum !== undefined) {
+    if (!Array.isArray(input.curriculum) || !input.curriculum.every((item) => typeof item === "string")) return { ok: false, error: "Mövzular düzgün deyil." };
+    const topics = (input.curriculum as string[]).map((item) => item.trim()).filter(Boolean);
+    if (topics.length > 200 || topics.some((item) => item.length > 300)) return { ok: false, error: "Mövzu siyahısı çox uzundur (ən çox 200 mövzu, hər biri 300 simvol)." };
+    value.course.curriculum = topics;
+  }
+  return { ok: true, value };
+}
+
 /**
  * «Cədvəl hazırlama» formasında seçilən Kitabxana kitabları (istəyə bağlı «books» sahəsi).
  * undefined — sahə göndərilməyib (kitablara toxunulmur); xəta — 400 mətni.
@@ -4429,6 +4457,8 @@ router.post("/admin/schedule-lessons", requireTeacher, async (req, res, next) =>
     if (!lessonBooks.ok) { res.status(400).json({ error: lessonBooks.error }); return; }
     const schedule = parseLessonSchedule(req.body);
     if (!schedule.ok) { res.status(400).json({ error: schedule.error }); return; }
+    const details = parseLessonDetails(req.body);
+    if (!details.ok) { res.status(400).json({ error: details.error }); return; }
     // Idempotency guard: a double submit (double click, Enter + click, network
     // retry) must not create two identical lessons. Serialise creations for the
     // same term + name with a transaction-scoped advisory lock and refuse a
@@ -4446,18 +4476,19 @@ router.post("/admin/schedule-lessons", requireTeacher, async (req, res, next) =>
         title,
         category: "İslam elmləri",
         instructor: "",
-        totalLessons: 0,
+        totalLessons: details.value.course.totalLessons ?? 0,
         credits: 3,
         hours: 45,
         color: "teal",
         progress: 0,
         completedLessons: 0,
         description: `${title} dərsi.`,
-        curriculum: [],
+        curriculum: details.value.course.curriculum ?? [],
         lessonDescription: "",
         nextLesson: null,
         lessonDays: [],
         lessonTime: null,
+        pdfUrl: details.value.course.pdfUrl ?? null,
       }).returning();
       if (!course) throw new Error("Dərs yaradılmadı.");
       const [resource] = await tx.insert(resourcesTable).values({
@@ -4469,7 +4500,7 @@ router.post("/admin/schedule-lessons", requireTeacher, async (req, res, next) =>
         url: null,
         lessonDays: schedule.value?.lessonDays ?? [],
         lessonTime: schedule.value?.lessonTime ?? null,
-        isMandatory: true,
+        isMandatory: details.value.isMandatory ?? true,
         teacherClerkUserId: null,
         studentCapacity: 0,
       }).returning();
@@ -4506,10 +4537,21 @@ router.patch("/admin/schedule-lessons/:resourceId", requireTeacher, async (req, 
     if (!lessonBooks.ok) { res.status(400).json({ error: lessonBooks.error }); return; }
     const schedule = parseLessonSchedule(req.body);
     if (!schedule.ok) { res.status(400).json({ error: schedule.error }); return; }
+    const details = parseLessonDetails(req.body);
+    if (!details.ok) { res.status(400).json({ error: details.error }); return; }
     const title = typeof req.body?.title === "string" && req.body.title.trim() ? req.body.title.trim() : existing.title;
-    await db.update(coursesTable).set({ title }).where(eq(coursesTable.id, existing.courseId));
-    // Gün və saat göndərilibsə dərsin bütün qruplarına tətbiq olunur (forma yalnız dəyişəndə göndərir).
-    await db.update(resourcesTable).set({ title, ...(schedule.value ? { lessonDays: schedule.value.lessonDays, lessonTime: schedule.value.lessonTime } : {}) }).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber)));
+    await db.update(coursesTable).set({ title, ...details.value.course }).where(eq(coursesTable.id, existing.courseId));
+    // Gün, saat və icbari/ixtiyari göndərilibsə dərsin bütün qruplarına tətbiq olunur (forma gün/saatı yalnız dəyişəndə göndərir).
+    await db.update(resourcesTable).set({
+      title,
+      ...(schedule.value ? { lessonDays: schedule.value.lessonDays, lessonTime: schedule.value.lessonTime } : {}),
+      ...(details.value.isMandatory !== undefined ? { isMandatory: details.value.isMandatory } : {}),
+    }).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber)));
+    if (Object.keys(details.value.course).length || details.value.isMandatory !== undefined) await recordAuditEvent({
+      eventType: "course.updated", actorClerkUserId: userId, targetType: "course", targetId: existing.courseId,
+      details: { changedFields: [...Object.keys(details.value.course), ...(details.value.isMandatory !== undefined ? ["isMandatory"] : [])], termNumber: existing.termNumber, source: "schedule-prep" },
+      deduplicationKey: `course.updated:schedule-prep:${existing.courseId}:${Date.now()}`,
+    });
     if (schedule.value) await recordAuditEvent({
       eventType: "resource.updated", actorClerkUserId: userId, targetType: "resource", targetId: existing.id,
       details: { courseId: existing.courseId, termNumber: existing.termNumber, lessonDays: schedule.value.lessonDays, lessonTime: schedule.value.lessonTime, source: "schedule-prep" },
@@ -4538,11 +4580,13 @@ router.delete("/admin/schedule-lessons/:resourceId", requireTeacher, async (req,
       return;
     }
     const siblings = await db.select().from(resourcesTable).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber)));
-    if (siblings.some((item) => item.teacherClerkUserId)) {
-      res.status(400).json({ error: "Bu dərsə müəllim qrupu bağlıdır. Əvvəlcə «Qruplar» bölməsində (və ya Tədris proqramı → Semestr fənləri siyahısında) həmin müəllim qrupunu silin, sonra dərsi buradan silə bilərsiniz." });
+    const flagged = await flaggedGroupIds();
+    if (siblings.some((item) => isGroupRow(item, flagged))) {
+      res.status(400).json({ error: "Bu dərsin qrupu var. Əvvəlcə «Qruplar» bölməsində həmin qrupları silin, sonra dərsi buradan silə bilərsiniz." });
       return;
     }
-    await db.delete(resourcesTable).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber), isNull(resourcesTable.teacherClerkUserId)));
+    const scheduleRowIds = siblings.filter((item) => isScheduleRow(item, flagged)).map((item) => item.id);
+    if (scheduleRowIds.length) await db.delete(resourcesTable).where(inArray(resourcesTable.id, scheduleRowIds));
     const remaining = await db.select({ id: resourcesTable.id }).from(resourcesTable).where(eq(resourcesTable.courseId, existing.courseId)).limit(1);
     if (!remaining.length) await db.delete(coursesTable).where(eq(coursesTable.id, existing.courseId));
     res.json({ ok: true });
@@ -4800,15 +4844,17 @@ router.put("/admin/resources/:resourceId/teachers", requireTeacher, async (req, 
       return;
     }
     const [existing] = await db.select().from(resourcesTable).where(eq(resourcesTable.id, resourceId)).limit(1);
-    if (!existing || !existing.teacherClerkUserId) { res.status(404).json({ error: "Müəllim qrupu tapılmadı." }); return; }
+    // Müəllimsiz qrupa (is_group) da burada müəllim təyin olunur («Qruplar» → «3 Müəllimlər»).
+    if (!existing || !isGroupRow(existing, existing.teacherClerkUserId ? new Set() : await flaggedGroupIds())) { res.status(404).json({ error: "Qrup tapılmadı." }); return; }
     const requested = Array.isArray(req.body?.teacherClerkUserIds)
       ? (req.body.teacherClerkUserIds as unknown[]).filter((id): id is string => typeof id === "string")
       : null;
     if (!requested) { res.status(400).json({ error: "Müəllim siyahısı göndərilməyib." }); return; }
     const state = await loadCoTeachers();
     const currentCo = state.map.get(resourceId) ?? [];
-    const plan = planTeacherSet(existing.teacherClerkUserId, currentCo, requested);
-    if (!plan.ok) { res.status(400).json({ error: plan.error }); return; }
+    const plannedSet = planTeacherSet(existing.teacherClerkUserId ?? "", currentCo, requested);
+    if (!plannedSet.ok) { res.status(400).json({ error: plannedSet.error }); return; }
+    const plan = existing.teacherClerkUserId ? plannedSet : { ...plannedSet, removed: plannedSet.removed.filter(Boolean) };
     if (!state.available && (plan.coTeacherIds.length || currentCo.length)) {
       res.status(503).json({ error: RESOURCE_TEACHERS_TABLE_MISSING_MESSAGE, code: "resource_teachers_table_missing" });
       return;
@@ -4830,6 +4876,7 @@ router.put("/admin/resources/:resourceId/teachers", requireTeacher, async (req, 
     }
     if (plan.mainChanged) {
       await db.update(resourcesTable).set({ teacherClerkUserId: plan.mainTeacherId }).where(eq(resourcesTable.id, resourceId));
+      await setGroupFlag(db, resourceId, true);
     }
     const stamp = Date.now();
     const base = { courseId: existing.courseId, termNumber: existing.termNumber, mainTeacherClerkUserId: plan.mainTeacherId, teacherClerkUserIds: [plan.mainTeacherId, ...plan.coTeacherIds] };
@@ -4962,6 +5009,7 @@ router.delete("/admin/resources/:resourceId", requireTeacher, async (req, res, n
       ne(resourcesTable.id, resourceId),
     ));
     const keepAsScheduleLesson = siblings.length === 0;
+    const flagReady = keepAsScheduleLesson && await groupFlagAvailable();
     await db.transaction(async (tx) => {
       await tx.delete(studentTeacherChoicesTable).where(eq(studentTeacherChoicesTable.resourceId, resourceId));
       if (usage.lessonJoins) await tx.delete(lessonJoinEventsTable).where(eq(lessonJoinEventsTable.resourceId, resourceId));
@@ -4993,6 +5041,8 @@ router.delete("/admin/resources/:resourceId", requireTeacher, async (req, res, n
           teacherClerkUserId: null,
           studentCapacity: 0,
         }).where(eq(resourcesTable.id, resourceId));
+        // Yenidən cədvəl sətri olur (qrup deyil).
+        if (flagReady) await setGroupFlag(tx, resourceId, false);
       } else {
         await tx.delete(resourcesTable).where(eq(resourcesTable.id, resourceId));
       }
@@ -5898,7 +5948,7 @@ async function loadManagedGroup(req: Parameters<RequestHandler>[0], res: Paramet
   if (!Number.isInteger(resourceId) || resourceId <= 0) { res.status(400).json({ error: "Qrup seçilməyib." }); return null; }
   const actor = await groupActor(req);
   const [resource] = await db.select().from(resourcesTable).where(eq(resourcesTable.id, resourceId)).limit(1);
-  if (!resource || !resource.teacherClerkUserId) { res.status(404).json({ error: "Müəllim qrupu tapılmadı." }); return null; }
+  if (!resource || !isGroupRow(resource, resource.teacherClerkUserId ? new Set() : await flaggedGroupIds())) { res.status(404).json({ error: "Qrup tapılmadı." }); return null; }
   if (!actor.actorId || !(actor.manageAll || await userTeachesResource(actor.actorId, resource))) {
     res.status(403).json({ error: "Bu müəllim qrupuna giriş icazəniz yoxdur." });
     return null;
@@ -5910,12 +5960,16 @@ router.get("/admin/groups", requireTeacher, async (req, res, next) => {
   try {
     const actor = await groupActor(req);
     if (!actor.actorId) { res.status(401).json({ error: "Hesab tapılmadı." }); return; }
-    const [resources, coTeachers, courses, staffIds] = await Promise.all([
-      db.select().from(resourcesTable).where(sql`${resourcesTable.teacherClerkUserId} IS NOT NULL`).orderBy(asc(resourcesTable.termNumber), asc(resourcesTable.id)),
+    const [allRows, coTeachers, courses, staffIds, flagged, flagReady, activeTerms] = await Promise.all([
+      db.select().from(resourcesTable).orderBy(asc(resourcesTable.termNumber), asc(resourcesTable.id)),
       coTeacherMap(),
       db.select({ id: coursesTable.id, title: coursesTable.title }).from(coursesTable),
       getStaffClerkUserIds(),
+      flaggedGroupIds(),
+      groupFlagAvailable(),
+      getActiveTermNumbers(),
     ]);
+    const resources = allRows.filter((row) => isGroupRow(row, flagged));
     const visible = actor.manageAll ? resources : resources.filter((resource) => resourceTeacherIds(resource, coTeachers).includes(actor.actorId!));
     const ids = visible.map((resource) => resource.id);
     const choiceRows = ids.length ? await db.select({
@@ -5936,25 +5990,32 @@ router.get("/admin/groups", requireTeacher, async (req, res, next) => {
     }
     const titles = new Map(courses.map((course) => [course.id, course.title]));
     const views = await resourceViews(visible);
-    // Cədvəldəki dərslər (fənn + semestr): qrupu olmayanlar da görünsün deyə (addım 1 → 2).
-    const allRows = actor.manageAll ? await db.select().from(resourcesTable).orderBy(asc(resourcesTable.id)) : resources.filter((row) => visible.some((group) => group.courseId === row.courseId && group.termNumber === row.termNumber));
-    const lessonMap = new Map<string, { courseId: number; termNumber: number; courseTitle: string; lessonDays: string[]; lessonTime: string | null; groupCount: number; scheduleResourceId: number }>();
-    for (const row of allRows) {
+    // Cədvəldəki dərslər (fənn + semestr): qrupu olmayanlar da görünsün (addım 1 → 2).
+    // Müəllim aktiv semestrlərin dərslərini görür ki, özü üçün qrup yarada bilsin.
+    const lessonRows = actor.manageAll ? allRows : allRows.filter((row) => activeTerms.includes(row.termNumber));
+    const lessonMap = new Map<string, { courseId: number; termNumber: number; courseTitle: string; lessonDays: string[]; lessonTime: string | null; groupCount: number; scheduleResourceId: number; hasScheduleRow: boolean }>();
+    for (const row of lessonRows) {
       const key = `${row.courseId}:${row.termNumber}`;
+      const group = isGroupRow(row, flagged);
       const entry = lessonMap.get(key);
       if (!entry) {
-        lessonMap.set(key, { courseId: row.courseId, termNumber: row.termNumber, courseTitle: titles.get(row.courseId)?.trim() || row.title, lessonDays: row.lessonDays, lessonTime: row.lessonTime, groupCount: row.teacherClerkUserId ? 1 : 0, scheduleResourceId: row.id });
+        lessonMap.set(key, { courseId: row.courseId, termNumber: row.termNumber, courseTitle: titles.get(row.courseId)?.trim() || row.title, lessonDays: row.lessonDays, lessonTime: row.lessonTime, groupCount: group ? 1 : 0, scheduleResourceId: row.id, hasScheduleRow: !group });
       } else {
-        if (row.teacherClerkUserId) entry.groupCount += 1;
-        // Qrupsuz cədvəl sətri (skelet) dərsin əsas cədvəlidir.
-        if (!row.teacherClerkUserId) { entry.lessonDays = row.lessonDays; entry.lessonTime = row.lessonTime; entry.scheduleResourceId = row.id; }
+        if (group) entry.groupCount += 1;
+        // Qrupsuz cədvəl sətri dərsin əsas cədvəlidir.
+        else if (!entry.hasScheduleRow) { entry.lessonDays = row.lessonDays; entry.lessonTime = row.lessonTime; entry.scheduleResourceId = row.id; entry.hasScheduleRow = true; }
       }
     }
     res.json({
       canManageAll: actor.manageAll,
       canManageTeachers: actor.manageTeachers,
-      canCreateGroups: actor.manageAll,
-      lessons: Array.from(lessonMap.values()).sort((a, b) => a.termNumber - b.termNumber || a.courseTitle.localeCompare(b.courseTitle, "az")),
+      canCreateGroups: true,
+      // Müəllimsiz qrup yalnız is_group sütunu olduqda və yalnız sahib / idarə heyəti / admin üçün.
+      canCreateTeacherlessGroups: actor.manageAll && flagReady,
+      groupFlagAvailable: flagReady,
+      groupFlagMessage: flagReady ? null : GROUP_FLAG_MISSING_MESSAGE,
+      activeTerms,
+      lessons: Array.from(lessonMap.values()).map(({ hasScheduleRow: _ignored, ...lesson }) => lesson).sort((a, b) => a.termNumber - b.termNumber || a.courseTitle.localeCompare(b.courseTitle, "az")),
       groups: views.map((view, index) => {
         const resource = visible[index]!;
         const teaches = resourceTeacherIds(resource, coTeachers).includes(actor.actorId!);
@@ -5965,6 +6026,7 @@ router.get("/admin/groups", requireTeacher, async (req, res, next) => {
           pendingCount: counts.get(resource.id)?.pending ?? 0,
           canManageStudents: actor.manageAll || teaches,
           canDelete: actor.board || teaches,
+          canEditLinks: actor.manageAll || teaches,
         };
       }),
     });
@@ -5975,27 +6037,35 @@ class RosterPlanError extends Error {
   constructor(readonly status: number, message: string) { super(message); this.name = "RosterPlanError"; }
 }
 
-// Qrup yarat (addım 2 + 3): cədvəldəki dərs üçün tələbələr və müəllim(lər) birlikdə saxlanılır.
-// Qrup müəllimsiz saxlanılmır: qrupsuz cədvəl sətri (müəllimsiz) cədvəl dərsi sayılır və bir çox yerdə belə istifadə olunur.
+// Qrup yarat («2 Tələbələr»): cədvəldəki dərs üçün qrup + tələbələr + tutum.
+// - Sahib / idarə heyəti / admin: müəllim istəyə bağlıdır (is_group sütunu varsa); müəllim «3 Müəllimlər»də təyin olunur.
+//   Sütun hələ yoxdursa, əvvəlki kimi ən azı bir müəllim tələb olunur.
+// - Müəllim: yalnız aktiv semestrin dərsi üçün, özü avtomatik əsas müəllim olur.
 router.post("/admin/groups", requireTeacher, async (req, res, next) => {
   try {
     const actor = await groupActor(req);
-    if (!actor.actorId || !actor.manageAll) {
-      res.status(403).json({ error: "Qrupu yalnız sahib, idarə heyəti və admin yarada bilər." });
-      return;
-    }
+    if (!actor.actorId) { res.status(401).json({ error: "Hesab tapılmadı." }); return; }
     const actorId = actor.actorId;
+    const flagReady = await groupFlagAvailable();
     const courseId = Number(req.body?.courseId);
     const termNumber = Number(req.body?.termNumber);
     if (!Number.isInteger(courseId) || courseId < 1 || validateTermNumber(termNumber)) { res.status(400).json({ error: "Dərs və semestr düzgün seçilməyib." }); return; }
-    const teacherIds = Array.isArray(req.body?.teacherClerkUserIds)
+    const requestedTeacherIds = Array.isArray(req.body?.teacherClerkUserIds)
       ? Array.from(new Set((req.body.teacherClerkUserIds as unknown[]).filter((id): id is string => typeof id === "string" && Boolean(id.trim())).map((id) => id.trim())))
       : [];
-    if (!teacherIds.length) { res.status(400).json({ error: "Qrupa ən azı bir müəllim təyin edin (3-cü addım)." }); return; }
+    let teacherIds = requestedTeacherIds;
+    if (!actor.manageAll) {
+      // Müəllim öz qrupunu yaradır: əsas müəllim həmişə özüdür, əlavə müəllimi idarə heyəti təyin edir.
+      if (actor.role !== "teacher") { res.status(403).json({ error: "Qrupu yalnız sahib, idarə heyəti, admin və müəllim yarada bilər." }); return; }
+      if (!(await getActiveTermNumbers()).includes(termNumber)) { res.status(400).json({ error: "Bu semestr aktiv deyil." }); return; }
+      teacherIds = [actorId];
+    }
+    if (!teacherIds.length && !flagReady) { res.status(400).json({ error: GROUP_FLAG_MISSING_MESSAGE, code: "group_flag_missing" }); return; }
     if (teacherIds.length > 10) { res.status(400).json({ error: "Bir qrupa ən çox 10 müəllim təyin etmək olar." }); return; }
-    for (const id of teacherIds) {
+    for (const id of actor.manageAll ? teacherIds : []) {
       if (!await validateTeacherAssignment(id)) { res.status(400).json({ error: "Yalnız aktiv müəllim hesabı təyin edilə bilər." }); return; }
     }
+    const mainTeacherId = teacherIds[0] ?? null;
     const coTeacherIds = teacherIds.slice(1);
     if (coTeacherIds.length && !(await loadCoTeachers()).available) {
       res.status(503).json({ error: RESOURCE_TEACHERS_TABLE_MISSING_MESSAGE, code: "resource_teachers_table_missing" });
@@ -6008,23 +6078,26 @@ router.post("/admin/groups", requireTeacher, async (req, res, next) => {
       ? (req.body.profileIds as unknown[]).filter((id): id is number => typeof id === "number" && Number.isInteger(id) && id > 0)
       : [];
     const staffIds = await getStaffClerkUserIds();
+    const flaggedBefore = await flaggedGroupIds();
     const result = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${"teacher-choice:" + courseId + ":" + termNumber}, 0))`);
       const rows = await tx.select().from(resourcesTable).where(and(eq(resourcesTable.courseId, courseId), eq(resourcesTable.termNumber, termNumber))).orderBy(asc(resourcesTable.id));
       if (!rows.length) return { ok: false as const, status: 400, error: "Bu dərs seçilən semestrin cədvəlində yoxdur. Əvvəlcə «Cədvəl hazırlama» bölməsində dərsi yaradın (1-ci addım)." };
-      const skeleton = rows.find((row) => !row.teacherClerkUserId);
+      const skeleton = rows.find((row) => isScheduleRow(row, flaggedBefore));
       const source = skeleton ?? rows[0]!;
       let group: typeof resourcesTable.$inferSelect | undefined;
       if (skeleton) {
-        [group] = await tx.update(resourcesTable).set({ teacherClerkUserId: teacherIds[0], studentCapacity }).where(eq(resourcesTable.id, skeleton.id)).returning();
+        [group] = await tx.update(resourcesTable).set({ teacherClerkUserId: mainTeacherId, studentCapacity }).where(eq(resourcesTable.id, skeleton.id)).returning();
       } else {
         [group] = await tx.insert(resourcesTable).values({
           courseId, termNumber, kind: "material", title: source.title, body: "Cədvəl dərsi", url: null,
           lessonDays: source.lessonDays, lessonTime: source.lessonTime, isMandatory: source.isMandatory,
-          teacherClerkUserId: teacherIds[0], studentCapacity,
+          teacherClerkUserId: mainTeacherId, studentCapacity,
         }).returning();
       }
       if (!group) throw new Error("Qrup yaradılmadı.");
+      // Bayraq: müəllimsiz qrup üçün mütləqdir (yoxsa cədvəl sətri sayılardı); müəllimli qrup üçün də yazılır.
+      if (flagReady) await setGroupFlag(tx, group.id, true);
       let toAdd: number[] = [];
       if (requested.length) {
         const eligible = await tx.select({ id: studentAcademicProfilesTable.id, clerkUserId: applicationsTable.clerkUserId })
@@ -6066,11 +6139,11 @@ router.post("/admin/groups", requireTeacher, async (req, res, next) => {
     const stamp = Date.now();
     await recordAuditEvent({
       eventType: "resource.created", actorClerkUserId: actorId, targetType: "resource", targetId: group.id,
-      details: { courseId, termNumber, teacherClerkUserId: teacherIds[0], coTeacherClerkUserIds: coTeacherIds, students: toAdd.length, source: "groups", reusedScheduleRow: result.reusedSchedule },
+      details: { courseId, termNumber, teacherClerkUserId: mainTeacherId, coTeacherClerkUserIds: coTeacherIds, students: toAdd.length, source: "groups", reusedScheduleRow: result.reusedSchedule, createdByTeacher: !actor.manageAll },
       deduplicationKey: `resource.created:group:${group.id}:${stamp}`,
     });
     for (const teacherId of coTeacherIds) {
-      await recordAuditEvent({ eventType: "resource.teacher_added", actorClerkUserId: actorId, targetType: "resource", targetId: group.id, details: { courseId, termNumber, teacherClerkUserId: teacherId, mainTeacherClerkUserId: teacherIds[0] }, deduplicationKey: `resource.teacher_added:${group.id}:${teacherId}:${stamp}` });
+      await recordAuditEvent({ eventType: "resource.teacher_added", actorClerkUserId: actorId, targetType: "resource", targetId: group.id, details: { courseId, termNumber, teacherClerkUserId: teacherId, mainTeacherClerkUserId: mainTeacherId }, deduplicationKey: `resource.teacher_added:${group.id}:${teacherId}:${stamp}` });
     }
     for (const profileId of toAdd) {
       await recordAuditEvent({ eventType: "resource.student_added", actorClerkUserId: actorId, targetType: "resource", targetId: group.id, details: { courseId, termNumber, profileId }, deduplicationKey: `resource.student_added:${group.id}:${profileId}:${stamp}` });
@@ -6083,13 +6156,14 @@ router.post("/admin/groups", requireTeacher, async (req, res, next) => {
 router.get("/admin/groups/candidates", requireTeacher, async (req, res, next) => {
   try {
     const actor = await groupActor(req);
-    if (!actor.manageAll) { res.status(403).json({ error: "Qrupu yalnız sahib, idarə heyəti və admin yarada bilər." }); return; }
+    if (!actor.manageAll && actor.role !== "teacher") { res.status(403).json({ error: "Qrupu yalnız sahib, idarə heyəti, admin və müəllim yarada bilər." }); return; }
     const courseId = Number(req.query.courseId);
     const termNumber = Number(req.query.termNumber);
     if (!Number.isInteger(courseId) || courseId < 1 || validateTermNumber(termNumber)) { res.status(400).json({ error: "Dərs və semestr düzgün seçilməyib." }); return; }
     const staffIds = await getStaffClerkUserIds();
     const term = termDetails(termNumber);
-    const groupRows = await db.select({ id: resourcesTable.id }).from(resourcesTable).where(and(eq(resourcesTable.courseId, courseId), eq(resourcesTable.termNumber, termNumber), sql`${resourcesTable.teacherClerkUserId} IS NOT NULL`));
+    const flagged = await flaggedGroupIds();
+    const groupRows = (await db.select({ id: resourcesTable.id, teacherClerkUserId: resourcesTable.teacherClerkUserId }).from(resourcesTable).where(and(eq(resourcesTable.courseId, courseId), eq(resourcesTable.termNumber, termNumber)))).filter((row) => isGroupRow(row, flagged));
     const taken = new Set<number>();
     if (groupRows.length) {
       for (const row of await db.select({ profileId: studentTeacherChoicesTable.profileId }).from(studentTeacherChoicesTable).where(and(inArray(studentTeacherChoicesTable.resourceId, groupRows.map((item) => item.id)), or(eq(studentTeacherChoicesTable.status, "pending"), eq(studentTeacherChoicesTable.status, "approved"))))) taken.add(row.profileId);

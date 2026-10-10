@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { filterGroups, groupCapacityLabel, groupIsFull, groupScheduleLabel, matchesStudentSearch, type GroupView } from "./groups";
+import { filterGroups, groupCapacityLabel, groupIsFull, groupScheduleLabel, matchesStudentSearch, NO_TEACHER_FILTER, sortForTeacherAssignment, teacherAssignmentSummary, type GroupView } from "./groups";
 
 const group = (patch: Partial<GroupView>): GroupView => ({
   id: 1, courseId: 10, courseTitle: "Quran", termNumber: 1, teacherClerkUserId: "t1", coTeacherClerkUserIds: [], teacherName: "Fərman İsayev",
@@ -38,4 +38,16 @@ test("student search matches names and T-number", () => {
   assert.ok(matchesStudentSearch(student, "meryem"));
   assert.ok(matchesStudentSearch(student, "T0007"));
   assert.ok(!matchesStudentSearch(student, "hüseyn"));
+});
+
+test("teacher assignment view: teacher-less groups first, summary and filter", () => {
+  const groups = [
+    group({ id: 1, courseTitle: "Təcvid" }),
+    group({ id: 2, courseTitle: "Quran", teacherClerkUserId: null, teacherName: null, teacherNames: [] }),
+    group({ id: 3, courseTitle: "Fiqh" }),
+  ];
+  assert.deepEqual(sortForTeacherAssignment(groups).map((item) => item.id), [2, 3, 1]);
+  assert.equal(teacherAssignmentSummary(groups).text, "1 qrupda müəllim yoxdur");
+  assert.equal(teacherAssignmentSummary([groups[0]!, groups[2]!]).text, "Hamısında müəllim var ✓");
+  assert.deepEqual(filterGroups(groups, { termNumber: null, courseId: null, teacherId: NO_TEACHER_FILTER, search: "" }).map((item) => item.id), [2]);
 });

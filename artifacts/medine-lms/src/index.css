@@ -232,25 +232,6 @@
   cursor: pointer;
 }
 
-[data-testid="section-selected-subjects"][data-focused="true"],
-[data-testid="section-selected-subjects"][data-focused="true"] > div.mt-3 {
-  display: contents;
-}
-
-[data-testid="section-selected-subjects"][data-focused="true"] > button[aria-pressed="true"] {
-  order: 1;
-}
-
-[data-testid="section-selected-subjects"][data-semester-open="false"] {
-  display: none;
-}
-
-[data-testid="section-selected-subjects"],
-[data-testid="section-active-selected-terms"],
-[data-testid="section-semester-management"] > div.order-4 {
-  display: none;
-}
-
 .print-only-transcript {
   display: none;
 }

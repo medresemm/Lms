@@ -17,7 +17,28 @@ export type GroupView = {
   pendingCount: number;
   canManageStudents: boolean;
   canDelete: boolean;
+  canEditLinks?: boolean;
 };
+
+/** Müəllim süzgəcində «Müəllim təyin olunmayıb» seçimi. */
+export const NO_TEACHER_FILTER = '__none';
+export const NO_TEACHER_LABEL = 'Müəllim təyin olunmayıb';
+
+export function groupHasTeacher(group: Pick<GroupView, 'teacherClerkUserId'>): boolean {
+  return Boolean(group.teacherClerkUserId);
+}
+
+/** «3 Müəllimlər»: müəllimsiz qruplar əvvəldə, sonra fənn adı üzrə. */
+export function sortForTeacherAssignment<T extends GroupView>(groups: readonly T[]): T[] {
+  return [...groups].sort((a, b) => Number(groupHasTeacher(a)) - Number(groupHasTeacher(b)) || a.courseTitle.localeCompare(b.courseTitle, 'az') || a.id - b.id);
+}
+
+/** «Hamısında müəllim var ✓» və ya «2 qrupda müəllim yoxdur». */
+export function teacherAssignmentSummary(groups: readonly Pick<GroupView, 'teacherClerkUserId'>[]): { missing: number; text: string; complete: boolean } {
+  const missing = groups.filter((group) => !groupHasTeacher(group)).length;
+  if (!groups.length) return { missing: 0, complete: false, text: 'Bu semestrdə hələ qrup yoxdur' };
+  return missing ? { missing, complete: false, text: `${missing} qrupda müəllim yoxdur` } : { missing: 0, complete: true, text: 'Hamısında müəllim var ✓' };
+}
 
 export type GroupFilter = { termNumber: number | null; courseId: number | null; teacherId: string; search: string };
 
@@ -62,7 +83,8 @@ export function filterGroups<T extends GroupView>(groups: readonly T[], filter: 
   return groups.filter((group) => {
     if (filter.termNumber !== null && group.termNumber !== filter.termNumber) return false;
     if (filter.courseId !== null && group.courseId !== filter.courseId) return false;
-    if (filter.teacherId && !resourceTeacherIds(group).includes(filter.teacherId)) return false;
+    if (filter.teacherId === NO_TEACHER_FILTER) { if (groupHasTeacher(group)) return false; }
+    else if (filter.teacherId && !resourceTeacherIds(group).includes(filter.teacherId)) return false;
     if (!query) return true;
     const haystack = fold([group.courseTitle, ...(group.teacherNames ?? []), group.teacherName ?? '', `${group.termNumber}`, groupScheduleLabel(group)].join(' '));
     return query.split(/\s+/).every((part) => haystack.includes(part));

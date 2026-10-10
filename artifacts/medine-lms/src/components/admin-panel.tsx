@@ -351,6 +351,7 @@ function apiUrl(path: string) {
 }
 
 function AttendanceExcuses({ onRead }: { onRead?: () => void }) {
+  const { t } = useI18n();
   const [items, setItems] = useState<Array<{ id: number; attendanceRecordId: number; studentName: string; courseTitle: string; attendanceDate: string; teacherName: string; reason: string; status: string; createdAt: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
@@ -372,23 +373,23 @@ function AttendanceExcuses({ onRead }: { onRead?: () => void }) {
     if (!isLoading && items.length > 0 && !isOpen) markExcusesRead();
   }, [isLoading, items.length]);
   const removeExcuse = async (id: number) => {
-    if (!window.confirm('Bu üzr müraciətini silmək istəyirsiniz?')) return;
+    if (!window.confirm(t('confirmDeleteExcuse'))) return;
     const response = await fetch(apiUrl(`/admin/attendance-excuses/${id}`), { method: 'DELETE' });
     if (!response.ok) return;
     setItems((current) => current.filter((item) => item.id !== id));
   };
   const removeAttendanceRecord = async (recordId: number, excuseId: number) => {
-    if (!window.confirm('Bu qayıb qeydini silmək istəyirsiniz?')) return;
+    if (!window.confirm(t('confirmDeleteAbsence'))) return;
     const response = await fetch(apiUrl(`/admin/attendance-records/${recordId}`), { method: 'DELETE' });
     if (!response.ok) return;
     setItems((current) => current.filter((item) => item.id !== excuseId));
   };
   return <div className="mb-6 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.22)] p-4">
     <button type="button" onClick={() => { if (!isOpen) markExcusesRead(); else setIsOpen(false); }} className="focus-ring flex w-full items-center justify-between gap-3 text-left" aria-expanded={isOpen} data-testid="button-teacher-excuses">
-      <span><span className="block text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">Müəllimə gələn üzrlər</span><span className="mt-1 block text-xs text-[hsl(var(--muted-foreground))]">Tələbələrin göndərdiyi izahatlar</span></span>
+      <span><span className="block text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">{t('excusesTitle')}</span><span className="mt-1 block text-xs text-[hsl(var(--muted-foreground))]">{t('excusesHint')}</span></span>
       {unreadIds.length > 0 && <span className="inline-flex min-w-8 items-center justify-center rounded-full bg-red-600 px-2.5 py-1 text-xs font-black text-white">{unreadIds.length}</span>}
     </button>
-    {isOpen && <div className="mt-4 border-t border-[hsl(var(--border))] pt-4">{isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Üzrlər yüklənir...</p> : !items.length ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Yeni üzr müraciəti yoxdur.</p> : <div className="space-y-3">{items.map((item) => <div key={item.id} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-bold text-[hsl(var(--primary))]">{item.studentName} · {item.courseTitle}</p><div className="flex items-center gap-2"><span className="text-xs text-[hsl(var(--muted-foreground))]">{item.attendanceDate}</span><button type="button" onClick={() => void removeExcuse(item.id)} className="focus-ring rounded-lg border border-[hsl(var(--border))] px-2 py-1 text-[10px] font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid={`button-delete-excuse-${item.id}`}>Üzrü sil</button><button type="button" onClick={() => void removeAttendanceRecord(item.attendanceRecordId, item.id)} className="focus-ring rounded-lg bg-[hsl(var(--destructive))] px-2 py-1 text-[10px] font-bold text-white hover:opacity-90" data-testid={`button-delete-attendance-${item.attendanceRecordId}`}>Qayıbı sil</button></div></div><p className="mt-2 text-sm leading-6 text-[hsl(var(--foreground))]">{item.reason}</p><p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Davamiyyəti qeyd edən müəllim: {item.teacherName} · {item.status === 'pending' ? 'Gözləmədə' : item.status}</p></div>)}</div>}</div>}
+    {isOpen && <div className="mt-4 border-t border-[hsl(var(--border))] pt-4">{isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('excusesLoading')}</p> : !items.length ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('noExcuses')}</p> : <div className="space-y-3">{items.map((item) => <div key={item.id} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-bold text-[hsl(var(--primary))]">{item.studentName} · {item.courseTitle}</p><div className="flex items-center gap-2"><span className="text-xs text-[hsl(var(--muted-foreground))]">{item.attendanceDate}</span><button type="button" onClick={() => void removeExcuse(item.id)} className="focus-ring rounded-lg border border-[hsl(var(--border))] px-2 py-1 text-[10px] font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid={`button-delete-excuse-${item.id}`}>{t('deleteExcuse')}</button><button type="button" onClick={() => void removeAttendanceRecord(item.attendanceRecordId, item.id)} className="focus-ring rounded-lg bg-[hsl(var(--destructive))] px-2 py-1 text-[10px] font-bold text-white hover:opacity-90" data-testid={`button-delete-attendance-${item.attendanceRecordId}`}>{t('deleteAbsence')}</button></div></div><p className="mt-2 text-sm leading-6 text-[hsl(var(--foreground))]">{item.reason}</p><p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{t('recordedBy')}: {item.teacherName} · {item.status === 'pending' ? t('statusPending') : item.status}</p></div>)}</div>}</div>}
   </div>;
 }
 
@@ -593,6 +594,7 @@ function RollCallAttendance() {
 }
 
 function TeacherChoiceRequests() {
+  const { t } = useI18n();
   const [items, setItems] = useState<Array<{ id: number; studentName: string; teacherName?: string; courseId: number; termNumber: number; status: string; studentCapacity: number; activeChoiceCount: number; isFull: boolean }>>([]);
   const [notice, setNotice] = useState('');
   const load = async () => { try { const response = await fetch(apiUrl('/admin/teacher-choices'), { cache: 'no-store' }); if (!response.ok) throw new Error('load'); setItems(await response.json()); } catch { setItems([]); } };
@@ -600,11 +602,11 @@ function TeacherChoiceRequests() {
   const decide = async (id: number, decision: 'approved' | 'rejected') => {
     const response = await fetch(apiUrl(`/admin/teacher-choices/${id}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decision }) });
     const data = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) { setNotice(data.error ?? 'Seçimə qərar vermək mümkün olmadı.'); await load(); return; }
+    if (!response.ok) { setNotice(data.error ?? t('choiceFail')); await load(); return; }
     await load();
-    setNotice(decision === 'approved' ? 'Tələbə seçimi təsdiqləndi.' : 'Tələbə seçimi rədd edildi.');
+    setNotice(decision === 'approved' ? t('choiceApproved') : t('choiceRejected'));
   };
-  return <section className="mb-6 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.22)] p-4" data-testid="section-teacher-choice-requests"><p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">Müəllim seçim müraciətləri</p>{notice && <p className="mt-2 text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}{!items.length ? <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Müraciət yoxdur.</p> : <div className="mt-4 space-y-2">{items.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[hsl(var(--card))] p-3"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{item.studentName}</p><p className="text-xs text-[hsl(var(--muted-foreground))]">{item.teacherName ?? 'Müəllim'} · Fənn № {item.courseId} · {item.termNumber}-ci semestr · Qrup: {item.studentCapacity > 0 ? `${item.activeChoiceCount}/${item.studentCapacity}` : `${item.activeChoiceCount} · limitsiz`} · {item.status === 'pending' ? 'Gözləmədə' : item.status === 'approved' ? 'Təsdiqlənib' : 'Rədd edilib'}</p></div>{item.status === 'pending' && <div className="flex gap-2"><button type="button" onClick={() => void decide(item.id, 'approved')} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white">Təsdiqlə</button><button type="button" onClick={() => void decide(item.id, 'rejected')} className="rounded-lg bg-[hsl(var(--destructive))] px-3 py-2 text-xs font-bold text-white">Rədd et</button></div>}</div>)}</div>}</section>;
+  return <section className="mb-6 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.22)] p-4" data-testid="section-teacher-choice-requests"><p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">{t('choiceTitle')}</p>{notice && <p className="mt-2 text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{notice}</p>}{!items.length ? <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">{t('noRequests')}</p> : <div className="mt-4 space-y-2">{items.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[hsl(var(--card))] p-3"><div><p className="text-sm font-bold text-[hsl(var(--primary))]">{item.studentName}</p><p className="text-xs text-[hsl(var(--muted-foreground))]">{item.teacherName ?? t('roleTeacher')} · {t('subjectNo')} {item.courseId} · {item.termNumber}. {t('semester')} · {t('groupWord')}: {item.studentCapacity > 0 ? `${item.activeChoiceCount}/${item.studentCapacity}` : `${item.activeChoiceCount} · ${t('unlimitedGroup')}`} · {item.status === 'pending' ? t('statusPending') : item.status === 'approved' ? t('statusApproved') : t('statusRejected')}</p></div>{item.status === 'pending' && <div className="flex gap-2"><button type="button" onClick={() => void decide(item.id, 'approved')} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white">{t('approve')}</button><button type="button" onClick={() => void decide(item.id, 'rejected')} className="rounded-lg bg-[hsl(var(--destructive))] px-3 py-2 text-xs font-bold text-white">{t('reject')}</button></div>}</div>)}</div>}</section>;
 }
 
 type SystemStatistics = {
@@ -1154,6 +1156,7 @@ function AuditHistory() {
 }
 
 function SubjectRemovalRequests() {
+  const { t } = useI18n();
   const query = useGetAdminSubjectRemovalRequests();
   const queryClient = useQueryClient();
   const [rejectingId, setRejectingId] = useState<number | null>(null);
@@ -1162,7 +1165,7 @@ function SubjectRemovalRequests() {
   const decide = async (id: number, profileId: number, decision: 'approved' | 'rejected', reason?: string) => {
     const rejectionReason = reason?.trim();
     if (decision === 'rejected' && (!rejectionReason || rejectionReason.length < 3)) {
-      setDecisionError((current) => ({ ...current, [id]: 'Rədd səbəbi ən azı 3 simvol olmalıdır.' }));
+      setDecisionError((current) => ({ ...current, [id]: t('reasonMin') }));
       return;
     }
     setDecisionError((current) => ({ ...current, [id]: '' }));
@@ -1176,12 +1179,12 @@ function SubjectRemovalRequests() {
       setRejectionReasons((current) => ({ ...current, [id]: '' }));
     } else {
       const data = await response.json().catch(() => ({}));
-      setDecisionError((current) => ({ ...current, [id]: data.error ?? 'Qərar yadda saxlanılmadı.' }));
+      setDecisionError((current) => ({ ...current, [id]: data.error ?? t('decisionNotSaved') }));
     }
   };
   return <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.22)] p-4" data-testid="section-subject-removal-requests">
-    <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">İcbari dərs silinmə müraciətləri</p>
-    {query.isLoading ? <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">Müraciətlər yüklənir...</p> : !query.data?.length ? <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">Müraciət yoxdur.</p> : <div className="mt-4 space-y-3">{query.data.map((item) => <div key={item.id} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-bold text-[hsl(var(--primary))]">{item.studentName} · {item.courseTitle}</p><span className="text-xs font-bold">{item.termNumber}-ci semestr · {item.status === 'pending' ? 'Gözləmədə' : item.status === 'approved' ? 'Təsdiqlənib' : 'Rədd edilib'}</span></div><p className="mt-2 text-sm"><strong>Tələbənin səbəbi:</strong> {item.reason}</p>{item.status === 'rejected' && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-900"><strong>Göndərilən rədd izahı:</strong> {item.rejectionReason || 'İzah qeyd edilməyib.'}</p>}{item.status === 'pending' && <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void decide(item.id, item.profileId, 'approved')} className="focus-ring rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white">Təsdiqlə</button>{rejectingId !== item.id && <button type="button" onClick={() => { setRejectingId(item.id); setDecisionError((current) => ({ ...current, [item.id]: '' })); }} className="focus-ring rounded-lg bg-[hsl(var(--destructive))] px-3 py-2 text-xs font-bold text-white">Rədd et</button>}{rejectingId === item.id && <div className="basis-full rounded-lg border border-red-200 bg-red-50 p-3"><label className="block text-xs font-bold text-red-900" htmlFor={`input-subject-removal-rejection-${item.id}`}>Tələbəyə göndəriləcək izah</label><textarea id={`input-subject-removal-rejection-${item.id}`} value={rejectionReasons[item.id] ?? ''} onChange={(event) => setRejectionReasons((current) => ({ ...current, [item.id]: event.target.value }))} maxLength={1000} rows={3} placeholder="Rədd səbəbini yazın..." className="focus-ring mt-2 w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-xs" data-testid={`input-subject-removal-rejection-${item.id}`} />{decisionError[item.id] && <p className="mt-2 text-xs font-semibold text-red-800" role="alert">{decisionError[item.id]}</p>}<div className="mt-2 flex gap-2"><button type="button" onClick={() => void decide(item.id, item.profileId, 'rejected', rejectionReasons[item.id])} className="focus-ring rounded-lg bg-[hsl(var(--destructive))] px-3 py-2 text-xs font-bold text-white">Rəddi göndər</button><button type="button" onClick={() => setRejectingId(null)} className="focus-ring rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-900">Ləğv et</button></div></div>}</div>}</div>)}</div>}
+    <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">{t('removalTitle')}</p>
+    {query.isLoading ? <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">{t('requestsLoading')}</p> : !query.data?.length ? <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">{t('noRequests')}</p> : <div className="mt-4 space-y-3">{query.data.map((item) => <div key={item.id} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-bold text-[hsl(var(--primary))]">{item.studentName} · {item.courseTitle}</p><span className="text-xs font-bold">{item.termNumber}. {t('semester')} · {item.status === 'pending' ? t('statusPending') : item.status === 'approved' ? t('statusApproved') : t('statusRejected')}</span></div><p className="mt-2 text-sm"><strong>{t('studentReason')}:</strong> {item.reason}</p>{item.status === 'rejected' && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-900"><strong>{t('sentRejection')}:</strong> {item.rejectionReason || t('noReason')}</p>}{item.status === 'pending' && <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void decide(item.id, item.profileId, 'approved')} className="focus-ring rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white">{t('approve')}</button>{rejectingId !== item.id && <button type="button" onClick={() => { setRejectingId(item.id); setDecisionError((current) => ({ ...current, [item.id]: '' })); }} className="focus-ring rounded-lg bg-[hsl(var(--destructive))] px-3 py-2 text-xs font-bold text-white">{t('reject')}</button>}{rejectingId === item.id && <div className="basis-full rounded-lg border border-red-200 bg-red-50 p-3"><label className="block text-xs font-bold text-red-900" htmlFor={`input-subject-removal-rejection-${item.id}`}>{t('rejectionNote')}</label><textarea id={`input-subject-removal-rejection-${item.id}`} value={rejectionReasons[item.id] ?? ''} onChange={(event) => setRejectionReasons((current) => ({ ...current, [item.id]: event.target.value }))} maxLength={1000} rows={3} placeholder={t('rejectionPh')} className="focus-ring mt-2 w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-xs" data-testid={`input-subject-removal-rejection-${item.id}`} />{decisionError[item.id] && <p className="mt-2 text-xs font-semibold text-red-800" role="alert">{decisionError[item.id]}</p>}<div className="mt-2 flex gap-2"><button type="button" onClick={() => void decide(item.id, item.profileId, 'rejected', rejectionReasons[item.id])} className="focus-ring rounded-lg bg-[hsl(var(--destructive))] px-3 py-2 text-xs font-bold text-white">{t('sendRejection')}</button><button type="button" onClick={() => setRejectingId(null)} className="focus-ring rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-900">{t('cancel')}</button></div></div>}</div>}</div>)}</div>}
   </div>;
 }
 

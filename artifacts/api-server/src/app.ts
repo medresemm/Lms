@@ -53,6 +53,25 @@ function describeDatabaseUrl(url: string | undefined) {
   return `başqa host (${host.split(":")[1] ?? "port yoxdur"})`;
 }
 
+// Supabase layihə ref-i (məs. «abcd…») — gizli deyil (açıq URL-lərdə də görünür); hansı layihəyə qoşulduğunu
+// sahibin Supabase panelindəki layihə ilə müqayisə etmək üçün. Parol/istifadəçi adı göstərilmir.
+function supabaseProjectRef(url: string | undefined): string | null {
+  if (!url) return null;
+  const pooledUser = /^[a-z]+:\/\/postgres\.([a-z0-9]{20})[:@]/i.exec(url)?.[1];
+  if (pooledUser) return pooledUser;
+  const host = /(?:^|[/@.])(?:db\.)?([a-z0-9]{20})\.supabase\.(?:co|in)/i.exec(url)?.[1];
+  return host ?? null;
+}
+
+function databaseEnvRefs() {
+  return {
+    DATABASE_URL: supabaseProjectRef(process.env.DATABASE_URL),
+    POSTGRES_URL: process.env.POSTGRES_URL ? supabaseProjectRef(process.env.POSTGRES_URL) ?? "başqa host" : null,
+    SUPABASE_URL: process.env.SUPABASE_URL ? supabaseProjectRef(process.env.SUPABASE_URL) ?? "başqa host" : null,
+    SUPABASE_S3_ENDPOINT: supabaseProjectRef(process.env.SUPABASE_S3_ENDPOINT),
+  };
+}
+
 // Adi sorğu: {"status":"ok"}. `DEBUG_API_ERRORS=1` env dəyişəni təyin olunubsa və ?deep=1 verilibsə,
 // bazanın və Clerk-in əlçatanlığı yoxlanılır (parol/açar göstərilmir, yalnız bəli/xeyr və xəta kodu).
 app.get("/api/healthz", async (req, res) => {
@@ -70,6 +89,7 @@ app.get("/api/healthz", async (req, res) => {
       RESEND_API_KEY: Boolean(process.env.RESEND_API_KEY),
       SUPABASE_S3_ENDPOINT: Boolean(process.env.SUPABASE_S3_ENDPOINT),
     },
+    supabaseProjectRefs: databaseEnvRefs(),
   };
   const dbStarted = Date.now();
   try {

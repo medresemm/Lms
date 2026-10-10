@@ -10,6 +10,7 @@ import { answerScrollTop, initialShown, pagerState, revealMore } from '@/lib/pag
 import { courseBookRange, type CourseBookView } from '@/lib/course-books';
 import { courseTermLabel } from '@/components/course-books';
 import { AiTestBuilder, loadTestBuilderConfig, type TestBuilderConfig } from '@/components/ai-test-builder';
+import { LanguageSwitch } from '@/lib/i18n';
 
 // Mədinə AI — saytın daxili köməkçisi.
 // Söhbət tarixçəsi YALNIZ bu brauzerin localStorage-ində saxlanılır (açar: medine-ai-chat:<clerkUserId>).
@@ -770,6 +771,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
             </div>
           </div>
           <div className="relative flex shrink-0 items-center gap-2">
+            <LanguageSwitch tone="onDark" />
             <button type="button" onClick={() => setHelpOpen((open) => !open)} aria-expanded={helpOpen} aria-label="İzah" className="inline-flex shrink-0 items-center justify-center rounded-full border border-[#e3c27a]/30 p-2 text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6]" data-testid="button-ai-help">
               <HelpCircle size={14} />
             </button>

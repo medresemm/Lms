@@ -207,7 +207,8 @@ function Sidebar({ onClose, currentSemester, unansweredQuestionCount = 0, onOpen
           </button>
         )}
       </div>
-       <div className="flex items-center gap-1">
+       <div className="flex flex-wrap items-center gap-1">
+        <LanguageSwitch tone="onDark" />
         <HomeLink dark />
         <ArticlesLink dark />
       </div>
@@ -327,6 +328,7 @@ function HeaderActions({ studentName, onNotifications, onLogout, hasNewNotificat
 
   return (
     <div className="flex items-center gap-2 md:gap-3">
+      <LanguageSwitch />
       <button
         type="button"
         onClick={onNotifications}
@@ -351,7 +353,6 @@ function HeaderActions({ studentName, onNotifications, onLogout, hasNewNotificat
           className="focus-ring hidden items-center gap-1.5 rounded-xl border border-[hsl(var(--destructive)/.35)] bg-[hsl(var(--destructive)/.08)] px-3.5 py-2.5 text-sm font-bold text-[hsl(var(--destructive))] transition hover:bg-[hsl(var(--destructive)/.16)] sm:inline-flex"
           data-testid="button-logout"
         >
-          <LanguageSwitch />
           <LogOut size={16} strokeWidth={2.2} /> {t('logout')}
         </button>
       )}

@@ -137,7 +137,10 @@ function AdmissionExamPortal() {
             <div className="flex h-11 w-11 items-center justify-center rounded-[13px] bg-[hsl(var(--accent))] font-serif text-xl font-bold text-[hsl(var(--primary))] shadow-[0_5px_0_hsl(37_83%_52%)]">M</div>
             <div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Mədinə Tədris Akademiyası</p><p className="font-serif text-lg text-[hsl(var(--primary))]">Qəbul mərhələsi</p></div>
           </div>
-          <button type="button" onClick={() => void signOut({ redirectUrl: basePath || '/' })} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))]">Çıxış et</button>
+          <div className="flex items-center gap-2">
+            <LanguageSwitch />
+            <button type="button" onClick={() => void signOut({ redirectUrl: basePath || '/' })} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))]">Çıxış et</button>
+          </div>
         </header>
         <section className="mt-8 rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-[var(--shadow-sm)] md:p-9" data-testid="admission-exam-gate">
           <div className="flex items-start gap-4">

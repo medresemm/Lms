@@ -1,6 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { AlertCircle } from 'lucide-react';
 import { HomeLink } from '@/components/home-link';
+import { LanguageSwitch } from '@/lib/i18n';
 
 export default function NotFound() {
   return (
@@ -17,7 +18,7 @@ export default function NotFound() {
           <p className="mt-4 text-sm text-gray-600">
             Axtardığınız səhifə tapılmadı.
           </p>
-          <HomeLink />
+          <div className="mt-6 flex items-center gap-2"><LanguageSwitch /><HomeLink /></div>
         </CardContent>
       </Card>
     </div>

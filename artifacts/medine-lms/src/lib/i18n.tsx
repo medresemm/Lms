@@ -662,12 +662,15 @@ export function useI18n() {
   return value;
 }
 
-export function LanguageSwitch({ className = '' }: { className?: string }) {
+export function LanguageSwitch({ className = '', tone = 'light' }: { className?: string; tone?: 'light' | 'onDark' }) {
   const { locale, setLocale, t } = useI18n();
+  const shell = tone === 'onDark'
+    ? 'border-white/25 bg-black/25'
+    : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]';
   return (
-    <div role="group" aria-label={t('language')} className={`inline-flex rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-0.5 ${className}`} data-testid="language-switch">
+    <div role="group" aria-label={t('language')} className={`inline-flex rounded-xl border p-0.5 ${shell} ${className}`} data-testid="language-switch">
       {(['az', 'ar'] as const).map((item) => (
-        <button key={item} type="button" aria-pressed={locale === item} onClick={() => setLocale(item)} className={`rounded-[10px] px-2.5 py-2 text-xs font-bold ${locale === item ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'text-[hsl(var(--primary))]'}`}>
+        <button key={item} type="button" aria-pressed={locale === item} onClick={() => setLocale(item)} className={`rounded-[10px] px-2.5 py-2 text-xs font-bold ${locale === item ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : tone === 'onDark' ? 'text-white' : 'text-[hsl(var(--primary))]'}`}>
           {item === 'az' ? 'AZ' : 'عربي'}
         </button>
       ))}

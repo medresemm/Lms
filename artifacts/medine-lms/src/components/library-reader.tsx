@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { ArrowLeft, ArrowRight, ChevronLeft, ListTree, Loader2, RotateCcw, Search, X } from 'lucide-react';
 import { PdfDownloadLink } from '@/components/medrese-library';
 import { Link, useSearch } from 'wouter';
+import { LanguageSwitch } from '@/lib/i18n';
 import { useAuth, useUser } from '@clerk/react';
 import { DidYouMean, LibraryHitList } from '@/components/library-search-results';
 import {
@@ -556,6 +557,7 @@ export function LibraryReader({ slug, backHref }: { slug: string; backHref: stri
           )}
         </div>
         {book && token && <PdfDownloadLink book={book} token={token} tone="reader" />}
+        <LanguageSwitch tone="onDark" />
         <button
           type="button"
           onClick={() => setSearchOpen(true)}

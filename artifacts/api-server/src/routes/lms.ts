@@ -24,6 +24,7 @@ import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notInArray, or, sql } 
 import { getApplicationWindowStatus, type ApplicationWindow } from "../lib/applicationWindow.js";
 import { isMeetingUrl, lessonTimeForDay } from "../lib/lessonAttendance.js";
 import { buildAccountProfile } from "../lib/accountProfile.js";
+import { rosterIdsToKeep, staffIdsFrom } from "../lib/studentVisibility.js";
 import {
   coTaughtResourceIds,
   coTeacherMap,
@@ -339,7 +340,7 @@ async function getSystemStatistics(): Promise<SystemStatistics> {
   const users = await getClerkDirectory();
   const [currentStudents, graduatedStudents, settings] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(applicationsTable)
-      .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt))),
+      .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt), await excludeStaffStudentsCondition())),
     db.select({ count: sql<number>`count(*)` }).from(applicationsTable)
       .where(eq(applicationsTable.status, "graduated")),
     db.select({ statisticsVisible: applicationSettingsTable.statisticsVisible })
@@ -486,6 +487,39 @@ export async function getClerkDirectory(): Promise<ClerkUser[]> {
   return clerkDirectoryRequest;
 }
 
+/** Rol dəyişəndən dərhal sonra köhnə keşlənmiş Clerk məlumatı istifadə olunmasın. */
+export function invalidateClerkUserCaches(userId?: string) {
+  if (userId) clerkUserCache.delete(userId);
+  clerkDirectoryCache = null;
+}
+
+function configuredAdminUserIds() {
+  return (process.env.ADMIN_USER_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+}
+
+/**
+ * Hazırkı rolu tələbə olmayan (sahib, admin, müəllim, nəzarətçi, idarə heyəti) hesabların Clerk id-ləri.
+ * Panel rolu ilə eyni mənbədən (roleForClerkUser) hesablanır. Clerk əlçatan deyilsə tələbə siyahıları
+ * pozulmasın deyə yalnız ADMIN_USER_IDS qaytarılır.
+ */
+export async function getStaffClerkUserIds(): Promise<Set<string>> {
+  const configured = configuredAdminUserIds();
+  try {
+    const users = await getClerkDirectory();
+    return staffIdsFrom(users.map((user) => ({ id: user.id, role: roleForClerkUser(user) })), configured);
+  } catch {
+    return new Set(configured);
+  }
+}
+
+/** SQL şərti: müraciəti işçi hesabına bağlı olan tələbə profillərini siyahılardan çıxarır (məlumat silinmir). */
+export async function excludeStaffStudentsCondition(staffIds?: ReadonlySet<string>) {
+  const ids = Array.from(staffIds ?? await getStaffClerkUserIds());
+  return ids.length
+    ? or(isNull(applicationsTable.clerkUserId), notInArray(applicationsTable.clerkUserId, ids))
+    : undefined;
+}
+
 function userProfileSnapshot(
   clerkUser: NonNullable<Awaited<ReturnType<typeof getClerkUser>>>,
   application?: Pick<typeof applicationsTable.$inferSelect, "firstName" | "lastName" | "username" | "email" | "phone" | "birthDate" | "arabicLevel">,
@@ -553,11 +587,7 @@ function toAdminUser(
 }
 
 async function userHasTeacherAccess(userId: string) {
-  const configuredIds = (process.env.ADMIN_USER_IDS ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-  if (configuredIds.includes(userId)) return true;
+  if (configuredAdminUserIds().includes(userId)) return true;
 
   const clerkUser = await getClerkUser(userId);
   return hasStaffRole(clerkUser?.publicMetadata) || await userIsSystemOwner(userId, clerkUser);
@@ -3784,7 +3814,7 @@ async function notifyStudentsAboutCourseLinks(courseId: number, courseTitle: str
   if (!terms.length) return;
   const students = await db.select({ profile: studentAcademicProfilesTable }).from(studentAcademicProfilesTable)
     .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
-    .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)));
+    .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt), await excludeStaffStudentsCondition()));
   const inTerm = students.filter((student) => terms.includes(currentTermNumber(student.profile)));
   if (!inTerm.length) return;
   const removed = await db.select({ profileId: studentCourseSelectionsTable.profileId }).from(studentCourseSelectionsTable).where(and(
@@ -4037,7 +4067,7 @@ router.post("/admin/student-notifications", requireTeacher, async (req, res, nex
       ? await db.select({ id: studentAcademicProfilesTable.id, semester: studentAcademicProfilesTable.semester, currentTerm: studentAcademicProfilesTable.courseYear })
         .from(studentAcademicProfilesTable)
         .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
-        .where(and(inArray(studentAcademicProfilesTable.id, requestedIds), eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)))
+        .where(and(inArray(studentAcademicProfilesTable.id, requestedIds), eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt), await excludeStaffStudentsCondition()))
       : [];
     const targetProfileIds = selectedProfiles.map((profile) => profile.id);
     const destination = req.body?.destination === "gmail" || req.body?.destination === "both" ? req.body.destination : "home";
@@ -4081,7 +4111,7 @@ router.post("/admin/student-notifications", requireTeacher, async (req, res, nex
     if (result.created && (destination === "gmail" || destination === "both")) {
       const recipients = await db.select({ email: applicationsTable.email, firstName: applicationsTable.firstName, lastName: applicationsTable.lastName })
         .from(studentAcademicProfilesTable).innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
-        .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt), targetProfileIds.length
+        .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt), await excludeStaffStudentsCondition(), targetProfileIds.length
           ? inArray(studentAcademicProfilesTable.id, targetProfileIds)
           : inArray(studentAcademicProfilesTable.semester, targetTerms.map((term) => term % 2 === 0 ? 2 : 1))));
       await Promise.all(recipients.map((recipient) => sendStudentNotificationEmail({ to: recipient.email, studentName: `${recipient.firstName} ${recipient.lastName}`.trim(), title, body })));
@@ -5616,11 +5646,14 @@ router.get("/admin/resources/:resourceId/students", requireTeacher, async (req, 
       username: applicationsTable.username,
     }).from(studentAcademicProfilesTable)
       .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
-      .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)))
+      .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt), await excludeStaffStudentsCondition()))
       .orderBy(asc(applicationsTable.firstName), asc(applicationsTable.lastName));
-    const selected = await db.select({ profileId: studentTeacherChoicesTable.profileId })
+    const visibleIds = new Set(rows.map((row) => row.profileId));
+    // İşçi roluna keçmiş hesabların qrup üzvlüyü saxlanılır, amma siyahıda göstərilmir.
+    const selected = (await db.select({ profileId: studentTeacherChoicesTable.profileId })
       .from(studentTeacherChoicesTable)
-      .where(and(eq(studentTeacherChoicesTable.resourceId, resourceId), eq(studentTeacherChoicesTable.status, "approved")));
+      .where(and(eq(studentTeacherChoicesTable.resourceId, resourceId), eq(studentTeacherChoicesTable.status, "approved"))))
+      .filter((item) => visibleIds.has(item.profileId));
     const sameCourseResources = await db.select({ id: resourcesTable.id }).from(resourcesTable).where(and(
       eq(resourcesTable.courseId, resource.courseId),
       eq(resourcesTable.termNumber, resource.termNumber),
@@ -5657,6 +5690,7 @@ router.put("/admin/resources/:resourceId/students", requireTeacher, async (req, 
       res.status(400).json({ error: `Bu qrup üçün ən çox ${resource.studentCapacity} tələbə seçə bilərsiniz.` });
       return;
     }
+    const staffIds = await getStaffClerkUserIds();
     const result = await db.transaction(async (tx) => {
       // Serialize roster changes for the same subject/semester so two groups
       // cannot claim the same student at the same time.
@@ -5666,12 +5700,21 @@ router.put("/admin/resources/:resourceId/students", requireTeacher, async (req, 
         eq(resourcesTable.termNumber, resource.termNumber),
       ));
       const otherResourceIds = courseResources.map((item) => item.id).filter((id) => id !== resourceId);
-      const approvedProfiles = await tx.select({ id: studentAcademicProfilesTable.id })
+      const approvedProfiles = profileIds.length ? await tx.select({ id: studentAcademicProfilesTable.id, clerkUserId: applicationsTable.clerkUserId })
         .from(studentAcademicProfilesTable)
         .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
-        .where(and(inArray(studentAcademicProfilesTable.id, profileIds), eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)));
-      const validIds = approvedProfiles.map((item) => item.id);
-      if (validIds.length !== profileIds.length) return { status: 400, error: "Seçilən tələbələrdən biri artıq aktiv deyil." } as const;
+        .where(and(inArray(studentAcademicProfilesTable.id, profileIds), eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt))) : [];
+      if (approvedProfiles.length !== profileIds.length) return { status: 400, error: "Seçilən tələbələrdən biri artıq aktiv deyil." } as const;
+      // İşçi rolundakı hesab tələbə kimi qrupa yeni əlavə edilmir (siyahıda görünmür də).
+      const validIds = approvedProfiles.filter((item) => !item.clerkUserId || !staffIds.has(item.clerkUserId)).map((item) => item.id);
+      // Qrupda artıq olan gizli işçi profilləri silinmir: rol geri qaytarılsa, tələbə öz qrupunda qalır.
+      const currentMembers = await tx.select({ profileId: studentTeacherChoicesTable.profileId, clerkUserId: applicationsTable.clerkUserId })
+        .from(studentTeacherChoicesTable)
+        .innerJoin(studentAcademicProfilesTable, eq(studentTeacherChoicesTable.profileId, studentAcademicProfilesTable.id))
+        .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
+        .where(and(eq(studentTeacherChoicesTable.resourceId, resourceId), eq(studentTeacherChoicesTable.status, "approved")));
+      const staffProfileIds = new Set(currentMembers.filter((item) => item.clerkUserId && staffIds.has(item.clerkUserId)).map((item) => item.profileId));
+      const keepIds = rosterIdsToKeep(validIds, currentMembers.map((item) => item.profileId), staffProfileIds);
       const pendingChoices = await tx.select({ profileId: studentTeacherChoicesTable.profileId })
         .from(studentTeacherChoicesTable)
         .where(and(
@@ -5696,7 +5739,7 @@ router.put("/admin/resources/:resourceId/students", requireTeacher, async (req, 
       await tx.delete(studentTeacherChoicesTable).where(and(
         eq(studentTeacherChoicesTable.resourceId, resourceId),
         eq(studentTeacherChoicesTable.status, "approved"),
-        ...(validIds.length ? [notInArray(studentTeacherChoicesTable.profileId, validIds)] : []),
+        ...(keepIds.length ? [notInArray(studentTeacherChoicesTable.profileId, keepIds)] : []),
       ));
       if (validIds.length) {
         const now = new Date().toISOString();
@@ -5852,7 +5895,13 @@ router.get("/admin/teacher-choices", requireTeacher, async (req, res, next) => {
     const applications = await db.select().from(applicationsTable);
     const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
     const applicationMap = new Map(applications.map((application) => [application.id, application]));
-    res.json(rows.filter((row) => resourceMap.has(row.resourceId)).map((row) => {
+    const staffIds = await getStaffClerkUserIds();
+    const isStaffChoice = (profileId: number) => {
+      const profile = profileMap.get(profileId);
+      const clerkUserId = profile ? applicationMap.get(profile.applicationId)?.clerkUserId : null;
+      return Boolean(clerkUserId && staffIds.has(clerkUserId));
+    };
+    res.json(rows.filter((row) => resourceMap.has(row.resourceId) && !isStaffChoice(row.profileId)).map((row) => {
       const resource = resourceMap.get(row.resourceId)!;
       const profile = profileMap.get(row.profileId);
       const application = profile ? applicationMap.get(profile.applicationId) : undefined;
@@ -6196,6 +6245,39 @@ router.get("/admin/users", requireOwnerOrAssistant, async (_req, res, next) => {
   }
 });
 
+/**
+ * «İstifadəçi rolları» üçün: hansı hesabın təsdiqlənmiş tələbə profili var və neçə müəllim qrupunda
+ * tələbə kimi qeydiyyatdadır. Rol verilməzdən əvvəl qısa qeyd göstərmək üçün istifadə olunur.
+ */
+router.get("/admin/users/student-records", requireOwnerOrAssistant, async (_req, res, next) => {
+  try {
+    res.setHeader("Cache-Control", "no-store");
+    const profiles = await db.select({
+      profileId: studentAcademicProfilesTable.id,
+      studentNumber: studentAcademicProfilesTable.studentNumber,
+      clerkUserId: applicationsTable.clerkUserId,
+    }).from(studentAcademicProfilesTable)
+      .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
+      .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)));
+    const linked = profiles.filter((profile): profile is typeof profile & { clerkUserId: string } => Boolean(profile.clerkUserId));
+    const memberships = linked.length
+      ? await db.select({ profileId: studentTeacherChoicesTable.profileId, resourceId: studentTeacherChoicesTable.resourceId })
+        .from(studentTeacherChoicesTable)
+        .where(and(inArray(studentTeacherChoicesTable.profileId, linked.map((profile) => profile.profileId)), eq(studentTeacherChoicesTable.status, "approved")))
+      : [];
+    const groupCounts = new Map<number, number>();
+    for (const membership of memberships) groupCounts.set(membership.profileId, (groupCounts.get(membership.profileId) ?? 0) + 1);
+    res.json(linked.map((profile) => ({
+      clerkUserId: profile.clerkUserId,
+      profileId: profile.profileId,
+      studentNumber: profile.studentNumber,
+      groupCount: groupCounts.get(profile.profileId) ?? 0,
+    })));
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/admin/role-permissions", requireSystemOwner, async (req, res, next) => {
   try {
     const { userId } = getAuth(req);
@@ -6266,6 +6348,7 @@ router.patch("/admin/users/:userId/role", requireOwnerOrAssistant, async (req, r
       delete publicMetadata.individualRolePermissions;
     }
     await clerkClient.users.updateUserMetadata(userId, { publicMetadata });
+    invalidateClerkUserCaches(userId);
     const updated = await getClerkUser(userId);
     if (!updated) {
       res.status(404).json({ error: "İstifadəçi yeniləndikdən sonra tapılmadı." });
@@ -6502,6 +6585,7 @@ router.get("/admin/courses/:courseId/students", requireTeacher, async (req, res,
       .where(and(
         eq(applicationsTable.status, "approved"),
         isNull(applicationsTable.deletedAt),
+        await excludeStaffStudentsCondition(),
         ...(termFilter ? [eq(studentAcademicProfilesTable.courseYear, termFilter.courseYear), eq(studentAcademicProfilesTable.semester, termFilter.semester)] : []),
       ))
       .orderBy(asc(applicationsTable.firstName), asc(applicationsTable.lastName));
@@ -6565,7 +6649,7 @@ router.get("/admin/students", requireTeacher, async (_req, res, next) => {
       application: applicationsTable,
     }).from(studentAcademicProfilesTable)
       .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
-      .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)))
+      .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt), await excludeStaffStudentsCondition()))
       .orderBy(asc(applicationsTable.firstName), asc(applicationsTable.lastName));
     const students = rows.map(({ profile, application }) => ({
       profileId: profile.id,
@@ -6605,7 +6689,7 @@ router.get("/admin/graduation-candidates", requireSystemOwner, async (_req, res,
       application: applicationsTable,
     }).from(studentAcademicProfilesTable)
       .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
-      .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)))
+      .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt), await excludeStaffStudentsCondition()))
       .orderBy(asc(applicationsTable.firstName), asc(applicationsTable.lastName));
     const students = rows
       .filter(({ profile }) => currentTermNumber(profile) === termNumber)
@@ -7325,7 +7409,7 @@ router.get("/admin/academic-profiles", requireTeacher, async (_req, res, next) =
       application: applicationsTable,
     }).from(studentAcademicProfilesTable)
       .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
-      .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)))
+      .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt), await excludeStaffStudentsCondition()))
       .orderBy(desc(studentAcademicProfilesTable.id));
     res.json(GetAdminAcademicProfilesResponse.parse(rows.map(({ profile, application }) => toAcademicSummary(profile, application))));
   } catch (error) {
@@ -7379,7 +7463,7 @@ router.get("/admin/search", requireTeacher, async (req, res, next) => {
         phone: applicationsTable.phone,
       }).from(studentAcademicProfilesTable)
         .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
-        .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt))),
+        .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt), await excludeStaffStudentsCondition())),
       db.select({
         id: applicationsTable.id,
         firstName: applicationsTable.firstName,
@@ -7957,6 +8041,7 @@ router.post("/admin/applications/:applicationId/teacher-role", requireOwnerOrAss
       ? { ...clerkUser.publicMetadata, role: "teacher" }
       : { role: "teacher" };
     const updated = await clerkClient.users.updateUserMetadata(application.clerkUserId, { publicMetadata });
+    invalidateClerkUserCaches(application.clerkUserId);
     const actorId = getAuth(req).userId;
     if (actorId) await recordAuditEvent({
       eventType: "teacher.assignment",

@@ -149,6 +149,7 @@ import { CourseBooksEditor } from '@/components/course-books';
 import { formatFullName, formatPersonName } from '@/lib/utils';
 import { accountProfileQueryRetry } from '@/lib/account-profile-retry';
 import { isCoTaught, orderedTeacherSelection, resourceTeacherIds, resourceTeacherLabel, sameTeacherSet, teachesResource } from '@/lib/co-teachers';
+import { staffStudentNote, type StudentRecordInfo } from '@/lib/staff-student-note';
 
 type Tab = 'course-content' | 'course-activation' | 'schedule-prep' | 'announcement' | 'student-notifications' | 'article' | 'benefit' | 'schedule' | 'teachers-schedule' | 'messages' | 'questions' | 'student-management' | 'application' | 'exams' | 'users' | 'statistics' | 'audit-history' | 'graduation-certificates' | 'library';
 
@@ -3980,6 +3981,7 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
    const [individualPermissions, setIndividualPermissions] = useState<RolePermissionKey[]>([]);
    const [isSavingIndividualPermissions, setIsSavingIndividualPermissions] = useState(false);
    const [expandedSummaryRole, setExpandedSummaryRole] = useState<'teacher' | 'assistant' | 'supervisor' | null>(null);
+   const [studentRecords, setStudentRecords] = useState<Record<string, StudentRecordInfo>>({});
   const individualProfileQuery = useGetAdminUserProfile(permissionUser?.id ?? '', {
     query: {
       enabled: Boolean(permissionUser),
@@ -4002,6 +4004,14 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
       }));
     }).catch(() => undefined);
   }, [canConfigurePermissions]);
+
+  useEffect(() => {
+    // Tələbə profili olan hesablara işçi rolu veriləndə qısa qeyd göstərmək üçün.
+    void fetch(apiUrl('/admin/users/student-records'), { cache: 'no-store' })
+      .then(async (response) => response.ok ? response.json() as Promise<StudentRecordInfo[]> : [])
+      .then((records) => setStudentRecords(Object.fromEntries(records.map((record) => [record.clerkUserId, record]))))
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (!individualProfileQuery.data || !permissionUser) return;
@@ -4096,6 +4106,7 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
             const role = selectedRole(user);
             const isOwner = user.role === 'owner';
             const hasChange = !isOwner && role !== (user.role === 'admin' ? UserRoleUpdateInputRole.teacher : user.role);
+            const studentNote = isOwner ? null : staffStudentNote(studentRecords[user.id], user.role, role);
             return (
               <article key={user.id} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -4126,6 +4137,7 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
                         <button type="button" className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))]" onClick={() => setEditingUser(user)} data-testid={`button-edit-user-${user.id}`}>Məlumatları düzəlt</button>
                          {canConfigurePermissions && user.role === 'none' && <button type="button" className="focus-ring rounded-xl border border-[hsl(var(--destructive)/.28)] px-3 py-2 text-xs font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.08)] disabled:opacity-50" disabled={deletingUserId === user.id} onClick={() => void removeUser(user)} data-testid={`button-delete-user-${user.id}`}>{deletingUserId === user.id ? 'Silinir...' : 'Hesabı sil'}</button>}
                      </div>
+                    {studentNote && <p className={`w-full rounded-lg px-3 py-2 text-[11px] leading-5 ${hasChange && user.role === 'none' ? 'bg-amber-50 text-amber-900' : 'bg-[hsl(var(--muted)/.6)] text-[hsl(var(--muted-foreground))]'}`} data-testid={`note-user-student-record-${user.id}`}>{studentNote}</p>}
                   </div>
                 )}
               </article>

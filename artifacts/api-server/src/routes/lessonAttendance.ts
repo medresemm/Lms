@@ -38,6 +38,7 @@ import {
 } from "../lib/lessonAttendance.js";
 import {
   currentTermNumber,
+  excludeStaffStudentsCondition,
   getApprovedStudentProfile,
   getClerkUser,
   getStudentVisibleCourseIds,
@@ -65,9 +66,17 @@ function sendJoinPage(res: Response, status: number, title: string, message: str
   res.status(status).type("html").send(`<!doctype html><html lang="az"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>body{font-family:system-ui,sans-serif;background:#fbfaf5;color:#173b51;display:grid;place-items:center;min-height:100vh;margin:0}main{max-width:460px;padding:28px;border:1px solid #e5dcc5;border-radius:18px;background:#fff}h1{font-size:20px;margin:0 0 10px}p{line-height:1.55;font-size:15px}a{color:#9e782a;font-weight:700}</style></head><body><main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p>${link}</main></body></html>`);
 }
 
-async function studentRosterData(profileIds?: number[]) {
+/**
+ * Davamiyyət siyahısı üçün tələbələr. İşçi roluna (müəllim, idarə heyəti və s.) keçmiş hesablar
+ * siyahıya düşmür; yalnız hesab sahibinin özünün dərsə qoşulması yoxlananda (includeStaff) daxil edilir.
+ */
+async function studentRosterData(profileIds?: number[], options: { includeStaff?: boolean } = {}) {
   const filters = [eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)];
   if (profileIds) filters.push(inArray(studentAcademicProfilesTable.id, profileIds.length ? profileIds : [-1]));
+  if (!options.includeStaff) {
+    const notStaff = await excludeStaffStudentsCondition();
+    if (notStaff) filters.push(notStaff);
+  }
   const rows = await db.select({ profile: studentAcademicProfilesTable, firstName: applicationsTable.firstName, lastName: applicationsTable.lastName })
     .from(studentAcademicProfilesTable)
     .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
@@ -143,7 +152,7 @@ async function handleJoin(res: Response, userId: string | null | undefined, targ
     return;
   }
 
-  const [student] = await studentRosterData([profile.id]);
+  const [student] = await studentRosterData([profile.id], { includeStaff: true });
   const group = await courseTermResources({ courseId: course.id, termNumber: resource?.termNumber ?? term });
   const assigned = student ? group.filter((item) => rosterForResource(item, group, [student]).includes(profile.id)) : [];
   if (resource && !assigned.some((item) => item.id === resource!.id)) {

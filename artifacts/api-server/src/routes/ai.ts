@@ -48,6 +48,7 @@ import {
   getApprovedStudentProfile,
   activeTeachers,
   clerkDisplayName,
+  excludeStaffStudentsCondition,
   getClerkDirectory,
   getClerkUser,
   getCourses,
@@ -513,10 +514,11 @@ function toMatch(profile: ProfileRow, application: ApplicationRow): AiStudentMat
 function buildAdminContext(permissions: ReadonlySet<string>, isOwner: boolean, role: string): AdminAiContext {
   const can = (permission: string) => isOwner || permissions.has(permission);
   const canManageUsers = (isOwner || role === "owner_assistant") && can("userRoleManagement");
+  // İşçi roluna keçmiş hesablar (müəllim, idarə heyəti və s.) tələbə axtarışına, saylara və statistikaya düşmür.
   const studentRows = memo(async () => db.select({ profile: studentAcademicProfilesTable, application: applicationsTable })
     .from(studentAcademicProfilesTable)
     .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
-    .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)))
+    .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt), await excludeStaffStudentsCondition()))
     .orderBy(asc(applicationsTable.firstName), asc(applicationsTable.lastName)));
 
   const allStudents = memo(async () => (await studentRows()).map(({ profile, application }) => toMatch(profile, application)));

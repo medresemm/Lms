@@ -135,6 +135,7 @@ import { SchedulePdfButton } from '@/components/schedule-pdf-button';
 import { Link, useLocation } from 'wouter';
 import { AiAssistantLauncher } from '@/components/ai-assistant';
 import { ArticlesLink, HomeLink } from '@/components/home-link';
+import { LanguageSwitch, useI18n } from '@/lib/i18n';
 import { MessageCenter } from '@/components/message-center';
 import { loadUnansweredQuestionCount, QaCenter } from '@/components/qa-center';
 import { AdminExamsSection } from '@/components/exam-module';
@@ -2972,6 +2973,7 @@ function StudentDetail({ profileId, onClose }: { profileId: number; onClose: () 
 }
 
 function TeacherStats({ canEdit, canReadProfiles }: { canEdit: boolean; canReadProfiles: boolean }) {
+  const { t: tr } = useI18n();
   const profilesQuery = useGetAdminAcademicProfiles({ query: { enabled: canReadProfiles, queryKey: getGetAdminAcademicProfilesQueryKey() } });
   const profiles = profilesQuery.data ?? [];
   const [activeTerms, setActiveTerms] = useState<number[]>([1, 2, 3, 4]);
@@ -2992,9 +2994,9 @@ function TeacherStats({ canEdit, canReadProfiles }: { canEdit: boolean; canReadP
     <section className="mt-5" data-testid="teacher-stats">
       <div className="mb-2 flex items-end justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--secondary-foreground))]">Akademik icmal</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--secondary-foreground))]">{tr('academicSummary')}</p>
         </div>
-        <p className="hidden text-xs text-[hsl(var(--muted-foreground))] sm:block">Təsdiqlənmiş tələbələr üzrə</p>
+        <p className="hidden text-xs text-[hsl(var(--muted-foreground))] sm:block">{tr('approvedStudents')}</p>
       </div>
       {profilesQuery.isLoading ? (
          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
@@ -3007,7 +3009,7 @@ function TeacherStats({ canEdit, canReadProfiles }: { canEdit: boolean; canReadP
            <button type="button" onClick={() => setDirectoryFilter('all')} className="focus-ring flex items-center justify-between gap-2 rounded-xl bg-[hsl(var(--primary))] px-3 py-2.5 text-left text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5">
             <span>
               <span className="grid size-7 place-items-center rounded-lg bg-white/10 text-[hsl(var(--accent))]"><UsersRound size={14} /></span>
-              <span className="mt-2 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--primary-foreground)/.62)]">Ümumi tələbə</span>
+              <span className="mt-2 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--primary-foreground)/.62)]">{tr('totalStudents')}</span>
               <span className="mt-0.5 block font-serif text-2xl leading-none">{profiles.length}</span>
             </span>
             <span className="flex items-end gap-1" aria-hidden>{[8, 14, 11, 18, 15].map((height) => <span key={height} className="w-1 rounded-full bg-white/25" style={{ height }} />)}</span>
@@ -3015,30 +3017,30 @@ function TeacherStats({ canEdit, canReadProfiles }: { canEdit: boolean; canReadP
            <button type="button" onClick={() => setDirectoryFilter(1)} className="focus-ring flex items-center justify-between gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2.5 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
             <span>
               <span className="grid size-7 place-items-center rounded-lg bg-[#eef8f1] text-[#2f7d4f]"><GraduationCap size={14} /></span>
-              <span className="mt-2 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">1-ci tədris ili</span>
+              <span className="mt-2 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{tr('year1')}</span>
               <span className="mt-0.5 block font-serif text-2xl leading-none text-[hsl(var(--primary))]">{firstYearCount}</span>
-              <span className="block text-[11px] text-[hsl(var(--muted-foreground))]">tələbə</span>
+              <span className="block text-[11px] text-[hsl(var(--muted-foreground))]">{tr('studentWord')}</span>
             </span>
             <span className="flex items-end gap-1" aria-hidden>{[7, 11, 15, 18].map((height) => <span key={height} className="w-1 rounded-full bg-[#8dcea8]" style={{ height }} />)}</span>
            </button>
            <button type="button" onClick={() => setDirectoryFilter(2)} className="focus-ring flex items-center justify-between gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2.5 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
             <span>
               <span className="grid size-7 place-items-center rounded-lg bg-[#eef4ff] text-[#3d63b8]"><GraduationCap size={14} /></span>
-              <span className="mt-2 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">2-ci tədris ili</span>
+              <span className="mt-2 block text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{tr('year2')}</span>
               <span className="mt-0.5 block font-serif text-2xl leading-none text-[hsl(var(--primary))]">{secondYearCount}</span>
-              <span className="block text-[11px] text-[hsl(var(--muted-foreground))]">tələbə</span>
+              <span className="block text-[11px] text-[hsl(var(--muted-foreground))]">{tr('studentWord')}</span>
             </span>
             <span className="flex items-end gap-1" aria-hidden>{[12, 8, 11, 7].map((height) => <span key={height} className="w-1 rounded-full bg-[#d7e2f2]" style={{ height }} />)}</span>
            </button>
             {activeTerms.includes(5) && activeTerms.includes(6) && <button type="button" onClick={() => setDirectoryFilter(3)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2.5 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
              <GraduationCap size={16} className="text-[hsl(var(--secondary-foreground))]" />
-             <p className="mt-2 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">3-cü tədris ili</p>
+             <p className="mt-2 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{tr('year3')}</p>
              <p className="mt-0.5 font-serif text-2xl leading-none text-[hsl(var(--primary))]">{thirdYearCount}</p>
              <p className="text-[11px] text-[hsl(var(--muted-foreground))]">tələbə</p>
             </button>}
             {activeTerms.includes(7) && activeTerms.includes(8) && <button type="button" onClick={() => setDirectoryFilter(4)} className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2.5 text-left shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5">
              <GraduationCap size={16} className="text-[hsl(var(--secondary-foreground))]" />
-             <p className="mt-2 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">4-cü tədris ili</p>
+             <p className="mt-2 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{tr('year4')}</p>
              <p className="mt-0.5 font-serif text-2xl leading-none text-[hsl(var(--primary))]">{fourthYearCount}</p>
              <p className="text-[11px] text-[hsl(var(--muted-foreground))]">tələbə</p>
             </button>}
@@ -3740,6 +3742,7 @@ function AdminGlobalSearch({ onSelectStudent }: { onSelectStudent: (profileId: n
 }
 
 export function AdminPanel() {
+  const { t: tr, locale, dir } = useI18n();
   const [, setLocation] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
@@ -3874,7 +3877,7 @@ export function AdminPanel() {
     t === 'exams' && canManageAssignments && <AdminExamsSection resources={resourcesQuery.data ?? []} teacherClerkUserId={activeRole === 'teacher' || activeRole === 'admin' ? user?.id : undefined} owner={owner} />,
     t === 'course-activation' && (owner || ownerAssistant) && <CourseActivationSettings />,
     t === 'groups' && canEditCourseContent && <GroupManagementSection view={groupsView} onViewChange={setGroupsView} onOpenSchedule={(owner || ownerAssistant || activeRole === 'admin') ? () => { scrollTabRef.current = 'schedule-prep'; setTab('schedule-prep'); } : undefined} />,
-    t === 'announcement' && <><button type="button" onClick={() => setIsAnnouncementListOpen((current) => !current)} aria-expanded={isAnnouncementListOpen} className="focus-ring mb-5 inline-flex items-center gap-2.5 rounded-xl border border-[hsl(var(--border))] px-5 py-3.5 text-sm font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-existing-announcements"><Megaphone size={18} /> Mövcud elanlar</button>{isAnnouncementListOpen && <AnnouncementList />}<AnnouncementForm onSaved={() => setLocation('/admin')} /></>,
+    t === 'announcement' && <><button type="button" onClick={() => setIsAnnouncementListOpen((current) => !current)} aria-expanded={isAnnouncementListOpen} className="focus-ring mb-5 inline-flex items-center gap-2.5 rounded-xl border border-[hsl(var(--border))] px-5 py-3.5 text-sm font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-existing-announcements"><Megaphone size={18} /> {tr('existingAnnouncements')}</button>{isAnnouncementListOpen && <AnnouncementList />}<AnnouncementForm onSaved={() => setLocation('/admin')} /></>,
     t === 'article' && <ArticleForm />,
     t === 'benefit' && <DailyBenefitForm />,
     t === 'application' && <>{(owner || ownerAssistant) && <ApplicationWindowSettings />}<ApplicationList applications={applicationsQuery.data ?? []} isLoading={applicationsQuery.isLoading} busyId={decisionBusyId} onDecision={decideApplication} canDecide={!ownerAssistant} canAssignTeacher={owner || ownerAssistant} onAssignTeacher={assignApplicationTeacher} teacherBusyId={teacherBusyId} />{decisionNotice && <p className="mt-4 rounded-xl bg-[hsl(var(--secondary)/.35)] p-3 text-sm font-semibold text-[hsl(var(--secondary-foreground))]">{decisionNotice}</p>}</>,
@@ -3903,19 +3906,20 @@ export function AdminPanel() {
   };
 
   return (
-    <div className="grain min-h-[100dvh] overflow-x-hidden bg-[hsl(var(--background))]">
+    <div dir={dir} className={`grain min-h-[100dvh] overflow-x-hidden bg-[hsl(var(--background))]${locale === 'ar' ? ' font-ar' : ''}`}>
       <header className="border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 md:px-8">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <Link href="/user-portal" className="focus-ring flex min-w-0 items-center gap-2.5 rounded-xl" data-testid="link-admin-back">
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[hsl(var(--accent))] font-serif text-lg font-bold text-[hsl(var(--primary))]">M</div>
-             <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Mədinə</p><p className="truncate text-sm font-bold leading-tight text-[hsl(var(--primary))]">{owner ? 'Sahib paneli' : ownerAssistant ? 'İdarə heyəti paneli' : activeRole === 'supervisor' ? 'Nəzarətçi paneli' : 'Müəllim paneli'}</p></div>
+             <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">{tr('academyShort')}</p><p className="truncate text-sm font-bold leading-tight text-[hsl(var(--primary))]">{owner ? tr('adminOwner') : ownerAssistant ? tr('adminBoard') : activeRole === 'supervisor' ? tr('adminSupervisor') : tr('adminTeacher')}</p></div>
           </Link>
           <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
             <HomeLink compact />
             <ArticlesLink compact />
              <AdminGlobalSearch onSelectStudent={(profileId) => { setFocusStudentId(profileId); scrollTabRef.current = 'student-management'; setTab('student-management'); }} />
              <span className="hidden max-w-52 items-center gap-2 truncate rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] sm:inline-flex">{owner ? 'N1 · ' : ownerAssistant ? 'NK1 · ' : ''}{displayName} <ChevronDown size={14} className="text-[hsl(var(--muted-foreground))]" /></span>
-             <button type="button" onClick={onLogout} className="focus-ring inline-flex items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" aria-label="Çıxış" data-testid="button-admin-logout"><LogOut size={15} /> <span className="hidden sm:inline">Çıxış</span></button>
+             <LanguageSwitch />
+             <button type="button" onClick={onLogout} className="focus-ring inline-flex items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" aria-label={tr('logout')} data-testid="button-admin-logout"><LogOut size={15} /> <span className="hidden sm:inline">{tr('logout')}</span></button>
           </div>
         </div>
       </header>
@@ -3924,39 +3928,39 @@ export function AdminPanel() {
            <div className="flex min-w-0 items-center gap-2.5">
              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[hsl(var(--border))] font-serif text-xs font-bold text-[hsl(var(--primary))]">{accountCode}</div>
              <div className="min-w-0">
-               <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">Hesab məlumatları</p>
+               <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">{tr('accountInfo')}</p>
                <p className="truncate font-bold text-[hsl(var(--primary))]">{fullName}</p>
              </div>
            </div>
-           <div className="sm:ml-auto sm:border-l sm:border-[hsl(var(--border))] sm:pl-6">
-             <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">Hesab kodu</p>
+           <div className="sm:ms-auto sm:border-s sm:border-[hsl(var(--border))] sm:ps-6">
+             <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">{tr('accountCode')}</p>
              <p className="mt-0.5 text-lg font-bold text-[hsl(var(--primary))]">{accountCode}</p>
            </div>
-           <div className="sm:border-l sm:border-[hsl(var(--border))] sm:pl-6">
-              <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">Status</p>
-               <p className="mt-0.5 flex items-center gap-1.5 text-sm font-bold text-[hsl(var(--primary))]"><span className="h-2 w-2 rounded-full bg-emerald-500" />{owner ? 'Sistem sahibi' : ownerAssistant ? 'İdarə heyəti' : metadataRole === 'supervisor' ? 'Nəzarətçi' : 'Müəllim'}</p>
+           <div className="sm:border-s sm:border-[hsl(var(--border))] sm:ps-6">
+              <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">{tr('accountStatus')}</p>
+               <p className="mt-0.5 flex items-center gap-1.5 text-sm font-bold text-[hsl(var(--primary))]"><span className="h-2 w-2 rounded-full bg-emerald-500" />{owner ? tr('systemOwner') : ownerAssistant ? tr('roleBoard') : metadataRole === 'supervisor' ? tr('roleSupervisor') : tr('roleTeacher')}</p>
            </div>
          </section>
        </div>
       <main className="mx-auto min-w-0 max-w-6xl px-4 py-6 md:px-8">
         <div className="max-w-2xl">
-          <p className="flex items-center gap-2 text-xl font-bold tracking-wide text-[hsl(var(--primary))]"><ShieldCheck size={20} /> İDARƏETMƏ SAHƏSİ</p>
-          {!owner && <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Tələbələr və ziyarətçilər üçün dərsləri, elanları, məqalələri, günün faydasını və dərs resurslarını buradan əlavə edin.</p>}
+          <p className="flex items-center gap-2 text-xl font-bold tracking-wide text-[hsl(var(--primary))]"><ShieldCheck size={20} /> {tr('adminArea')}</p>
+          {!owner && <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{tr('adminAreaHint')}</p>}
         </div>
         <TeacherStats canEdit={owner || ownerAssistant} canReadProfiles={canRead('students')} />
         <section className="mt-5 min-w-0 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 shadow-[var(--shadow-sm)] sm:p-4">
-           <h2 className="mb-3 flex items-center gap-2 font-serif text-2xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]"><ShieldCheck size={18} /> İdarə paneli</h2>
+           <h2 className="mb-3 flex items-center gap-2 font-serif text-2xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]"><ShieldCheck size={18} /> {tr('adminPanel')}</h2>
             <div className="grid grid-flow-row-dense grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
-                  {([['announcement', 'Yeni elan', Megaphone, 'announcements'], ['student-notifications', 'Tələbələrə bildiriş', Send, 'announcements'], ['article', 'Məqalə', BookOpenText, 'articles'], ['benefit', 'Günün faydası', Quote, 'dailyBenefits'], ['student-management', 'Tələbələri idarə et', UsersRound, 'students'], ['application', 'Müraciətlər', UsersRound, 'applications'], ['exams', 'İmtahan və testlər', ClipboardList, 'assignments'], ['schedule-prep', 'Cədvəl hazırlama', CalendarRange, null], ['groups', 'Qruplar', Users, 'schedule'], ['users', 'İstifadəçi rolları', UserCog, 'userRoleManagement'], ['course-activation', 'Dərsləri idarə et', BookOpen, 'schedule'], ['statistics', 'Statistika', UsersRound, null], ['audit-history', 'Audit tarixçəsi', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'schedule-prep' && (ownerAssistant || activeRole === 'admin')) || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <Fragment key={value}><button type="button" onClick={() => toggleTab(value)} className={adminTileClass(value, tab === value)} aria-expanded={tab === value} aria-controls={tab === value ? `panel-admin-${value}` : undefined} data-testid={`tab-admin-${value}`}><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Icon size={16} /></span><span className="leading-4">{label} {value === 'application' && pendingApplicationCount > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'exams' && pendingExamReviewCount > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" title="Yoxlama gözləyən açıq cavablar" data-testid="badge-pending-exam-reviews">{pendingExamReviewCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</span>{tab === value && <TilePointer />}</button>{inlinePanel(value)}</Fragment>)}
-                   {(owner || ownerAssistant) && <button type="button" onClick={() => toggleTab('graduation-certificates')} className={adminTileClass('graduation-certificates', tab === 'graduation-certificates')} aria-expanded={tab === 'graduation-certificates'} aria-controls={tab === 'graduation-certificates' ? 'panel-admin-graduation-certificates' : undefined} data-testid="tab-admin-graduation-certificates"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><FileBadge size={16} /></span><span className="leading-4">Şəhadətnamə idarəsi</span>{tab === 'graduation-certificates' && <TilePointer />}</button>}{inlinePanel('graduation-certificates')}
+                  {([['announcement', 'tileAnnouncement', Megaphone, 'announcements'], ['student-notifications', 'tileStudentNotice', Send, 'announcements'], ['article', 'tileArticle', BookOpenText, 'articles'], ['benefit', 'tileBenefit', Quote, 'dailyBenefits'], ['student-management', 'tileStudents', UsersRound, 'students'], ['application', 'tileApplications', UsersRound, 'applications'], ['exams', 'tileExams', ClipboardList, 'assignments'], ['schedule-prep', 'tileSchedulePrep', CalendarRange, null], ['groups', 'tileGroups', Users, 'schedule'], ['users', 'tileRoles', UserCog, 'userRoleManagement'], ['course-activation', 'tileCourses', BookOpen, 'schedule'], ['statistics', 'tileStatistics', UsersRound, null], ['audit-history', 'tileAudit', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'schedule-prep' && (ownerAssistant || activeRole === 'admin')) || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <Fragment key={value}><button type="button" onClick={() => toggleTab(value)} className={adminTileClass(value, tab === value)} aria-expanded={tab === value} aria-controls={tab === value ? `panel-admin-${value}` : undefined} data-testid={`tab-admin-${value}`}><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Icon size={16} /></span><span className="leading-4">{tr(label)} {value === 'application' && pendingApplicationCount > 0 && <span className="ms-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'exams' && pendingExamReviewCount > 0 && <span className="ms-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" title="Yoxlama gözləyən açıq cavablar" data-testid="badge-pending-exam-reviews">{pendingExamReviewCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="ms-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</span>{tab === value && <TilePointer />}</button>{inlinePanel(value)}</Fragment>)}
+                   {(owner || ownerAssistant) && <button type="button" onClick={() => toggleTab('graduation-certificates')} className={adminTileClass('graduation-certificates', tab === 'graduation-certificates')} aria-expanded={tab === 'graduation-certificates'} aria-controls={tab === 'graduation-certificates' ? 'panel-admin-graduation-certificates' : undefined} data-testid="tab-admin-graduation-certificates"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><FileBadge size={16} /></span><span className="leading-4">{tr('tileCertificates')}</span>{tab === 'graduation-certificates' && <TilePointer />}</button>}{inlinePanel('graduation-certificates')}
                    
-                   <button type="button" onClick={() => toggleTab('library')} className={adminTileClass('library', tab === 'library')} aria-expanded={tab === 'library'} aria-controls={tab === 'library' ? 'panel-admin-library' : undefined} data-testid="tab-admin-library"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Library size={16} /></span><span className="leading-4">Mədrəsə Kitabxanası</span>{tab === 'library' && <TilePointer />}</button>{inlinePanel('library')}
+                   <button type="button" onClick={() => toggleTab('library')} className={adminTileClass('library', tab === 'library')} aria-expanded={tab === 'library'} aria-controls={tab === 'library' ? 'panel-admin-library' : undefined} data-testid="tab-admin-library"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Library size={16} /></span><span className="leading-4">{tr('navLibrary')}</span>{tab === 'library' && <TilePointer />}</button>{inlinePanel('library')}
             </div>
                <div className="mt-3 flex flex-wrap gap-1.5 border-t border-[hsl(var(--border))] pt-3">
-                 <button type="button" onClick={() => toggleTab('schedule')} className={`relative ${adminTabButtonClass('schedule', tab === 'schedule')}`} aria-expanded={tab === 'schedule'} aria-controls={tab === 'schedule' ? 'panel-admin-schedule' : undefined} data-testid="tab-admin-schedule"><CalendarRange size={16} /> Mənim cədvəlim{tab === 'schedule' && <TilePointer />}</button>
-                  <button type="button" onClick={() => toggleTab('teachers-schedule')} className={`relative ${adminTabButtonClass('teachers-schedule', tab === 'teachers-schedule')}`} aria-expanded={tab === 'teachers-schedule'} aria-controls={tab === 'teachers-schedule' ? 'panel-admin-teachers-schedule' : undefined} data-testid="tab-admin-teachers-schedule"><CalendarRange size={16} /> Müəllimlər cədvəli{tab === 'teachers-schedule' && <TilePointer />}</button>
-                   <button type="button" onClick={() => toggleTab('messages')} className={`relative ${adminTabButtonClass('messages', tab === 'messages')}`} aria-expanded={tab === 'messages'} aria-controls={tab === 'messages' ? 'panel-admin-messages' : undefined} data-testid="tab-admin-messages"><Mail size={16} /> Məsləhətləşmə / Əlaqə {unreadMessageCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unreadMessageCount}</span>}{tab === 'messages' && <TilePointer />}</button>
-                   <button type="button" onClick={() => toggleTab('questions')} className={`relative ${adminTabButtonClass('questions', tab === 'questions')}`} aria-expanded={tab === 'questions'} aria-controls={tab === 'questions' ? 'panel-admin-questions' : undefined} data-testid="tab-admin-questions"><HelpCircle size={16} /> Sual-cavab {unansweredQuestionCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unansweredQuestionCount}</span>}{tab === 'questions' && <TilePointer />}</button>
+                 <button type="button" onClick={() => toggleTab('schedule')} className={`relative ${adminTabButtonClass('schedule', tab === 'schedule')}`} aria-expanded={tab === 'schedule'} aria-controls={tab === 'schedule' ? 'panel-admin-schedule' : undefined} data-testid="tab-admin-schedule"><CalendarRange size={16} /> {tr('mySchedule')}{tab === 'schedule' && <TilePointer />}</button>
+                  <button type="button" onClick={() => toggleTab('teachers-schedule')} className={`relative ${adminTabButtonClass('teachers-schedule', tab === 'teachers-schedule')}`} aria-expanded={tab === 'teachers-schedule'} aria-controls={tab === 'teachers-schedule' ? 'panel-admin-teachers-schedule' : undefined} data-testid="tab-admin-teachers-schedule"><CalendarRange size={16} /> {tr('teachersSchedule')}{tab === 'teachers-schedule' && <TilePointer />}</button>
+                   <button type="button" onClick={() => toggleTab('messages')} className={`relative ${adminTabButtonClass('messages', tab === 'messages')}`} aria-expanded={tab === 'messages'} aria-controls={tab === 'messages' ? 'panel-admin-messages' : undefined} data-testid="tab-admin-messages"><Mail size={16} /> {tr('navMessages')} {unreadMessageCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unreadMessageCount}</span>}{tab === 'messages' && <TilePointer />}</button>
+                   <button type="button" onClick={() => toggleTab('questions')} className={`relative ${adminTabButtonClass('questions', tab === 'questions')}`} aria-expanded={tab === 'questions'} aria-controls={tab === 'questions' ? 'panel-admin-questions' : undefined} data-testid="tab-admin-questions"><HelpCircle size={16} /> {tr('navQa')} {unansweredQuestionCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unansweredQuestionCount}</span>}{tab === 'questions' && <TilePointer />}</button>
               </div>
               {tab && pillTabs.includes(tab) && inlinePanel(tab)}
               {tab && !pillTabs.includes(tab) && !tileTabsRendered.has(tab) && inlinePanel(tab)}

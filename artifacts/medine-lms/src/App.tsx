@@ -17,6 +17,7 @@ import {
   useGetStudentScheduleAccess,
   useGetStudentDeletionNotice,
   useGetOwnUserProfile,
+  setAuthTokenGetter,
 } from '@workspace/api-client-react';
 import { ClerkProvider, Show, useAuth, useClerk, useSignIn as useModernSignIn, useUser } from '@clerk/react';
 import { useSignIn as useLegacySignIn } from '@clerk/react/legacy';
@@ -839,6 +840,36 @@ function AccountGateError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+/**
+ * Attach a fresh Clerk session token to every generated API request. The
+ * __session cookie can be stale for a moment right after page load (Clerk
+ * refreshes it in the background), which made the first admin requests fail
+ * with 401. getToken() always returns a valid (refreshed if needed) token.
+ */
+function ClerkApiAuthBridge() {
+  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+  const stateRef = useRef({ isLoaded, isSignedIn });
+  stateRef.current = { isLoaded, isSignedIn };
+  useState(() => {
+    setAuthTokenGetter(async () => {
+      if (!stateRef.current.isLoaded || !stateRef.current.isSignedIn) return null;
+      try {
+        return await Promise.race([
+          getTokenRef.current(),
+          new Promise<null>((resolve) => { window.setTimeout(() => resolve(null), 4_000); }),
+        ]);
+      } catch {
+        return null;
+      }
+    });
+    return null;
+  });
+  useEffect(() => () => setAuthTokenGetter(null), []);
+  return null;
+}
+
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
   const { user } = useUser();
@@ -930,6 +961,7 @@ function ClerkProviderWithRoutes() {
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
       <QueryClientProvider client={queryClient}>
+        <ClerkApiAuthBridge />
         <ClerkQueryClientCacheInvalidator />
         <TooltipProvider><Router /><Toaster /></TooltipProvider>
       </QueryClientProvider>

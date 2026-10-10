@@ -135,7 +135,7 @@ import {
   getGetAdminExamsQueryKey,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useClerk, useUser } from '@clerk/react';
+import { useAuth, useClerk, useUser } from '@clerk/react';
 import { SchedulePdfButton } from '@/components/schedule-pdf-button';
 import { Link, useLocation } from 'wouter';
 import { AiAssistantLauncher } from '@/components/ai-assistant';
@@ -2138,6 +2138,9 @@ function SchedulePrepSection() {
   const [notice, setNotice] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [booksCourseId, setBooksCourseId] = useState<number | null>(null);
+  // Synchronous guard: a double click / Enter+click can submit twice before the
+  // disabled state re-renders, which created two identical lessons.
+  const savingRef = useRef(false);
   const lessons = Array.from(new Map((resourcesQuery.data ?? []).filter((resource) => resource.termNumber === termNumber).map((resource) => [resource.courseId, resource])).values());
 
   const reset = () => {
@@ -2147,6 +2150,8 @@ function SchedulePrepSection() {
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
+    if (savingRef.current) return;
+    savingRef.current = true;
     setNotice('');
     setIsSaving(true);
     try {
@@ -2167,6 +2172,7 @@ function SchedulePrepSection() {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Dərs yadda saxlanılmadı.');
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -2210,7 +2216,7 @@ function SchedulePrepSection() {
           <button type="submit" className={buttonClass} disabled={isSaving} data-testid="button-save-schedule-prep">{isSaving ? 'Yadda saxlanılır...' : editingId === null ? 'Dərs əlavə et' : 'Adı yenilə'}</button>
         </div>
       </form>
-      {notice && <FormNotice text={notice} error={notice.includes('bil') || notice.includes('mütləq') || notice.includes('silinmə')} />}
+      {notice && <FormNotice text={notice} error={notice.includes('bil') || notice.includes('mütləq') || notice.includes('silinmə') || notice.includes('artıq var') || notice.includes('bağlıdır')} />}
       <div className="space-y-2" data-testid="list-schedule-prep">
         {resourcesQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Siyahı yüklənir...</p> : lessons.length ? lessons.map((lesson) => {
           const courseTitle = coursesQuery.data?.find((course) => course.id === lesson.courseId)?.title ?? lesson.title;
@@ -2291,6 +2297,41 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
   const mutation = useCreateResource();
   const createCourseMutation = useCreateCourse();
   const queryClient = useQueryClient();
+  const [removingResourceId, setRemovingResourceId] = useState<number | null>(null);
+  const removeResourceGroup = async (resource: { id: number; teacherName?: string | null; courseId: number; termNumber: number }) => {
+    const courseTitle = coursesQuery.data?.find((course) => course.id === resource.courseId)?.title ?? 'Fənn';
+    const label = resource.teacherName ? `${courseTitle} · ${resource.teacherName} (${resource.termNumber}-ci semestr) müəllim qrupunu` : `${courseTitle} (${resource.termNumber}-ci semestr) fənnini`;
+    if (!window.confirm(`${label} silmək istədiyinizə əminsiniz?`)) return;
+    setRemovingResourceId(resource.id);
+    try {
+      let response = await fetch(apiUrl(`/admin/resources/${resource.id}`), { method: 'DELETE' });
+      if (response.status === 409) {
+        const conflict = await response.json().catch(() => ({})) as { error?: string; summary?: string[]; requiresConfirmation?: boolean };
+        if (!conflict.requiresConfirmation) { setNotice(conflict.error || 'Qrup silinə bilmədi.'); return; }
+        const details = conflict.summary?.length ? conflict.summary.join(', ') : 'tələbə və qiymət məlumatları';
+        const ok = window.confirm(`Diqqət! Bu qrupda məlumat var: ${details}.\n\nQrup silinsə, tələbələrin bu qrupa təyinatı, qrupun tapşırıqları, testləri, cavablar, qiymətlər və dərsə qoşulma qeydləri birdəfəlik silinəcək. Bu əməliyyat geri qaytarılmır.\n\nYenə də silmək istəyirsiniz?`);
+        if (!ok) return;
+        response = await fetch(apiUrl(`/admin/resources/${resource.id}?confirm=1`), { method: 'DELETE' });
+      }
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({})) as { error?: string };
+        setNotice(result.error || 'Qrup silinə bilmədi.');
+        return;
+      }
+      if (editingId === resource.id) setEditingId(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetAdminResourcesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetCoursesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetAdminAssignmentsQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetAdminExamsQueryKey() }),
+      ]);
+      setNotice(resource.teacherName ? 'Müəllim qrupu silindi. Dərs qrupsuz qalıbsa, onu indi Cədvəl hazırlama bölməsindən silmək olar.' : 'Fənn semestrdən silindi.');
+    } catch {
+      setNotice('Qrup silinə bilmədi.');
+    } finally {
+      setRemovingResourceId(null);
+    }
+  };
   const ownTeacherName = teacherName?.trim() || user?.fullName?.trim() || [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || user?.username || 'Müəllim';
   useEffect(() => {
     if (!teacherOnly || !user?.id) return;
@@ -2701,7 +2742,7 @@ function ResourceForm({ onSaved, teacherOnly = false, teacherName }: { onSaved: 
         <div className="flex justify-end gap-2">{editingId !== null && <button type="button" className="focus-ring rounded-xl px-4 py-3 text-sm font-bold text-[hsl(var(--muted-foreground))]" onClick={() => { setEditingId(null); setForm({ courseId: '', termNumber: 1, kind: ResourceInputKind.material, title: '', body: '', url: '', lessonDays: [], lessonTime: '', isMandatory: true, teacherClerkUserId: '', studentCapacity: 0 }); }}>Ləğv et</button>}<button type="submit" className={buttonClass} disabled={isSaving || mutation.isPending || coursesQuery.isLoading || teachersQuery.isLoading} data-testid="button-create-resource"><FilePlus2 size={16} /> {isSaving ? 'Yadda saxlanılır...' : editingId === null ? 'Dərsi əlavə et' : 'Dəyişiklikləri saxla'}</button></div>
       <FormNotice text={notice} error={notice.includes('bil') || notice.includes('olmaya')} />
     </form>
-      <div className="mt-8 border-t border-[hsl(var(--border))] pt-6"><button type="button" onClick={() => setShowSelectedSubjects((current) => !current)} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--accent))] px-4 py-3 text-sm font-black text-[hsl(var(--primary))] shadow-[0_4px_0_hsl(37_83%_52%)]" aria-expanded={showSelectedSubjects} data-testid="button-show-selected-subjects"><BookOpen size={16} /> Seçili fənlər</button>{showSelectedSubjects && <div className="mt-4 rounded-2xl border-2 border-[hsl(var(--accent)/.6)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-selected-subjects"><p className="text-sm font-black text-[hsl(var(--primary))]">Hazırda seçili fənlər</p>{resourcesQuery.data?.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{resourcesQuery.data.map((resource) => <div key={resource.id} className="rounded-xl bg-[hsl(var(--card))] p-3"><p className="text-sm font-bold text-[hsl(var(--primary))]">{coursesQuery.data?.find((course) => course.id === resource.courseId)?.title ?? 'Fənn'}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{resource.teacherName ?? 'Müəllim təyin edilməyib'} · {resource.termNumber}-ci semestr</p></div>)}</div> : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Hələ seçili fənn yoxdur.</p>}</div>}<div className="mt-4"><h4 className="font-serif text-xl text-[hsl(var(--primary))]">Semestr fənləri</h4>{resourcesQuery.isLoading ? <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Fənlər yüklənir...</p> : resourcesQuery.data?.length ? <div className="mt-3 space-y-2">{resourcesQuery.data.map((resource) => <div key={resource.id} className="flex items-start justify-between gap-3 rounded-xl bg-[hsl(var(--muted)/.5)] p-3"><div className="min-w-0"><p className="text-sm font-bold text-[hsl(var(--primary))]"><span className="text-[hsl(var(--secondary-foreground))]">{resource.teacherName ? `Müəllim: ${resource.teacherName}` : 'Müəllim təyin edilməyib'}</span> · {coursesQuery.data?.find((course) => course.id === resource.courseId)?.title ?? 'Fənn'}</p><p className="text-xs text-[hsl(var(--muted-foreground))]">{resource.title} · {resource.termNumber}-ci semestr · {resource.isMandatory ? 'İcbari' : 'İxtiyari'} · {resource.studentCapacity} tələbəlik qrup · {resource.lessonDays.length ? resource.lessonDays.map((day) => `${lessonDayOptions.find(([value]) => value === day)?.[1] ?? day} ${parseDayTimes(resource.lessonTime, [day])[day] || '—'}`).join(', ') : 'Gün təyin edilməyib'}</p></div><div className="flex shrink-0 gap-1"><button type="button" className="focus-ring rounded-lg p-2 text-[hsl(var(--secondary-foreground))] hover:bg-[hsl(var(--card))]" aria-label="Fənni redaktə et" onClick={() => { setEditingId(resource.id); setDayTimes(parseDayTimes(resource.lessonTime, resource.lessonDays)); setForm({ courseId: String(resource.courseId), termNumber: resource.termNumber, kind: resource.kind as ResourceInputKind, title: resource.title, body: resource.body, url: resource.url ?? '', lessonDays: resource.lessonDays, lessonTime: resource.lessonTime ?? '', isMandatory: resource.isMandatory, teacherClerkUserId: resource.teacherClerkUserId ?? '', studentCapacity: resource.studentCapacity }); }}><Pencil size={15} /></button><button type="button" className="focus-ring rounded-lg p-2 text-[hsl(var(--destructive))] hover:bg-[hsl(var(--card))]" aria-label="Fənni sil" onClick={async () => { if (!window.confirm('Bu fənni semestrdən silmək istədiyinizə əminsiniz?')) return; const response = await fetch(apiUrl(`/admin/resources/${resource.id}`), { method: 'DELETE' }); if (!response.ok) { setNotice('Fənn silinə bilmədi.'); return; } await queryClient.invalidateQueries({ queryKey: getGetAdminResourcesQueryKey() }); await queryClient.invalidateQueries({ queryKey: getGetCoursesQueryKey() }); setNotice('Fənn semestrdən silindi.'); }}><Trash2 size={15} /></button></div></div>)}</div> : <p className="mt-3 rounded-xl border border-dashed border-[hsl(var(--border))] p-4 text-center text-xs text-[hsl(var(--muted-foreground))]">Hələ semestr fənni əlavə edilməyib.</p>}</div></div>
+      <div className="mt-8 border-t border-[hsl(var(--border))] pt-6"><button type="button" onClick={() => setShowSelectedSubjects((current) => !current)} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--accent))] px-4 py-3 text-sm font-black text-[hsl(var(--primary))] shadow-[0_4px_0_hsl(37_83%_52%)]" aria-expanded={showSelectedSubjects} data-testid="button-show-selected-subjects"><BookOpen size={16} /> Seçili fənlər</button>{showSelectedSubjects && <div className="mt-4 rounded-2xl border-2 border-[hsl(var(--accent)/.6)] bg-[hsl(var(--accent)/.12)] p-4" data-testid="section-selected-subjects"><p className="text-sm font-black text-[hsl(var(--primary))]">Hazırda seçili fənlər</p>{resourcesQuery.data?.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{resourcesQuery.data.map((resource) => <div key={resource.id} className="rounded-xl bg-[hsl(var(--card))] p-3"><p className="text-sm font-bold text-[hsl(var(--primary))]">{coursesQuery.data?.find((course) => course.id === resource.courseId)?.title ?? 'Fənn'}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{resource.teacherName ?? 'Müəllim təyin edilməyib'} · {resource.termNumber}-ci semestr</p></div>)}</div> : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Hələ seçili fənn yoxdur.</p>}</div>}<div className="mt-4"><h4 className="font-serif text-xl text-[hsl(var(--primary))]">Semestr fənləri</h4>{resourcesQuery.isLoading ? <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Fənlər yüklənir...</p> : resourcesQuery.data?.length ? <div className="mt-3 space-y-2">{resourcesQuery.data.map((resource) => <div key={resource.id} className="flex items-start justify-between gap-3 rounded-xl bg-[hsl(var(--muted)/.5)] p-3"><div className="min-w-0"><p className="text-sm font-bold text-[hsl(var(--primary))]"><span className="text-[hsl(var(--secondary-foreground))]">{resource.teacherName ? `Müəllim: ${resource.teacherName}` : 'Müəllim təyin edilməyib'}</span> · {coursesQuery.data?.find((course) => course.id === resource.courseId)?.title ?? 'Fənn'}</p><p className="text-xs text-[hsl(var(--muted-foreground))]">{resource.title} · {resource.termNumber}-ci semestr · {resource.isMandatory ? 'İcbari' : 'İxtiyari'} · {resource.studentCapacity} tələbəlik qrup · {resource.lessonDays.length ? resource.lessonDays.map((day) => `${lessonDayOptions.find(([value]) => value === day)?.[1] ?? day} ${parseDayTimes(resource.lessonTime, [day])[day] || '—'}`).join(', ') : 'Gün təyin edilməyib'}</p></div><div className="flex shrink-0 gap-1"><button type="button" className="focus-ring rounded-lg p-2 text-[hsl(var(--secondary-foreground))] hover:bg-[hsl(var(--card))]" aria-label="Fənni redaktə et" onClick={() => { setEditingId(resource.id); setDayTimes(parseDayTimes(resource.lessonTime, resource.lessonDays)); setForm({ courseId: String(resource.courseId), termNumber: resource.termNumber, kind: resource.kind as ResourceInputKind, title: resource.title, body: resource.body, url: resource.url ?? '', lessonDays: resource.lessonDays, lessonTime: resource.lessonTime ?? '', isMandatory: resource.isMandatory, teacherClerkUserId: resource.teacherClerkUserId ?? '', studentCapacity: resource.studentCapacity }); }}><Pencil size={15} /></button><button type="button" className="focus-ring inline-flex items-center gap-1 rounded-lg px-2 py-2 text-xs font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--card))] disabled:opacity-50" aria-label={resource.teacherName ? 'Müəllim qrupunu sil' : 'Fənni sil'} title={resource.teacherName ? 'Müəllim qrupunu sil' : 'Fənni sil'} disabled={removingResourceId === resource.id} onClick={() => void removeResourceGroup(resource)} data-testid={`button-delete-resource-group-${resource.id}`}><Trash2 size={15} />{resource.teacherName ? <span className="hidden sm:inline">Qrupu sil</span> : null}</button></div></div>)}</div> : <p className="mt-3 rounded-xl border border-dashed border-[hsl(var(--border))] p-4 text-center text-xs text-[hsl(var(--muted-foreground))]">Hələ semestr fənni əlavə edilməyib.</p>}</div></div>
     </div>
   );
 }
@@ -4504,13 +4545,27 @@ export function AdminPanel() {
   const pendingExcuseCount = excusesQuery.data?.filter((item) => item.status === 'pending' && !readExcuseIds.includes(item.id)).length ?? 0;
   const pendingApplicationCount = applicationsQuery.data?.filter((item) => item.status === 'pending').length ?? 0;
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const { isLoaded: authLoaded, isSignedIn, getToken } = useAuth();
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
   useEffect(() => {
+    // Wait until Clerk is ready so the first poll carries a valid session token
+    // (an early request with a stale cookie used to answer 401).
+    if (!authLoaded || !isSignedIn) return;
     let active = true;
-    const refresh = () => { void fetch(apiUrl('/messages/unread-count')).then((response) => response.ok ? response.json() as Promise<{ count: number }> : Promise.reject()).then((result) => { if (active) setUnreadMessageCount(result.count); }).catch(() => undefined); };
-    refresh();
-    const timer = window.setInterval(refresh, 30000);
+    const refresh = async () => {
+      try {
+        const token = await getTokenRef.current().catch(() => null);
+        const response = await fetch(apiUrl('/messages/unread-count'), { cache: 'no-store', headers: token ? { authorization: `Bearer ${token}` } : {} });
+        if (!response.ok) return;
+        const result = await response.json() as { count: number };
+        if (active && typeof result.count === 'number') setUnreadMessageCount(result.count);
+      } catch { /* keep the previous count */ }
+    };
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, 30000);
     return () => { active = false; window.clearInterval(timer); };
-  }, []);
+  }, [authLoaded, isSignedIn]);
   const clerkFullName = user?.fullName?.trim() || [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim();
   const configuredOwnerName = import.meta.env.VITE_SYSTEM_OWNER_NAME?.trim();
   const ownerName = configuredOwnerName && configuredOwnerName !== 'SYSTEM_OWNER_NAME' && configuredOwnerName !== 'VITE_SYSTEM_OWNER_NAME' ? configuredOwnerName : '';
@@ -4520,7 +4575,7 @@ export function AdminPanel() {
     : (profileName || clerkFullName || firstName);
   const canManageAssignments = owner || rolePermissions.has('assignments') && (activeRole === 'teacher' || activeRole === 'admin' || activeRole === 'owner_assistant');
   const canEditCourseContent = owner || rolePermissions.has('schedule') || activeRole === 'teacher' || activeRole === 'admin';
-  const adminExamsQuery = useGetAdminExams({ query: { enabled: canManageAssignments, queryKey: getGetAdminExamsQueryKey(), refetchInterval: 120_000 } });
+  const adminExamsQuery = useGetAdminExams({ query: { enabled: authLoaded && Boolean(isSignedIn) && canManageAssignments, queryKey: getGetAdminExamsQueryKey(), refetchInterval: 120_000 } });
   const pendingExamReviewCount = canManageAssignments ? (adminExamsQuery.data ?? []).reduce((sum, exam) => sum + (exam.pendingReviewCount ?? 0), 0) : 0;
   const accountCode = owner ? 'N1' : (typeof user?.publicMetadata === 'object' && user.publicMetadata !== null && 'staffNumber' in user.publicMetadata && typeof user.publicMetadata.staffNumber === 'string' ? user.publicMetadata.staffNumber : metadataRole === 'owner_assistant' ? 'NK1' : metadataRole === 'supervisor' ? 'B001' : 'M01');
   const scrollTabRef = useRef<Tab | null>(null);

@@ -4301,37 +4301,57 @@ router.post("/admin/schedule-lessons", requireTeacher, async (req, res, next) =>
       res.status(400).json({ error: "Semestr və dərs adı düzgün doldurulmalıdır." });
       return;
     }
-    const [course] = await db.insert(coursesTable).values({
-      title,
-      category: "İslam elmləri",
-      instructor: "",
-      totalLessons: 0,
-      credits: 3,
-      hours: 45,
-      color: "teal",
-      progress: 0,
-      completedLessons: 0,
-      description: `${title} dərsi.`,
-      curriculum: [],
-      lessonDescription: "",
-      nextLesson: null,
-      lessonDays: [],
-      lessonTime: null,
-    }).returning();
-    if (!course) throw new Error("Dərs yaradılmadı.");
-    const [resource] = await db.insert(resourcesTable).values({
-      courseId: course.id,
-      termNumber,
-      kind: "material",
-      title,
-      body: "Cədvəl dərsi",
-      url: null,
-      lessonDays: [],
-      lessonTime: null,
-      isMandatory: true,
-      teacherClerkUserId: null,
-      studentCapacity: 0,
-    }).returning();
+    // Idempotency guard: a double submit (double click, Enter + click, network
+    // retry) must not create two identical lessons. Serialise creations for the
+    // same term + name with a transaction-scoped advisory lock and refuse a
+    // lesson whose name already exists in that semester.
+    const normalizedTitle = title.toLocaleLowerCase("az-AZ").replace(/\s+/g, " ");
+    const created = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`schedule-lesson:${termNumber}:${normalizedTitle}`}))`);
+      const sameTerm = await tx.select({ courseId: resourcesTable.courseId, resourceId: resourcesTable.id, courseTitle: coursesTable.title })
+        .from(resourcesTable)
+        .innerJoin(coursesTable, eq(coursesTable.id, resourcesTable.courseId))
+        .where(eq(resourcesTable.termNumber, termNumber));
+      const duplicate = sameTerm.find((row) => row.courseTitle.trim().toLocaleLowerCase("az-AZ").replace(/\s+/g, " ") === normalizedTitle);
+      if (duplicate) return { duplicate };
+      const [course] = await tx.insert(coursesTable).values({
+        title,
+        category: "İslam elmləri",
+        instructor: "",
+        totalLessons: 0,
+        credits: 3,
+        hours: 45,
+        color: "teal",
+        progress: 0,
+        completedLessons: 0,
+        description: `${title} dərsi.`,
+        curriculum: [],
+        lessonDescription: "",
+        nextLesson: null,
+        lessonDays: [],
+        lessonTime: null,
+      }).returning();
+      if (!course) throw new Error("Dərs yaradılmadı.");
+      const [resource] = await tx.insert(resourcesTable).values({
+        courseId: course.id,
+        termNumber,
+        kind: "material",
+        title,
+        body: "Cədvəl dərsi",
+        url: null,
+        lessonDays: [],
+        lessonTime: null,
+        isMandatory: true,
+        teacherClerkUserId: null,
+        studentCapacity: 0,
+      }).returning();
+      return { course, resource };
+    });
+    if ("duplicate" in created && created.duplicate) {
+      res.status(409).json({ error: "Bu semestrdə bu adda dərs artıq var.", courseId: created.duplicate.courseId, resourceId: created.duplicate.resourceId });
+      return;
+    }
+    const { course, resource } = created as { course: typeof coursesTable.$inferSelect; resource: typeof resourcesTable.$inferSelect | undefined };
     res.status(201).json({ courseId: course.id, resourceId: resource?.id ?? null });
   } catch (error) {
     next(error);
@@ -4379,7 +4399,7 @@ router.delete("/admin/schedule-lessons/:resourceId", requireTeacher, async (req,
     }
     const siblings = await db.select().from(resourcesTable).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber)));
     if (siblings.some((item) => item.teacherClerkUserId)) {
-      res.status(400).json({ error: "Bu dərsə müəllim təyin olunub. Qalanını tədris proqramından idarə edin." });
+      res.status(400).json({ error: "Bu dərsə müəllim qrupu bağlıdır. Əvvəlcə Tədris proqramı → Semestr fənləri siyahısında həmin müəllim qrupunu silin, sonra dərsi buradan silə bilərsiniz." });
       return;
     }
     await db.delete(resourcesTable).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber), isNull(resourcesTable.teacherClerkUserId)));
@@ -4573,6 +4593,71 @@ router.patch("/admin/resources/:resourceId", requireTeacher, async (req, res, ne
   } catch (error) { next(error); }
 });
 
+type ResourceGroupUsage = {
+  students: number;
+  assignments: number;
+  assignmentSubmissions: number;
+  gradedSubmissions: number;
+  exams: number;
+  examSubmissions: number;
+  lessonJoins: number;
+  attendanceRecords: number;
+};
+
+/** Everything that hangs off one teacher group (lms_resources row). */
+async function resourceGroupUsage(resource: typeof resourcesTable.$inferSelect): Promise<ResourceGroupUsage> {
+  const choices = await db.select({ profileId: studentTeacherChoicesTable.profileId, status: studentTeacherChoicesTable.status })
+    .from(studentTeacherChoicesTable).where(eq(studentTeacherChoicesTable.resourceId, resource.id));
+  const activeProfileIds = Array.from(new Set(choices.filter((choice) => choice.status === "approved" || choice.status === "pending").map((choice) => choice.profileId)));
+  const assignments = await db.select({ id: assignmentsTable.id }).from(assignmentsTable).where(eq(assignmentsTable.resourceId, resource.id));
+  const assignmentIds = assignments.map((item) => item.id);
+  const [submissionCounts] = assignmentIds.length
+    ? await db.select({
+      total: sql<number>`count(*)`,
+      graded: sql<number>`count(*) filter (where ${assignmentSubmissionsTable.status} = 'graded' or ${assignmentSubmissionsTable.score} is not null)`,
+    }).from(assignmentSubmissionsTable).where(inArray(assignmentSubmissionsTable.assignmentId, assignmentIds))
+    : [{ total: 0, graded: 0 }];
+  const exams = await db.select({ id: examsTable.id }).from(examsTable).where(eq(examsTable.resourceId, resource.id));
+  const examIds = exams.map((item) => item.id);
+  const [examSubmissionCount] = examIds.length
+    ? await db.select({ total: sql<number>`count(*)` }).from(examSubmissionsTable).where(inArray(examSubmissionsTable.examId, examIds))
+    : [{ total: 0 }];
+  let lessonJoins = 0;
+  try {
+    const [joins] = await db.select({ total: sql<number>`count(*)` }).from(lessonJoinEventsTable).where(eq(lessonJoinEventsTable.resourceId, resource.id));
+    lessonJoins = Number(joins?.total ?? 0);
+  } catch { lessonJoins = 0; }
+  const [attendance] = activeProfileIds.length
+    ? await db.select({ total: sql<number>`count(*)` }).from(studentAttendanceRecordsTable).where(and(
+      eq(studentAttendanceRecordsTable.courseId, resource.courseId),
+      eq(studentAttendanceRecordsTable.termNumber, resource.termNumber),
+      inArray(studentAttendanceRecordsTable.profileId, activeProfileIds),
+    ))
+    : [{ total: 0 }];
+  return {
+    students: activeProfileIds.length,
+    assignments: assignmentIds.length,
+    assignmentSubmissions: Number(submissionCounts?.total ?? 0),
+    gradedSubmissions: Number(submissionCounts?.graded ?? 0),
+    exams: examIds.length,
+    examSubmissions: Number(examSubmissionCount?.total ?? 0),
+    lessonJoins,
+    attendanceRecords: Number(attendance?.total ?? 0),
+  };
+}
+
+function resourceGroupUsageSummary(usage: ResourceGroupUsage) {
+  const parts: string[] = [];
+  if (usage.students) parts.push(`${usage.students} tələbə`);
+  if (usage.assignments) parts.push(`${usage.assignments} tapşırıq`);
+  if (usage.assignmentSubmissions) parts.push(`${usage.assignmentSubmissions} tapşırıq cavabı${usage.gradedSubmissions ? ` (${usage.gradedSubmissions} qiymətləndirilib)` : ""}`);
+  if (usage.exams) parts.push(`${usage.exams} test`);
+  if (usage.examSubmissions) parts.push(`${usage.examSubmissions} test cavabı`);
+  if (usage.lessonJoins) parts.push(`${usage.lessonJoins} dərsə qoşulma qeydi`);
+  if (usage.attendanceRecords) parts.push(`${usage.attendanceRecords} davamiyyət qeydi`);
+  return parts;
+}
+
 router.delete("/admin/resources/:resourceId", requireTeacher, async (req, res, next) => {
   try {
     const resourceId = Number(req.params.resourceId);
@@ -4580,19 +4665,74 @@ router.delete("/admin/resources/:resourceId", requireTeacher, async (req, res, n
     const actorId = getAuth(req).userId;
     const actor = actorId ? await getClerkUser(actorId) : null;
     const actorRole = actor ? roleForClerkUser(actor) : "none";
+    const isBoard = actorRole === "owner" || actorRole === "owner_assistant" || Boolean(actorId && await userIsSystemOwner(actorId, actor));
     const [existingResource] = await db.select().from(resourcesTable).where(eq(resourcesTable.id, resourceId)).limit(1);
     if (!existingResource) { res.status(404).json({ error: "Material tapılmadı." }); return; }
-    if (actorRole !== "owner" && actorRole !== "owner_assistant" && existingResource.teacherClerkUserId !== actorId) {
+    if (!isBoard && existingResource.teacherClerkUserId !== actorId) {
       res.status(403).json({ error: "Yalnız sizə təyin olunmuş dərsin materialını silə bilərsiniz." });
       return;
     }
-    const deleted = await db.delete(resourcesTable).where(eq(resourcesTable.id, resourceId)).returning({ id: resourcesTable.id });
-    if (!deleted.length) { res.status(404).json({ error: "Material tapılmadı." }); return; }
+    const confirmed = req.query.confirm === "1" || req.query.confirm === "true";
+    const usage = await resourceGroupUsage(existingResource);
+    const summary = resourceGroupUsageSummary(usage);
+    if (summary.length) {
+      if (!isBoard) {
+        res.status(409).json({ error: `Bu qrupda məlumat var (${summary.join(", ")}). Onu yalnız sahib və ya idarə heyəti silə bilər.`, usage, requiresConfirmation: false });
+        return;
+      }
+      if (!confirmed) {
+        res.status(409).json({ error: `Bu müəllim qrupunda məlumat var: ${summary.join(", ")}.`, usage, summary, requiresConfirmation: true });
+        return;
+      }
+    }
+    const siblings = await db.select({ id: resourcesTable.id }).from(resourcesTable).where(and(
+      eq(resourcesTable.courseId, existingResource.courseId),
+      eq(resourcesTable.termNumber, existingResource.termNumber),
+      ne(resourcesTable.id, resourceId),
+    ));
+    const keepAsScheduleLesson = siblings.length === 0;
+    await db.transaction(async (tx) => {
+      await tx.delete(studentTeacherChoicesTable).where(eq(studentTeacherChoicesTable.resourceId, resourceId));
+      if (usage.lessonJoins) await tx.delete(lessonJoinEventsTable).where(eq(lessonJoinEventsTable.resourceId, resourceId));
+      const assignmentIds = (await tx.select({ id: assignmentsTable.id }).from(assignmentsTable).where(eq(assignmentsTable.resourceId, resourceId))).map((item) => item.id);
+      if (assignmentIds.length) {
+        await tx.delete(assignmentAttachmentsTable).where(inArray(assignmentAttachmentsTable.assignmentId, assignmentIds));
+        await tx.delete(assignmentSubmissionsTable).where(inArray(assignmentSubmissionsTable.assignmentId, assignmentIds));
+        await tx.delete(assignmentsTable).where(inArray(assignmentsTable.id, assignmentIds));
+      }
+      const examIds = (await tx.select({ id: examsTable.id }).from(examsTable).where(eq(examsTable.resourceId, resourceId))).map((item) => item.id);
+      if (examIds.length) {
+        const questionIds = (await tx.select({ id: examQuestionsTable.id }).from(examQuestionsTable).where(inArray(examQuestionsTable.examId, examIds))).map((item) => item.id);
+        if (questionIds.length) await tx.delete(examOptionsTable).where(inArray(examOptionsTable.questionId, questionIds));
+        await tx.delete(examSubmissionsTable).where(inArray(examSubmissionsTable.examId, examIds));
+        await tx.delete(examAttemptsTable).where(inArray(examAttemptsTable.examId, examIds));
+        await tx.delete(onboardingExamAssignmentsTable).where(inArray(onboardingExamAssignmentsTable.examId, examIds));
+        await tx.delete(examQuestionsTable).where(inArray(examQuestionsTable.examId, examIds));
+        await tx.delete(examsTable).where(inArray(examsTable.id, examIds));
+      }
+      if (keepAsScheduleLesson) {
+        // Last group of this lesson in the semester: keep the lesson itself in
+        // "Cədvəl hazırlama" as an unassigned row so it can be reassigned or deleted there.
+        await tx.update(resourcesTable).set({
+          kind: "material",
+          body: "Cədvəl dərsi",
+          url: null,
+          expiresAt: null,
+          lessonDays: [],
+          lessonTime: null,
+          teacherClerkUserId: null,
+          studentCapacity: 0,
+        }).where(eq(resourcesTable.id, resourceId));
+      } else {
+        await tx.delete(resourcesTable).where(eq(resourcesTable.id, resourceId));
+      }
+    });
     if (actorId) await recordAuditEvent({
       eventType: "resource.deleted",
       actorClerkUserId: actorId,
       targetType: "resource",
       targetId: resourceId,
+      details: { courseId: existingResource.courseId, termNumber: existingResource.termNumber, teacherClerkUserId: existingResource.teacherClerkUserId, keptAsScheduleLesson: keepAsScheduleLesson, ...usage },
       deduplicationKey: `resource.deleted:${resourceId}:${Date.now()}`,
     });
     res.status(204).send();

@@ -25,6 +25,9 @@ import { getApplicationWindowStatus, type ApplicationWindow } from "../lib/appli
 import { isMeetingUrl, lessonTimeForDay } from "../lib/lessonAttendance.js";
 import { buildAccountProfile } from "../lib/accountProfile.js";
 import { rosterIdsToKeep, staffIdsFrom } from "../lib/studentVisibility.js";
+import { candidateStatus, managesAllGroups, planRosterAdd } from "../lib/groupRoster.js";
+import { validateCourseBooks, type CourseBookEntry } from "../lib/library/courseBooks.js";
+import { COURSE_BOOKS_TABLE_MISSING_MESSAGE, isMissingCourseBooksTable, saveCourseBooks } from "../lib/library/courseBooksRepo.js";
 import {
   coTaughtResourceIds,
   coTeacherMap,
@@ -604,7 +607,8 @@ export async function taughtByCondition(userId: string) {
 async function canManageResourceRoster(userId: string, resource: typeof resourcesTable.$inferSelect) {
   if (await userIsSystemOwner(userId)) return true;
   const clerkUser = await getClerkUser(userId);
-  return metadataRole(clerkUser?.publicMetadata) === "owner_assistant" || await userTeachesResource(userId, resource);
+  // Sahib, idarə heyəti və admin bütün qrupların tələbə siyahısını idarə edir; müəllim yalnız öz qruplarını.
+  return managesAllGroups(metadataRole(clerkUser?.publicMetadata) ?? "none") || await userTeachesResource(userId, resource);
 }
 
 export const rolePermissionKeys = [
@@ -714,7 +718,7 @@ function permissionForAdminRequest(path: string, method: string): RolePermission
   if (path.startsWith("/admin/articles")) return "articles";
   if (path.startsWith("/admin/daily-benefits")) return "dailyBenefits";
   if (path.startsWith("/admin/assignments") || path === "/admin/assignment-upload-url" || path.startsWith("/admin/exams")) return "assignments";
-  if (path.startsWith("/admin/resources") || path.startsWith("/admin/schedule-lessons") || path.startsWith("/admin/selected-courses") || path.startsWith("/admin/semester-dates")) return "schedule";
+  if (path.startsWith("/admin/resources") || path.startsWith("/admin/groups") || path.startsWith("/admin/schedule-lessons") || path.startsWith("/admin/selected-courses") || path.startsWith("/admin/semester-dates")) return "schedule";
   if (path.startsWith("/admin/lesson-attendance")) return "attendance";
   if (path.startsWith("/admin/search")) return "students";
   if (path.startsWith("/admin/teacher-schedule") || path.startsWith("/admin/teachers")) return "schedule";
@@ -4358,6 +4362,54 @@ router.get("/admin/teacher-schedule.pdf", requireTeacher, async (req, res, next)
   }
 });
 
+const SCHEDULE_WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+
+/**
+ * «Cədvəl hazırlama» formasında dərs günləri və saatları (istəyə bağlı «lessonDays» + «lessonDayTimes»).
+ * undefined — sahə göndərilməyib (cədvələ toxunulmur).
+ */
+function parseLessonSchedule(body: unknown): { ok: true; value: { lessonDays: string[]; lessonTime: string | null } | undefined } | { ok: false; error: string } {
+  const input = (body ?? {}) as { lessonDays?: unknown; lessonDayTimes?: unknown };
+  if (input.lessonDays === undefined) return { ok: true, value: undefined };
+  if (!Array.isArray(input.lessonDays)) return { ok: false, error: "Dərs günləri düzgün deyil." };
+  const days = SCHEDULE_WEEKDAYS.filter((day) => (input.lessonDays as unknown[]).includes(day));
+  if (days.length !== new Set(input.lessonDays as unknown[]).size) return { ok: false, error: "Dərs günləri düzgün deyil." };
+  if (!days.length) return { ok: true, value: { lessonDays: [], lessonTime: null } };
+  const lessonTime = storedLessonTime(days, input.lessonDayTimes, null);
+  if (!lessonTime) return { ok: false, error: "Hər seçilmiş gün üçün dərs saatı yazın." };
+  return { ok: true, value: { lessonDays: days, lessonTime } };
+}
+
+/**
+ * «Cədvəl hazırlama» formasında seçilən Kitabxana kitabları (istəyə bağlı «books» sahəsi).
+ * undefined — sahə göndərilməyib (kitablara toxunulmur); xəta — 400 mətni.
+ */
+async function parseLessonBooks(raw: unknown): Promise<{ ok: true; value: CourseBookEntry[] | undefined } | { ok: false; error: string }> {
+  if (raw === undefined) return { ok: true, value: undefined };
+  const parsed = validateCourseBooks(raw, await fullLibraryCatalog());
+  return parsed.ok ? { ok: true, value: parsed.value } : { ok: false, error: parsed.error };
+}
+
+/** Kitabları dərslə birlikdə saxlayır; alınmasa dərs qalır, xəta mətni qaytarılır. */
+async function saveLessonBooks(courseId: number, termNumber: number, books: CourseBookEntry[], userId: string, log: { error: (obj: object, msg: string) => void }) {
+  try {
+    await saveCourseBooks(courseId, termNumber, books, userId);
+    await recordAuditEvent({
+      eventType: "course.books.updated",
+      actorClerkUserId: userId,
+      targetType: "course",
+      targetId: courseId,
+      details: { termNumber, books: books.map((book) => book.slug), source: "schedule-prep" },
+      deduplicationKey: `course.books.updated:${courseId}:${termNumber}:${randomUUID()}`,
+    });
+    return null;
+  } catch (error) {
+    if (isMissingCourseBooksTable(error)) return COURSE_BOOKS_TABLE_MISSING_MESSAGE;
+    log.error({ err: error, courseId, termNumber }, "Saving lesson books failed");
+    return "Dərs yadda saxlanıldı, amma kitablar saxlanılmadı. «Kitablar» düyməsi ilə yenidən cəhd edin.";
+  }
+}
+
 router.post("/admin/schedule-lessons", requireTeacher, async (req, res, next) => {
   try {
     const userId = getAuth(req).userId;
@@ -4373,6 +4425,10 @@ router.post("/admin/schedule-lessons", requireTeacher, async (req, res, next) =>
       res.status(400).json({ error: "Semestr və dərs adı düzgün doldurulmalıdır." });
       return;
     }
+    const lessonBooks = await parseLessonBooks(req.body?.books);
+    if (!lessonBooks.ok) { res.status(400).json({ error: lessonBooks.error }); return; }
+    const schedule = parseLessonSchedule(req.body);
+    if (!schedule.ok) { res.status(400).json({ error: schedule.error }); return; }
     // Idempotency guard: a double submit (double click, Enter + click, network
     // retry) must not create two identical lessons. Serialise creations for the
     // same term + name with a transaction-scoped advisory lock and refuse a
@@ -4411,8 +4467,8 @@ router.post("/admin/schedule-lessons", requireTeacher, async (req, res, next) =>
         title,
         body: "Cədvəl dərsi",
         url: null,
-        lessonDays: [],
-        lessonTime: null,
+        lessonDays: schedule.value?.lessonDays ?? [],
+        lessonTime: schedule.value?.lessonTime ?? null,
         isMandatory: true,
         teacherClerkUserId: null,
         studentCapacity: 0,
@@ -4424,7 +4480,8 @@ router.post("/admin/schedule-lessons", requireTeacher, async (req, res, next) =>
       return;
     }
     const { course, resource } = created as { course: typeof coursesTable.$inferSelect; resource: typeof resourcesTable.$inferSelect | undefined };
-    res.status(201).json({ courseId: course.id, resourceId: resource?.id ?? null });
+    const booksError = lessonBooks.value?.length ? await saveLessonBooks(course.id, termNumber, lessonBooks.value, userId, req.log) : null;
+    res.status(201).json({ courseId: course.id, resourceId: resource?.id ?? null, booksSaved: Boolean(lessonBooks.value?.length) && !booksError, booksError });
   } catch (error) {
     next(error);
   }
@@ -4445,10 +4502,21 @@ router.patch("/admin/schedule-lessons/:resourceId", requireTeacher, async (req, 
       res.status(404).json({ error: "Cədvəl dərsi tapılmadı." });
       return;
     }
+    const lessonBooks = await parseLessonBooks(req.body?.books);
+    if (!lessonBooks.ok) { res.status(400).json({ error: lessonBooks.error }); return; }
+    const schedule = parseLessonSchedule(req.body);
+    if (!schedule.ok) { res.status(400).json({ error: schedule.error }); return; }
     const title = typeof req.body?.title === "string" && req.body.title.trim() ? req.body.title.trim() : existing.title;
     await db.update(coursesTable).set({ title }).where(eq(coursesTable.id, existing.courseId));
-    await db.update(resourcesTable).set({ title }).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber)));
-    res.json({ ok: true });
+    // Gün və saat göndərilibsə dərsin bütün qruplarına tətbiq olunur (forma yalnız dəyişəndə göndərir).
+    await db.update(resourcesTable).set({ title, ...(schedule.value ? { lessonDays: schedule.value.lessonDays, lessonTime: schedule.value.lessonTime } : {}) }).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber)));
+    if (schedule.value) await recordAuditEvent({
+      eventType: "resource.updated", actorClerkUserId: userId, targetType: "resource", targetId: existing.id,
+      details: { courseId: existing.courseId, termNumber: existing.termNumber, lessonDays: schedule.value.lessonDays, lessonTime: schedule.value.lessonTime, source: "schedule-prep" },
+      deduplicationKey: `resource.updated:schedule:${existing.id}:${Date.now()}`,
+    });
+    const booksError = lessonBooks.value ? await saveLessonBooks(existing.courseId, existing.termNumber, lessonBooks.value, userId, req.log) : null;
+    res.json({ ok: true, booksSaved: Boolean(lessonBooks.value) && !booksError, booksError });
   } catch (error) {
     next(error);
   }
@@ -4471,7 +4539,7 @@ router.delete("/admin/schedule-lessons/:resourceId", requireTeacher, async (req,
     }
     const siblings = await db.select().from(resourcesTable).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber)));
     if (siblings.some((item) => item.teacherClerkUserId)) {
-      res.status(400).json({ error: "Bu dərsə müəllim qrupu bağlıdır. Əvvəlcə Tədris proqramı → Semestr fənləri siyahısında həmin müəllim qrupunu silin, sonra dərsi buradan silə bilərsiniz." });
+      res.status(400).json({ error: "Bu dərsə müəllim qrupu bağlıdır. Əvvəlcə «Qruplar» bölməsində (və ya Tədris proqramı → Semestr fənləri siyahısında) həmin müəllim qrupunu silin, sonra dərsi buradan silə bilərsiniz." });
       return;
     }
     await db.delete(resourcesTable).where(and(eq(resourcesTable.courseId, existing.courseId), eq(resourcesTable.termNumber, existing.termNumber), isNull(resourcesTable.teacherClerkUserId)));
@@ -4921,8 +4989,7 @@ router.delete("/admin/resources/:resourceId", requireTeacher, async (req, res, n
           body: "Cədvəl dərsi",
           url: null,
           expiresAt: null,
-          lessonDays: [],
-          lessonTime: null,
+          // Gün və saat «Cədvəl hazırlama»da təyin olunur — dərsin cədvəli qalır.
           teacherClerkUserId: null,
           studentCapacity: 0,
         }).where(eq(resourcesTable.id, resourceId));
@@ -5761,6 +5828,397 @@ router.put("/admin/resources/:resourceId/students", requireTeacher, async (req, 
       return;
     }
     res.json({ selectedProfileIds: result.selectedProfileIds });
+  } catch (error) { next(error); }
+});
+
+// ---------------------------------------------------------------------------
+// «Qruplar» bölməsi — müəllim qruplarının ayrıca idarəsi (siyahı, tələbə əlavə et / çıxar).
+
+async function groupActor(req: Parameters<RequestHandler>[0]) {
+  const actorId = getAuth(req).userId ?? null;
+  const actor = actorId ? await getClerkUser(actorId) : null;
+  const role = actor ? roleForClerkUser(actor) : "none";
+  const isOwner = role === "owner" || Boolean(actorId && await userIsSystemOwner(actorId, actor));
+  return {
+    actorId,
+    role,
+    isOwner,
+    manageAll: managesAllGroups(role, isOwner),
+    // «Müəllim əlavə et / çıxar» — PUT /admin/resources/:id/teachers ilə eyni qayda.
+    manageTeachers: isOwner || role === "owner_assistant" || role === "admin",
+    // «Qrupu sil» — DELETE /admin/resources/:id ilə eyni qayda (board hər qrupu, müəllim öz qrupunu).
+    board: isOwner || role === "owner_assistant",
+  };
+}
+
+/** Qrupun təsdiqlənmiş üzvləri (işçi hesabları ayrıca qeyd olunur). */
+async function groupMembers(resourceId: number, staffIds: ReadonlySet<string>) {
+  const rows = await db.select({
+    profileId: studentTeacherChoicesTable.profileId,
+    status: studentTeacherChoicesTable.status,
+    studentNumber: studentAcademicProfilesTable.studentNumber,
+    firstName: applicationsTable.firstName,
+    lastName: applicationsTable.lastName,
+    clerkUserId: applicationsTable.clerkUserId,
+    applicationStatus: applicationsTable.status,
+    deletedAt: applicationsTable.deletedAt,
+  }).from(studentTeacherChoicesTable)
+    .innerJoin(studentAcademicProfilesTable, eq(studentTeacherChoicesTable.profileId, studentAcademicProfilesTable.id))
+    .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
+    .where(eq(studentTeacherChoicesTable.resourceId, resourceId));
+  const active = rows.filter((row) => row.applicationStatus === "approved" && !row.deletedAt);
+  const isStaff = (row: { clerkUserId: string | null }) => Boolean(row.clerkUserId && staffIds.has(row.clerkUserId));
+  return {
+    visible: active.filter((row) => row.status === "approved" && !isStaff(row))
+      .map((row) => ({ profileId: row.profileId, studentNumber: row.studentNumber, firstName: row.firstName, lastName: row.lastName }))
+      .sort((a, b) => a.firstName.localeCompare(b.firstName, "az") || a.lastName.localeCompare(b.lastName, "az")),
+    pendingProfileIds: active.filter((row) => row.status === "pending" && !isStaff(row)).map((row) => row.profileId),
+  };
+}
+
+/** Eyni fənn + semestrin başqa qruplarındakı (gözləyən və ya təsdiqlənmiş) tələbələr. */
+async function otherGroupProfileIds(resource: typeof resourcesTable.$inferSelect, executor: Pick<typeof db, "select"> = db) {
+  const siblings = await executor.select({ id: resourcesTable.id }).from(resourcesTable).where(and(
+    eq(resourcesTable.courseId, resource.courseId),
+    eq(resourcesTable.termNumber, resource.termNumber),
+    ne(resourcesTable.id, resource.id),
+  ));
+  if (!siblings.length) return new Set<number>();
+  const rows = await executor.select({ profileId: studentTeacherChoicesTable.profileId })
+    .from(studentTeacherChoicesTable)
+    .where(and(
+      inArray(studentTeacherChoicesTable.resourceId, siblings.map((item) => item.id)),
+      or(eq(studentTeacherChoicesTable.status, "pending"), eq(studentTeacherChoicesTable.status, "approved")),
+    ));
+  return new Set(rows.map((row) => row.profileId));
+}
+
+async function loadManagedGroup(req: Parameters<RequestHandler>[0], res: Parameters<RequestHandler>[1]) {
+  const resourceId = Number(req.params.resourceId);
+  if (!Number.isInteger(resourceId) || resourceId <= 0) { res.status(400).json({ error: "Qrup seçilməyib." }); return null; }
+  const actor = await groupActor(req);
+  const [resource] = await db.select().from(resourcesTable).where(eq(resourcesTable.id, resourceId)).limit(1);
+  if (!resource || !resource.teacherClerkUserId) { res.status(404).json({ error: "Müəllim qrupu tapılmadı." }); return null; }
+  if (!actor.actorId || !(actor.manageAll || await userTeachesResource(actor.actorId, resource))) {
+    res.status(403).json({ error: "Bu müəllim qrupuna giriş icazəniz yoxdur." });
+    return null;
+  }
+  return { resource, actor, actorId: actor.actorId };
+}
+
+router.get("/admin/groups", requireTeacher, async (req, res, next) => {
+  try {
+    const actor = await groupActor(req);
+    if (!actor.actorId) { res.status(401).json({ error: "Hesab tapılmadı." }); return; }
+    const [resources, coTeachers, courses, staffIds] = await Promise.all([
+      db.select().from(resourcesTable).where(sql`${resourcesTable.teacherClerkUserId} IS NOT NULL`).orderBy(asc(resourcesTable.termNumber), asc(resourcesTable.id)),
+      coTeacherMap(),
+      db.select({ id: coursesTable.id, title: coursesTable.title }).from(coursesTable),
+      getStaffClerkUserIds(),
+    ]);
+    const visible = actor.manageAll ? resources : resources.filter((resource) => resourceTeacherIds(resource, coTeachers).includes(actor.actorId!));
+    const ids = visible.map((resource) => resource.id);
+    const choiceRows = ids.length ? await db.select({
+      resourceId: studentTeacherChoicesTable.resourceId,
+      status: studentTeacherChoicesTable.status,
+      clerkUserId: applicationsTable.clerkUserId,
+    }).from(studentTeacherChoicesTable)
+      .innerJoin(studentAcademicProfilesTable, eq(studentTeacherChoicesTable.profileId, studentAcademicProfilesTable.id))
+      .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
+      .where(and(inArray(studentTeacherChoicesTable.resourceId, ids), eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt))) : [];
+    const counts = new Map<number, { students: number; pending: number }>();
+    for (const row of choiceRows) {
+      if (row.clerkUserId && staffIds.has(row.clerkUserId)) continue;
+      const entry = counts.get(row.resourceId) ?? { students: 0, pending: 0 };
+      if (row.status === "approved") entry.students += 1;
+      else if (row.status === "pending") entry.pending += 1;
+      counts.set(row.resourceId, entry);
+    }
+    const titles = new Map(courses.map((course) => [course.id, course.title]));
+    const views = await resourceViews(visible);
+    // Cədvəldəki dərslər (fənn + semestr): qrupu olmayanlar da görünsün deyə (addım 1 → 2).
+    const allRows = actor.manageAll ? await db.select().from(resourcesTable).orderBy(asc(resourcesTable.id)) : resources.filter((row) => visible.some((group) => group.courseId === row.courseId && group.termNumber === row.termNumber));
+    const lessonMap = new Map<string, { courseId: number; termNumber: number; courseTitle: string; lessonDays: string[]; lessonTime: string | null; groupCount: number; scheduleResourceId: number }>();
+    for (const row of allRows) {
+      const key = `${row.courseId}:${row.termNumber}`;
+      const entry = lessonMap.get(key);
+      if (!entry) {
+        lessonMap.set(key, { courseId: row.courseId, termNumber: row.termNumber, courseTitle: titles.get(row.courseId)?.trim() || row.title, lessonDays: row.lessonDays, lessonTime: row.lessonTime, groupCount: row.teacherClerkUserId ? 1 : 0, scheduleResourceId: row.id });
+      } else {
+        if (row.teacherClerkUserId) entry.groupCount += 1;
+        // Qrupsuz cədvəl sətri (skelet) dərsin əsas cədvəlidir.
+        if (!row.teacherClerkUserId) { entry.lessonDays = row.lessonDays; entry.lessonTime = row.lessonTime; entry.scheduleResourceId = row.id; }
+      }
+    }
+    res.json({
+      canManageAll: actor.manageAll,
+      canManageTeachers: actor.manageTeachers,
+      canCreateGroups: actor.manageAll,
+      lessons: Array.from(lessonMap.values()).sort((a, b) => a.termNumber - b.termNumber || a.courseTitle.localeCompare(b.courseTitle, "az")),
+      groups: views.map((view, index) => {
+        const resource = visible[index]!;
+        const teaches = resourceTeacherIds(resource, coTeachers).includes(actor.actorId!);
+        return {
+          ...view,
+          courseTitle: titles.get(resource.courseId)?.trim() || resource.title,
+          studentCount: counts.get(resource.id)?.students ?? 0,
+          pendingCount: counts.get(resource.id)?.pending ?? 0,
+          canManageStudents: actor.manageAll || teaches,
+          canDelete: actor.board || teaches,
+        };
+      }),
+    });
+  } catch (error) { next(error); }
+});
+
+class RosterPlanError extends Error {
+  constructor(readonly status: number, message: string) { super(message); this.name = "RosterPlanError"; }
+}
+
+// Qrup yarat (addım 2 + 3): cədvəldəki dərs üçün tələbələr və müəllim(lər) birlikdə saxlanılır.
+// Qrup müəllimsiz saxlanılmır: qrupsuz cədvəl sətri (müəllimsiz) cədvəl dərsi sayılır və bir çox yerdə belə istifadə olunur.
+router.post("/admin/groups", requireTeacher, async (req, res, next) => {
+  try {
+    const actor = await groupActor(req);
+    if (!actor.actorId || !actor.manageAll) {
+      res.status(403).json({ error: "Qrupu yalnız sahib, idarə heyəti və admin yarada bilər." });
+      return;
+    }
+    const actorId = actor.actorId;
+    const courseId = Number(req.body?.courseId);
+    const termNumber = Number(req.body?.termNumber);
+    if (!Number.isInteger(courseId) || courseId < 1 || validateTermNumber(termNumber)) { res.status(400).json({ error: "Dərs və semestr düzgün seçilməyib." }); return; }
+    const teacherIds = Array.isArray(req.body?.teacherClerkUserIds)
+      ? Array.from(new Set((req.body.teacherClerkUserIds as unknown[]).filter((id): id is string => typeof id === "string" && Boolean(id.trim())).map((id) => id.trim())))
+      : [];
+    if (!teacherIds.length) { res.status(400).json({ error: "Qrupa ən azı bir müəllim təyin edin (3-cü addım)." }); return; }
+    if (teacherIds.length > 10) { res.status(400).json({ error: "Bir qrupa ən çox 10 müəllim təyin etmək olar." }); return; }
+    for (const id of teacherIds) {
+      if (!await validateTeacherAssignment(id)) { res.status(400).json({ error: "Yalnız aktiv müəllim hesabı təyin edilə bilər." }); return; }
+    }
+    const coTeacherIds = teacherIds.slice(1);
+    if (coTeacherIds.length && !(await loadCoTeachers()).available) {
+      res.status(503).json({ error: RESOURCE_TEACHERS_TABLE_MISSING_MESSAGE, code: "resource_teachers_table_missing" });
+      return;
+    }
+    const capacityRaw = Number(req.body?.studentCapacity ?? 0);
+    const studentCapacity = Number.isInteger(capacityRaw) && capacityRaw >= 0 && capacityRaw <= 1000 ? capacityRaw : -1;
+    if (studentCapacity < 0) { res.status(400).json({ error: "Tələbə sayı 0 və ya müsbət tam ədəd olmalıdır." }); return; }
+    const requested = Array.isArray(req.body?.profileIds)
+      ? (req.body.profileIds as unknown[]).filter((id): id is number => typeof id === "number" && Number.isInteger(id) && id > 0)
+      : [];
+    const staffIds = await getStaffClerkUserIds();
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${"teacher-choice:" + courseId + ":" + termNumber}, 0))`);
+      const rows = await tx.select().from(resourcesTable).where(and(eq(resourcesTable.courseId, courseId), eq(resourcesTable.termNumber, termNumber))).orderBy(asc(resourcesTable.id));
+      if (!rows.length) return { ok: false as const, status: 400, error: "Bu dərs seçilən semestrin cədvəlində yoxdur. Əvvəlcə «Cədvəl hazırlama» bölməsində dərsi yaradın (1-ci addım)." };
+      const skeleton = rows.find((row) => !row.teacherClerkUserId);
+      const source = skeleton ?? rows[0]!;
+      let group: typeof resourcesTable.$inferSelect | undefined;
+      if (skeleton) {
+        [group] = await tx.update(resourcesTable).set({ teacherClerkUserId: teacherIds[0], studentCapacity }).where(eq(resourcesTable.id, skeleton.id)).returning();
+      } else {
+        [group] = await tx.insert(resourcesTable).values({
+          courseId, termNumber, kind: "material", title: source.title, body: "Cədvəl dərsi", url: null,
+          lessonDays: source.lessonDays, lessonTime: source.lessonTime, isMandatory: source.isMandatory,
+          teacherClerkUserId: teacherIds[0], studentCapacity,
+        }).returning();
+      }
+      if (!group) throw new Error("Qrup yaradılmadı.");
+      let toAdd: number[] = [];
+      if (requested.length) {
+        const eligible = await tx.select({ id: studentAcademicProfilesTable.id, clerkUserId: applicationsTable.clerkUserId })
+          .from(studentAcademicProfilesTable)
+          .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
+          .where(and(inArray(studentAcademicProfilesTable.id, requested), eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)));
+        const existing = await tx.select({ profileId: studentTeacherChoicesTable.profileId, status: studentTeacherChoicesTable.status })
+          .from(studentTeacherChoicesTable).where(eq(studentTeacherChoicesTable.resourceId, group.id));
+        const plan = planRosterAdd({
+          requested,
+          eligibleIds: new Set(eligible.filter((row) => !row.clerkUserId || !staffIds.has(row.clerkUserId)).map((row) => row.id)),
+          visibleMemberIds: existing.filter((row) => row.status === "approved").map((row) => row.profileId),
+          otherGroupProfileIds: await otherGroupProfileIds(group, tx),
+          pendingProfileIds: existing.filter((row) => row.status === "pending").map((row) => row.profileId),
+          capacity: studentCapacity,
+        });
+        // Xəta atılır ki, tranzaksiya geri qaytarılsın (skelet sətri də dəyişməsin).
+        if (!plan.ok) throw new RosterPlanError(plan.status, plan.error);
+        if (plan.toAdd.length) {
+          const now = new Date().toISOString();
+          await tx.insert(studentTeacherChoicesTable).values(plan.toAdd.map((profileId) => ({ profileId, resourceId: group!.id, status: "approved", createdAt: now, reviewedAt: now })))
+            .onConflictDoUpdate({ target: [studentTeacherChoicesTable.profileId, studentTeacherChoicesTable.resourceId], set: { status: "approved", reviewedAt: now } });
+        }
+        toAdd = plan.toAdd;
+      }
+      return { ok: true as const, group, toAdd, reusedSchedule: Boolean(skeleton) };
+    }).catch((error: unknown) => {
+      if (error instanceof RosterPlanError) return { ok: false as const, status: error.status, error: error.message };
+      throw error;
+    });
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    const { group, toAdd } = result;
+    if (coTeacherIds.length) {
+      try { await replaceCoTeachers(group.id, coTeacherIds, actorId); } catch (error) { req.log.error({ err: error, resourceId: group.id }, "Co-teacher assignment failed"); }
+    }
+    const stamp = Date.now();
+    await recordAuditEvent({
+      eventType: "resource.created", actorClerkUserId: actorId, targetType: "resource", targetId: group.id,
+      details: { courseId, termNumber, teacherClerkUserId: teacherIds[0], coTeacherClerkUserIds: coTeacherIds, students: toAdd.length, source: "groups", reusedScheduleRow: result.reusedSchedule },
+      deduplicationKey: `resource.created:group:${group.id}:${stamp}`,
+    });
+    for (const teacherId of coTeacherIds) {
+      await recordAuditEvent({ eventType: "resource.teacher_added", actorClerkUserId: actorId, targetType: "resource", targetId: group.id, details: { courseId, termNumber, teacherClerkUserId: teacherId, mainTeacherClerkUserId: teacherIds[0] }, deduplicationKey: `resource.teacher_added:${group.id}:${teacherId}:${stamp}` });
+    }
+    for (const profileId of toAdd) {
+      await recordAuditEvent({ eventType: "resource.student_added", actorClerkUserId: actorId, targetType: "resource", targetId: group.id, details: { courseId, termNumber, profileId }, deduplicationKey: `resource.student_added:${group.id}:${profileId}:${stamp}` });
+    }
+    res.status(201).json({ group: (await resourceViews([group]))[0], added: toAdd });
+  } catch (error) { next(error); }
+});
+
+// Qrup yaratma formasında seçici üçün: semestrin tələbələri (başqa qrupda olanlar qeyd olunur).
+router.get("/admin/groups/candidates", requireTeacher, async (req, res, next) => {
+  try {
+    const actor = await groupActor(req);
+    if (!actor.manageAll) { res.status(403).json({ error: "Qrupu yalnız sahib, idarə heyəti və admin yarada bilər." }); return; }
+    const courseId = Number(req.query.courseId);
+    const termNumber = Number(req.query.termNumber);
+    if (!Number.isInteger(courseId) || courseId < 1 || validateTermNumber(termNumber)) { res.status(400).json({ error: "Dərs və semestr düzgün seçilməyib." }); return; }
+    const staffIds = await getStaffClerkUserIds();
+    const term = termDetails(termNumber);
+    const groupRows = await db.select({ id: resourcesTable.id }).from(resourcesTable).where(and(eq(resourcesTable.courseId, courseId), eq(resourcesTable.termNumber, termNumber), sql`${resourcesTable.teacherClerkUserId} IS NOT NULL`));
+    const taken = new Set<number>();
+    if (groupRows.length) {
+      for (const row of await db.select({ profileId: studentTeacherChoicesTable.profileId }).from(studentTeacherChoicesTable).where(and(inArray(studentTeacherChoicesTable.resourceId, groupRows.map((item) => item.id)), or(eq(studentTeacherChoicesTable.status, "pending"), eq(studentTeacherChoicesTable.status, "approved"))))) taken.add(row.profileId);
+    }
+    const students = await db.select({
+      profileId: studentAcademicProfilesTable.id,
+      studentNumber: studentAcademicProfilesTable.studentNumber,
+      firstName: applicationsTable.firstName,
+      lastName: applicationsTable.lastName,
+    }).from(studentAcademicProfilesTable)
+      .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
+      .where(and(eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt), await excludeStaffStudentsCondition(staffIds), eq(studentAcademicProfilesTable.courseYear, term.courseYear), eq(studentAcademicProfilesTable.semester, term.semester)))
+      .orderBy(asc(applicationsTable.firstName), asc(applicationsTable.lastName));
+    res.json({ candidates: students.map((student) => ({ ...student, ...candidateStatus(student.profileId, new Set(), taken) })) });
+  } catch (error) { next(error); }
+});
+
+router.get("/admin/groups/:resourceId/students", requireTeacher, async (req, res, next) => {
+  try {
+    const loaded = await loadManagedGroup(req, res);
+    if (!loaded) return;
+    const { resource } = loaded;
+    const staffIds = await getStaffClerkUserIds();
+    const term = termDetails(resource.termNumber);
+    const [members, others, semesterStudents] = await Promise.all([
+      groupMembers(resource.id, staffIds),
+      otherGroupProfileIds(resource),
+      db.select({
+        profileId: studentAcademicProfilesTable.id,
+        studentNumber: studentAcademicProfilesTable.studentNumber,
+        firstName: applicationsTable.firstName,
+        lastName: applicationsTable.lastName,
+      }).from(studentAcademicProfilesTable)
+        .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
+        .where(and(
+          eq(applicationsTable.status, "approved"),
+          isNull(applicationsTable.deletedAt),
+          await excludeStaffStudentsCondition(staffIds),
+          eq(studentAcademicProfilesTable.courseYear, term.courseYear),
+          eq(studentAcademicProfilesTable.semester, term.semester),
+        ))
+        .orderBy(asc(applicationsTable.firstName), asc(applicationsTable.lastName)),
+    ]);
+    const memberIds = new Set(members.visible.map((member) => member.profileId));
+    res.json({
+      resourceId: resource.id,
+      termNumber: resource.termNumber,
+      studentCapacity: resource.studentCapacity,
+      members: members.visible,
+      pendingCount: members.pendingProfileIds.length,
+      candidates: semesterStudents.map((student) => ({ ...student, ...candidateStatus(student.profileId, memberIds, others) })),
+    });
+  } catch (error) { next(error); }
+});
+
+router.post("/admin/groups/:resourceId/students", requireTeacher, async (req, res, next) => {
+  try {
+    const loaded = await loadManagedGroup(req, res);
+    if (!loaded) return;
+    const { resource, actorId } = loaded;
+    const requested = Array.isArray(req.body?.profileIds)
+      ? (req.body.profileIds as unknown[]).filter((id): id is number => typeof id === "number" && Number.isInteger(id) && id > 0)
+      : [];
+    const staffIds = await getStaffClerkUserIds();
+    const result = await db.transaction(async (tx) => {
+      // «Tədris proqramı»ndakı PUT ilə eyni kilid: eyni fənn/semestr üzrə iki qrup eyni tələbəni eyni anda ala bilməz.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${"teacher-choice:" + resource.courseId + ":" + resource.termNumber}, 0))`);
+      const eligible = requested.length ? await tx.select({ id: studentAcademicProfilesTable.id, clerkUserId: applicationsTable.clerkUserId })
+        .from(studentAcademicProfilesTable)
+        .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
+        .where(and(inArray(studentAcademicProfilesTable.id, requested), eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt))) : [];
+      const choices = await tx.select({ profileId: studentTeacherChoicesTable.profileId, status: studentTeacherChoicesTable.status, clerkUserId: applicationsTable.clerkUserId })
+        .from(studentTeacherChoicesTable)
+        .innerJoin(studentAcademicProfilesTable, eq(studentTeacherChoicesTable.profileId, studentAcademicProfilesTable.id))
+        .innerJoin(applicationsTable, eq(studentAcademicProfilesTable.applicationId, applicationsTable.id))
+        .where(and(eq(studentTeacherChoicesTable.resourceId, resource.id), eq(applicationsTable.status, "approved"), isNull(applicationsTable.deletedAt)));
+      const visibleChoice = (row: { clerkUserId: string | null }) => !row.clerkUserId || !staffIds.has(row.clerkUserId);
+      const plan = planRosterAdd({
+        requested,
+        eligibleIds: new Set(eligible.filter(visibleChoice).map((row) => row.id)),
+        visibleMemberIds: choices.filter((row) => row.status === "approved" && visibleChoice(row)).map((row) => row.profileId),
+        otherGroupProfileIds: await otherGroupProfileIds(resource, tx),
+        pendingProfileIds: choices.filter((row) => row.status === "pending" && visibleChoice(row)).map((row) => row.profileId),
+        capacity: resource.studentCapacity,
+      });
+      if (!plan.ok) return plan;
+      if (plan.toAdd.length) {
+        const now = new Date().toISOString();
+        await tx.insert(studentTeacherChoicesTable).values(plan.toAdd.map((profileId) => ({
+          profileId, resourceId: resource.id, status: "approved", createdAt: now, reviewedAt: now,
+        }))).onConflictDoUpdate({
+          target: [studentTeacherChoicesTable.profileId, studentTeacherChoicesTable.resourceId],
+          set: { status: "approved", reviewedAt: now },
+        });
+      }
+      return plan;
+    });
+    if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+    const stamp = Date.now();
+    for (const profileId of result.toAdd) {
+      await recordAuditEvent({
+        eventType: "resource.student_added", actorClerkUserId: actorId, targetType: "resource", targetId: resource.id,
+        details: { courseId: resource.courseId, termNumber: resource.termNumber, profileId },
+        deduplicationKey: `resource.student_added:${resource.id}:${profileId}:${stamp}`,
+      });
+    }
+    res.json({ added: result.toAdd });
+  } catch (error) { next(error); }
+});
+
+router.delete("/admin/groups/:resourceId/students/:profileId", requireTeacher, async (req, res, next) => {
+  try {
+    const loaded = await loadManagedGroup(req, res);
+    if (!loaded) return;
+    const { resource, actorId } = loaded;
+    const profileId = Number(req.params.profileId);
+    if (!Number.isInteger(profileId) || profileId <= 0) { res.status(400).json({ error: "Tələbə seçilməyib." }); return; }
+    const removed = await db.delete(studentTeacherChoicesTable).where(and(
+      eq(studentTeacherChoicesTable.resourceId, resource.id),
+      eq(studentTeacherChoicesTable.profileId, profileId),
+      eq(studentTeacherChoicesTable.status, "approved"),
+    )).returning({ profileId: studentTeacherChoicesTable.profileId });
+    if (!removed.length) { res.status(404).json({ error: "Tələbə bu qrupda deyil." }); return; }
+    await recordAuditEvent({
+      eventType: "resource.student_removed", actorClerkUserId: actorId, targetType: "resource", targetId: resource.id,
+      details: { courseId: resource.courseId, termNumber: resource.termNumber, profileId },
+      deduplicationKey: `resource.student_removed:${resource.id}:${profileId}:${Date.now()}`,
+    });
+    res.json({ removed: profileId });
   } catch (error) { next(error); }
 });
 

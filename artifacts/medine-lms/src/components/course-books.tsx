@@ -96,22 +96,98 @@ export function CourseBooksSection({ courseId }: { courseId: number }) {
   );
 }
 
-type Draft = { slug: string; chapter: string; from: string; to: string; note: string };
+export type CourseBookDraft = { slug: string; chapter: string; from: string; to: string; note: string };
+type Draft = CourseBookDraft;
 
-function draftFromView(view: CourseBookView, book: LibraryBook | undefined): Draft {
+export function courseBookDraftFromView(view: CourseBookView, book: LibraryBook | undefined): Draft {
   const chapterIndex = book && view.chapterTitle ? book.chapters.findIndex((chapter) => chapter.title === view.chapterTitle && chapter.page === view.pageFrom) : -1;
   return { slug: view.slug, chapter: chapterIndex >= 0 ? String(chapterIndex) : '', from: view.printedFrom?.toString() ?? '', to: view.printedTo?.toString() ?? '', note: view.note ?? '' };
 }
 
-function draftToEntry(draft: Draft, book: LibraryBook | undefined): CourseBookEntry {
+export function courseBookDraftToEntry(draft: Draft, book: LibraryBook | undefined): CourseBookEntry {
   const offset = book?.pageOffset ?? 0;
   const scan = (value: string) => (value.trim() ? Number(value) + offset : null);
   const chapter = book && draft.chapter !== '' ? book.chapters[Number(draft.chapter)] : undefined;
   return { slug: draft.slug, pageFrom: scan(draft.from), pageTo: scan(draft.to), chapterTitle: chapter?.title ?? null, note: draft.note.trim() || null };
 }
 
+/** Qaralamaları serverə göndəriləcək siyahıya çevirir (silinmiş kitablar atılır). Səhv səhifədə xəta atır. */
+export function courseBookEntriesFromDrafts(drafts: readonly Draft[], bookBySlug: ReadonlyMap<string, LibraryBook>) {
+  for (const draft of drafts) {
+    if ((draft.from && !/^\d+$/.test(draft.from)) || (draft.to && !/^\d+$/.test(draft.to))) throw new Error('Səhifə nömrəsi yalnız rəqəm ola bilər.');
+  }
+  const kept = drafts.filter((draft) => bookBySlug.has(draft.slug));
+  return { entries: kept.map((draft) => courseBookDraftToEntry(draft, bookBySlug.get(draft.slug))), dropped: drafts.length - kept.length };
+}
+
 function normalize(value: string) {
   return value.toLocaleLowerCase('az').replace(/[^\p{L}]/gu, '');
+}
+
+/** Fənnin adına uyğun mövzulu kitablar əvvəl. */
+export function orderedLibraryBooks(books: readonly LibraryBook[], courseTitle?: string) {
+  const title = normalize(courseTitle ?? '');
+  return [...books].sort((a, b) => Number(title.includes(normalize(b.subject))) - Number(title.includes(normalize(a.subject))) || a.shortTitle.localeCompare(b.shortTitle, 'az'));
+}
+
+/**
+ * Kitab seçimi sahələri (kitab + mündəricatdan bab və ya səhifə aralığı + qeyd), bir neçə kitab.
+ * Həm «Kitablar» redaktorunda, həm də «Cədvəl hazırlama» dərs formasında istifadə olunur.
+ */
+export function CourseBookDraftsFields({ drafts, onChange, books, courseTitle, testIdPrefix = 'course-book' }: {
+  drafts: Draft[];
+  onChange: (next: Draft[]) => void;
+  books: readonly LibraryBook[];
+  courseTitle?: string;
+  testIdPrefix?: string;
+}) {
+  const bookBySlug = useMemo(() => new Map(books.map((book) => [book.slug, book])), [books]);
+  const ordered = useMemo(() => orderedLibraryBooks(books, courseTitle), [books, courseTitle]);
+  const update = (index: number, patch: Partial<Draft>) => onChange(drafts.map((row, position) => (position === index ? { ...row, ...patch } : row)));
+  const add = () => {
+    const first = ordered[0];
+    if (!first) return;
+    onChange([...drafts, { slug: first.slug, chapter: '', from: '', to: '', note: '' }]);
+  };
+  return (
+    <div className="space-y-2">
+      {drafts.map((draft, index) => {
+        const book = bookBySlug.get(draft.slug);
+        return (
+          <div key={index} className="space-y-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3" data-testid={`row-${testIdPrefix}-${index}`}>
+            <div className="flex gap-2">
+              <select aria-label="Kitab" className={`${fieldClass} min-w-0 flex-1`} value={draft.slug} onChange={(event) => update(index, { slug: event.target.value, chapter: '', from: '', to: '' })} data-testid={`select-${testIdPrefix}-${index}`}>
+                {!book && <option value={draft.slug}>Kitab artıq Kitabxanada yoxdur</option>}
+                {ordered.map((option) => <option key={option.slug} value={option.slug}>{option.shortTitle} · {option.subject}</option>)}
+              </select>
+              <button type="button" onClick={() => onChange(drafts.filter((_, position) => position !== index))} className="focus-ring shrink-0 rounded-lg px-2.5 text-[hsl(var(--destructive))] hover:bg-[hsl(var(--muted))]" aria-label="Kitabı çıxar" data-testid={`button-remove-${testIdPrefix}-${index}`}><Trash2 size={15} /></button>
+            </div>
+            {!book && <p className="text-xs font-semibold text-amber-800">Bu kitab Kitabxanadan silinib — yadda saxlayanda siyahıdan çıxarılacaq.</p>}
+            {book && book.chapters.length > 0 && (
+              <select aria-label="Bab (fəsil)" className={`${fieldClass} w-full`} dir="auto" value={draft.chapter} onChange={(event) => {
+                const value = event.target.value;
+                const chapter = value === '' ? null : book.chapters[Number(value)];
+                const next = chapter ? book.chapters.slice(Number(value) + 1).find((item) => item.level <= chapter.level) : undefined;
+                update(index, { chapter: value, from: chapter ? String(chapter.printedPage) : draft.from, to: chapter ? (next && next.printedPage > chapter.printedPage ? String(next.printedPage - 1) : '') : draft.to });
+              }} data-testid={`select-${testIdPrefix}-chapter-${index}`}>
+                <option value="">Bab seçilməyib (bütün kitab və ya səhifə aralığı)</option>
+                {book.chapters.map((chapter, chapterIndex) => <option key={chapterIndex} value={chapterIndex}>{chapter.level === 2 ? '  — ' : ''}{chapter.title} (s. {chapter.printedPage})</option>)}
+              </select>
+            )}
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
+              <span>Səhifə</span>
+              <input inputMode="numeric" aria-label="Başlanğıc səhifə" placeholder="dən" className={`${fieldClass} w-20 text-center`} value={draft.from} onChange={(event) => update(index, { from: event.target.value.replace(/\D/g, '').slice(0, 5) })} data-testid={`input-${testIdPrefix}-from-${index}`} />
+              <span>–</span>
+              <input inputMode="numeric" aria-label="Son səhifə" placeholder="dək" className={`${fieldClass} w-20 text-center`} value={draft.to} onChange={(event) => update(index, { to: event.target.value.replace(/\D/g, '').slice(0, 5) })} data-testid={`input-${testIdPrefix}-to-${index}`} />
+              <span className="text-[11px]">(kitabdakı çap nömrəsi; boş qalsa — bütün kitab)</span>
+            </div>
+            <input aria-label="Qeyd" placeholder="Qeyd (məs.: 1–4-cü həftələr)" maxLength={200} className={`${fieldClass} w-full`} value={draft.note} onChange={(event) => update(index, { note: event.target.value })} data-testid={`input-${testIdPrefix}-note-${index}`} />
+          </div>
+        );
+      })}
+      <button type="button" onClick={add} disabled={drafts.length >= MAX_BOOKS_PER_LESSON || !books.length} className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] disabled:opacity-50" data-testid={`button-add-${testIdPrefix}`}><Plus size={14} /> Kitab əlavə et</button>
+    </div>
+  );
 }
 
 /** Müəllim / admin: dərsə Kitabxanadan kitab(lar) bağlamaq. Server icazəni yoxlayır. */
@@ -128,15 +204,9 @@ export function CourseBooksEditor({ courseId, termNumber, courseTitle }: { cours
 
   useEffect(() => {
     if (current.loading || catalog.loading) return;
-    setDrafts(saved.map((view) => draftFromView(view, bookBySlug.get(view.slug))));
+    setDrafts(saved.map((view) => courseBookDraftFromView(view, bookBySlug.get(view.slug))));
     // Yalnız yükləmə bitəndə doldurulur.
   }, [current.loading, catalog.loading, termNumber]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Fənnin adına uyğun mövzulu kitablar əvvəl.
-  const ordered = useMemo(() => {
-    const title = normalize(courseTitle ?? '');
-    return [...books].sort((a, b) => Number(title.includes(normalize(b.subject))) - Number(title.includes(normalize(a.subject))) || a.shortTitle.localeCompare(b.shortTitle, 'az'));
-  }, [books, courseTitle]);
 
   if (!current.available) {
     return <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900" data-testid="text-course-books-unavailable">{current.message ?? 'Dərs kitabları hələ aktiv deyil.'}{current.detail && <span className="mt-1 block font-normal opacity-80" data-testid="text-course-books-unavailable-detail">Yoxlama: {current.detail}</span>}</p>;
@@ -148,24 +218,14 @@ export function CourseBooksEditor({ courseId, termNumber, courseTitle }: { cours
     return <p className="text-xs font-semibold text-[hsl(var(--destructive))]">{current.error || catalog.error}</p>;
   }
 
-  const update = (index: number, patch: Partial<Draft>) => setDrafts((rows) => (rows ?? []).map((row, position) => (position === index ? { ...row, ...patch } : row)));
-  const add = () => {
-    const first = ordered[0];
-    if (!first) return;
-    setDrafts((rows) => [...(rows ?? []), { slug: first.slug, chapter: '', from: '', to: '', note: '' }]);
-  };
   const save = async () => {
     setSaving(true);
     setNotice(null);
     try {
-      for (const draft of drafts) {
-        if ((draft.from && !/^\d+$/.test(draft.from)) || (draft.to && !/^\d+$/.test(draft.to))) throw new Error('Səhifə nömrəsi yalnız rəqəm ola bilər.');
-      }
       // Kitabxanadan silinmiş kitablar avtomatik çıxarılır.
-      const kept = drafts.filter((draft) => bookBySlug.has(draft.slug));
-      const dropped = drafts.length - kept.length;
-      const result = await saveCourseBooksApi(getToken, courseId, termNumber, kept.map((draft) => draftToEntry(draft, bookBySlug.get(draft.slug))));
-      setDrafts(result.map((view) => draftFromView(view, bookBySlug.get(view.slug))));
+      const { entries, dropped } = courseBookEntriesFromDrafts(drafts, bookBySlug);
+      const result = await saveCourseBooksApi(getToken, courseId, termNumber, entries);
+      setDrafts(result.map((view) => courseBookDraftFromView(view, bookBySlug.get(view.slug))));
       await current.reload();
       const base = result.length ? 'Dərs kitabları yadda saxlanıldı. Tələbələr «Oxu» düyməsi ilə açacaq.' : 'Dərsdən kitablar çıxarıldı.';
       setNotice({ text: dropped ? `${base} Kitabxanadan silinmiş ${dropped} kitab siyahıdan çıxarıldı.` : base, error: false });
@@ -179,43 +239,9 @@ export function CourseBooksEditor({ courseId, termNumber, courseTitle }: { cours
   return (
     <div className="space-y-3" data-testid={`editor-course-books-${courseId}-${termNumber}`}>
       {drafts.length === 0 && <p className="text-xs text-[hsl(var(--muted-foreground))]">Bu dərsə hələ kitab bağlanmayıb.</p>}
-      {drafts.map((draft, index) => {
-        const book = bookBySlug.get(draft.slug);
-        return (
-          <div key={index} className="space-y-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3" data-testid={`row-course-book-${index}`}>
-            <div className="flex gap-2">
-              <select aria-label="Kitab" className={`${fieldClass} min-w-0 flex-1`} value={draft.slug} onChange={(event) => update(index, { slug: event.target.value, chapter: '', from: '', to: '' })} data-testid={`select-course-book-${index}`}>
-                {!book && <option value={draft.slug}>Kitab artıq Kitabxanada yoxdur</option>}
-                {ordered.map((option) => <option key={option.slug} value={option.slug}>{option.shortTitle} · {option.subject}</option>)}
-              </select>
-              <button type="button" onClick={() => setDrafts((rows) => (rows ?? []).filter((_, position) => position !== index))} className="focus-ring shrink-0 rounded-lg px-2.5 text-[hsl(var(--destructive))] hover:bg-[hsl(var(--muted))]" aria-label="Kitabı çıxar" data-testid={`button-remove-course-book-${index}`}><Trash2 size={15} /></button>
-            </div>
-            {!book && <p className="text-xs font-semibold text-amber-800">Bu kitab Kitabxanadan silinib — yadda saxlayanda siyahıdan çıxarılacaq.</p>}
-            {book && book.chapters.length > 0 && (
-              <select aria-label="Fəsil" className={`${fieldClass} w-full`} dir="auto" value={draft.chapter} onChange={(event) => {
-                const value = event.target.value;
-                const chapter = value === '' ? null : book.chapters[Number(value)];
-                const next = chapter ? book.chapters.slice(Number(value) + 1).find((item) => item.level <= chapter.level) : undefined;
-                update(index, { chapter: value, from: chapter ? String(chapter.printedPage) : draft.from, to: chapter ? (next && next.printedPage > chapter.printedPage ? String(next.printedPage - 1) : '') : draft.to });
-              }} data-testid={`select-course-book-chapter-${index}`}>
-                <option value="">Fəsil seçilməyib (bütün kitab və ya səhifə aralığı)</option>
-                {book.chapters.map((chapter, chapterIndex) => <option key={chapterIndex} value={chapterIndex}>{chapter.level === 2 ? '  — ' : ''}{chapter.title} (s. {chapter.printedPage})</option>)}
-              </select>
-            )}
-            <div className="flex flex-wrap items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
-              <span>Səhifə</span>
-              <input inputMode="numeric" aria-label="Başlanğıc səhifə" placeholder="dən" className={`${fieldClass} w-20 text-center`} value={draft.from} onChange={(event) => update(index, { from: event.target.value.replace(/\D/g, '').slice(0, 5) })} data-testid={`input-course-book-from-${index}`} />
-              <span>–</span>
-              <input inputMode="numeric" aria-label="Son səhifə" placeholder="dək" className={`${fieldClass} w-20 text-center`} value={draft.to} onChange={(event) => update(index, { to: event.target.value.replace(/\D/g, '').slice(0, 5) })} data-testid={`input-course-book-to-${index}`} />
-              <span className="text-[11px]">(kitabdakı çap nömrəsi; boş qalsa — bütün kitab)</span>
-            </div>
-            <input aria-label="Qeyd" placeholder="Qeyd (məs.: 1–4-cü həftələr)" maxLength={200} className={`${fieldClass} w-full`} value={draft.note} onChange={(event) => update(index, { note: event.target.value })} data-testid={`input-course-book-note-${index}`} />
-          </div>
-        );
-      })}
+      <CourseBookDraftsFields drafts={drafts} onChange={setDrafts} books={books} courseTitle={courseTitle} />
       {notice && <p className={`rounded-lg px-3 py-2 text-xs font-semibold ${notice.error ? 'bg-red-50 text-red-800' : 'bg-emerald-50 text-emerald-800'}`} data-testid="text-course-books-notice">{notice.text}</p>}
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={add} disabled={drafts.length >= MAX_BOOKS_PER_LESSON || !books.length} className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] disabled:opacity-50" data-testid="button-add-course-book"><Plus size={14} /> Kitab əlavə et</button>
         <button type="button" onClick={() => void save()} disabled={saving} className="focus-ring inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] hover:opacity-90 disabled:opacity-50" data-testid="button-save-course-books">{saving && <Loader2 size={13} className="animate-spin" />} Kitabları yadda saxla</button>
       </div>
     </div>

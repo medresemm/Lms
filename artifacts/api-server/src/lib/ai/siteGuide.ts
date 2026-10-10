@@ -407,10 +407,63 @@ export const GUIDE_TOPICS: GuideTopic[] = [
     keywords: ["bir nece muellim", "iki muellim", "elave muellim", "birge tedris", "komekci muellim", "muellim elave", "muellim cixar", "assistent muellim"],
     standalone: ["bir nece muellim", "birge tedris", "elave muellim", "iki muellim"],
     steps: [
-      "«Tədris proqramı» bölməsini açın. Yeni qrup yaradarkən «Müəllim» sahəsində əsas müəllimi seçin, «Əlavə müəllimlər (birgə tədris)» siyahısında digər müəllimləri işarələyin.",
-      "Mövcud qrup üçün «Semestr fənləri» siyahısında qrupun altındakı «Müəllim əlavə et / çıxar» düyməsini basın, müəllimləri işarələyib «Yadda saxla» basın. Ən azı bir müəllim qalmalıdır.",
+      "Yeni qrupu «Qruplar» bölməsində «Qrup yarat» ilə yaradın: son addımda əsas müəllimi seçin və «Əlavə müəllimlər» siyahısında digər müəllimləri işarələyin.",
+      "Mövcud qrup üçün «Qruplar» bölməsində qrupu açın (və ya «Tədris proqramı» → «Semestr fənləri» siyahısında qrupun altına baxın) və «Müəllim əlavə et / çıxar» düyməsini basın, müəllimləri işarələyib «Yadda saxla» basın. Ən azı bir müəllim qalmalıdır.",
       "Birgə müəllimlər eyni tələbələri paylaşır: hamısı dərsi «Mənim cədvəlim»də görür, dərs linki yerləşdirir, davamiyyət yazır, tapşırıq və test verib qiymətləndirir. Tələbələr dərsdə bütün müəllimlərin adını görür.",
-      "Ayrı tələbə qrupu ilə başqa müəllim lazımdırsa, «+ Başqa müəllim əlavə et» düyməsindən istifadə edin — bu, ayrıca qrup yaradır.",
+      "Ayrı tələbə qrupu ilə başqa müəllim lazımdırsa, «Qruplar» bölməsində həmin dərs üçün yenidən «Qrup yarat» basın — bu, ayrıca qrup yaradır.",
+    ],
+  },
+  {
+    id: "admin-setup-order",
+    section: "schedule-prep",
+    modes: ["admin"],
+    title: "Tədris quruluşu: 1 Cədvəl → 2 Tələbələr → 3 Müəllim",
+    keywords: ["ardicilliq", "addim", "addimlar", "semestr qur", "tedris qurulus", "hardan baslayim", "yeni semestr", "nece qurum", "ders cedveli hazirla"],
+    standalone: ["hardan baslayim", "yeni semestr", "tedris qurulusu", "semestri nece qurum"],
+    steps: [
+      "1-ci addım — «Cədvəl hazırlama»: semestri seçin, hər dərsin adını, həftənin günlərini və saatını yazın, Kitabxanadan kitabları seçin.",
+      "2-ci addım — «Qruplar»: semestri seçin; həmin semestrin dərsləri görünür. Qrupu olmayan dərsdə «Qrup yarat» basın və bu semestrin tələbələrindən qrupa əlavə ediləcəkləri işarələyin.",
+      "3-cü addım — eyni pəncərədə qrupun əsas müəllimini və istəsəniz əlavə müəllimləri seçib «Qrupu yarat» basın. Mövcud qrupda müəllimləri «Müəllim əlavə et / çıxar» ilə dəyişin.",
+    ],
+    tips: [
+      "Qrup müəllimsiz yaradılmır: müəllimi olmayan sətir sistemdə hələ qrup deyil, yalnız cədvəldəki dərsdir və tələbələrə görünmür. Ona görə müəllim elə qrup yaradılan pəncərənin son addımında seçilir.",
+      "«Qruplar» bölməsində qrupu olmayan dərslər, tələbəsi olmayan qruplar və günü/saatı yazılmamış dərslər nişanla göstərilir.",
+    ],
+    related: ["Qruplara tələbəni necə əlavə edim?", "Dərsə kitab necə seçim?"],
+  },
+  {
+    id: "admin-groups",
+    section: "groups",
+    modes: ["admin"],
+    title: "Qrupları idarə etmək (qrup yarat, tələbə əlavə et / çıxar, müəllim təyin et)",
+    keywords: ["qrup", "qruplar", "qrupa telebe", "qrupdan cixar", "qrupa elave", "telebe elave", "telebe cixar", "qrup idare", "qrupu sil", "grup", "qrup yarat", "muellim teyin"],
+    standalone: ["qruplar harada", "qrupa telebe elave", "qrupdan telebe cixar", "qruplar hardan idare", "qrup yarat"],
+    steps: [
+      "İdarə panelində «Qruplar» bölməsini açın (o, «Cədvəl hazırlama» ilə yanaşıdır) və semestri seçin. Həmin semestrin hər dərsi öz qrupları ilə görünür; qrupu yoxdursa «Qrup yoxdur — Qrup yarat» yazılır.",
+      "«Qrup yarat» basın: əvvəl həmin semestrin təsdiqlənmiş tələbələrindən qrupa əlavə ediləcəkləri işarələyin (istəsəniz tutumu yazın), sonra əsas müəllimi və əlavə müəllimləri seçib «Qrupu yarat» basın.",
+      "Mövcud qrup kartında «Aç» basın: tələbəni çıxarmaq üçün «Çıxar» basıb təsdiqləyin, yeni tələbələr üçün «Tələbə əlavə et» ilə bir neçəsini birdən seçin. Eyni fənn üzrə başqa müəllim qrupunda olan tələbə seçilə bilmir.",
+      "Müəllimləri «Müəllim əlavə et / çıxar», qrupun özünü «Qrupu sil» düyməsi ilə idarə edin (silmə iki dəfə təsdiq istəyir).",
+      "Süzgəclərlə fənn və müəllim seçin və ya axtarış sahəsinə yazın.",
+    ],
+    tips: [
+      "Sahib, idarə heyəti və admin bütün qrupları görür və yeni qrup yaradır; müəllim yalnız öz qruplarını görür və onların tələbələrini idarə edir.",
+      "Dərsin adı, günləri, saatı və kitabları «Cədvəl hazırlama»da dəyişdirilir; dərs linki və məzmunu «Tədris proqramı»nda qalır.",
+    ],
+    related: ["Hansı ardıcıllıqla semestri qurum?", "Bir dərsə bir neçə müəllim necə əlavə edim?"],
+  },
+  {
+    id: "admin-schedule-prep",
+    section: "schedule-prep",
+    modes: ["admin"],
+    title: "Cədvəl hazırlama: dərs, gün, saat və kitablar",
+    keywords: ["cedvel hazirla", "cedvel hazirlama", "ders yarat", "yeni ders", "derse kitab", "kitab sec", "kitab bagla", "ders kitabi", "kitabxanadan kitab", "ders gunu", "ders saati"],
+    standalone: ["cedvel hazirlama", "derse kitab", "kitabxanadan kitab sec"],
+    steps: [
+      "«Cədvəl hazırlama» bölməsini açın, semestri seçin və dərsin adını yazın.",
+      "«Həftənin dərs günləri və saatı» hissəsində günləri işarələyib hər gün üçün saatı yazın.",
+      "«Kitab əlavə et» düyməsi ilə Kitabxanadan bir və ya bir neçə kitab seçin; istəsəniz kitabın mündəricatından babı və ya səhifə aralığını göstərin.",
+      "«Dərs əlavə et» basın — dərs, günlər və kitablar birlikdə yadda saxlanılır. «Redaktə et» ilə dəyişə bilərsiniz; gün və saat dəyişikliyi dərsin bütün qruplarına tətbiq olunur.",
+      "Sonra «Qruplar» bölməsinə keçib qrup yaradın, tələbələri əlavə edin və müəllim təyin edin.",
     ],
   },
   {
@@ -443,7 +496,7 @@ export const GUIDE_TOPICS: GuideTopic[] = [
 export type AdminSectionId =
   | "announcement" | "student-notifications" | "article" | "benefit" | "student-management" | "application" | "exams"
   | "course-content" | "users" | "course-activation" | "statistics" | "audit-history" | "graduation-certificates"
-  | "schedule-prep" | "library";
+  | "schedule-prep" | "library" | "groups";
 
 export interface AdminGuideAccess {
   isOwner: boolean;
@@ -467,13 +520,14 @@ const ADMIN_SECTIONS: Array<{ id: AdminSectionId; label: string; visible: (acces
     },
     { id: "application", label: "Müraciətlər", visible: perm("applications") },
     { id: "exams", label: "İmtahan və testlər", visible: perm("assignments") },
+    { id: "schedule-prep", label: "Cədvəl hazırlama", visible: (access) => board(access) || access.role === "admin" },
+    { id: "groups", label: "Qruplar", visible: perm("schedule") },
     { id: "course-content", label: "Tədris proqramı", visible: perm("schedule") },
     { id: "users", label: "İstifadəçi rolları", visible: board },
     { id: "course-activation", label: "Dərsləri idarə et", visible: board },
     { id: "statistics", label: "Statistika", visible: () => false },
     { id: "audit-history", label: "Audit tarixçəsi", visible: () => false },
     { id: "graduation-certificates", label: "Şəhadətnamə idarəsi", visible: board },
-    { id: "schedule-prep", label: "Cədvəl hazırlama", visible: (access) => board(access) || access.role === "admin" },
     { id: "library", label: "Mədrəsə Kitabxanası", visible: () => true },
   ];
 })();

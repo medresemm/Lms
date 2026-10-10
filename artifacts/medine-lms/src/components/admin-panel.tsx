@@ -27,6 +27,7 @@ import {
   Upload,
   UserCog,
   UsersRound,
+  Users,
   RefreshCw,
   Search,
   X,
@@ -146,13 +147,16 @@ import { loadUnansweredQuestionCount, QaCenter } from '@/components/qa-center';
 import { AdminExamsSection } from '@/components/exam-module';
 import { GraduateCertificateSection } from '@/components/graduate-certificate';
 import { MedreseLibrary } from '@/components/medrese-library';
-import { CourseBooksEditor } from '@/components/course-books';
+import { GroupManagementSection, SetupSteps } from '@/components/group-management';
+import { CourseBookDraftsFields, CourseBooksEditor, courseBookDraftFromView, courseBookEntriesFromDrafts, type CourseBookDraft } from '@/components/course-books';
+import { useCourseBooks } from '@/lib/course-books';
+import { useLibraryCatalog } from '@/lib/library';
 import { formatFullName, formatPersonName } from '@/lib/utils';
 import { accountProfileQueryRetry } from '@/lib/account-profile-retry';
 import { isCoTaught, orderedTeacherSelection, resourceTeacherIds, resourceTeacherLabel, sameTeacherSet, teachesResource } from '@/lib/co-teachers';
 import { staffStudentNote, type StudentRecordInfo } from '@/lib/staff-student-note';
 
-type Tab = 'course-content' | 'course-activation' | 'schedule-prep' | 'announcement' | 'student-notifications' | 'article' | 'benefit' | 'schedule' | 'teachers-schedule' | 'messages' | 'questions' | 'student-management' | 'application' | 'exams' | 'users' | 'statistics' | 'audit-history' | 'graduation-certificates' | 'library';
+type Tab = 'course-content' | 'groups' | 'course-activation' | 'schedule-prep' | 'announcement' | 'student-notifications' | 'article' | 'benefit' | 'schedule' | 'teachers-schedule' | 'messages' | 'questions' | 'student-management' | 'application' | 'exams' | 'users' | 'statistics' | 'audit-history' | 'graduation-certificates' | 'library';
 
 const emptyCourse: CourseInput = {
   title: '',
@@ -844,6 +848,12 @@ const auditEventLabels: Record<string, string> = {
   'resource.created': 'Yeni dərs yaradıldı',
   'resource.updated': 'Dərs məlumatları yeniləndi',
   'resource.deleted': 'Dərs silindi',
+  'resource.student_added': 'Tələbə qrupa əlavə edildi',
+  'resource.student_removed': 'Tələbə qrupdan çıxarıldı',
+  'resource.teacher_added': 'Qrupa müəllim əlavə edildi',
+  'resource.teacher_removed': 'Qrupdan müəllim çıxarıldı',
+  'resource.main_teacher_changed': 'Qrupun əsas müəllimi dəyişdi',
+  'course.books.updated': 'Dərs kitabları yeniləndi',
   'teacher.choice.created': 'Müəllim seçimi göndərildi',
   'teacher.choice.approved': 'Müəllim seçimi təsdiqləndi',
   'teacher.choice.rejected': 'Müəllim seçimi rədd edildi',
@@ -2131,16 +2141,32 @@ function CourseLessonCountForm() {
   );
 }
 
-function SchedulePrepSection() {
+function SchedulePrepSection({ onOpenGroups }: { onOpenGroups?: () => void }) {
   const coursesQuery = useGetCourses();
   const resourcesQuery = useGetAdminResources();
   const queryClient = useQueryClient();
   const [termNumber, setTermNumber] = useState(1);
   const [title, setTitle] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingCourseId, setEditingCourseId] = useState<number | null>(null);
   const [notice, setNotice] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [booksCourseId, setBooksCourseId] = useState<number | null>(null);
+  // Dərs formasında Kitabxanadan seçilən kitablar (dərslə birlikdə lms_course_books-a yazılır).
+  const catalog = useLibraryCatalog();
+  const courseBooks = useCourseBooks();
+  const libraryBooks = catalog.books ?? [];
+  const bookBySlug = new Map(libraryBooks.map((book) => [book.slug, book]));
+  // Dərs günləri və saatları (1-ci addım). Redaktədə yalnız dəyişəndə göndərilir və dərsin bütün qruplarına tətbiq olunur.
+  const [lessonDays, setLessonDays] = useState<string[]>([]);
+  const [dayTimes, setDayTimes] = useState<Record<string, string>>({});
+  const [initialSchedule, setInitialSchedule] = useState('');
+  const scheduleKey = (days: string[], times: Record<string, string>) => JSON.stringify(lessonDayOptions.filter(([day]) => days.includes(day)).map(([day]) => [day, times[day] ?? '']));
+  const [bookDrafts, setBookDrafts] = useState<CourseBookDraft[]>([]);
+  // Redaktədə mövcud kitablar yüklənməmiş boş siyahı göndərilib onları silməsin deyə.
+  const [bookDraftsReady, setBookDraftsReady] = useState(true);
+  const booksAvailable = courseBooks.available && !catalog.error;
+  const booksLoading = catalog.loading || courseBooks.loading;
   // Synchronous guard: a double click / Enter+click can submit twice before the
   // disabled state re-renders, which created two identical lessons.
   const savingRef = useRef(false);
@@ -2148,8 +2174,45 @@ function SchedulePrepSection() {
 
   const reset = () => {
     setEditingId(null);
+    setEditingCourseId(null);
     setTitle('');
+    setLessonDays([]);
+    setDayTimes({});
+    setInitialSchedule('');
+    setBookDrafts([]);
+    setBookDraftsReady(true);
   };
+
+  const fillDraftsFor = (courseId: number) => {
+    const saved = courseBooks.items.find((item) => item.courseId === courseId && item.termNumber === termNumber)?.books ?? [];
+    setBookDrafts(saved.map((view) => courseBookDraftFromView(view, bookBySlug.get(view.slug))));
+  };
+
+  const startEdit = (lesson: { id: number; courseId: number }, courseTitle: string) => {
+    setEditingId(lesson.id);
+    setEditingCourseId(lesson.courseId);
+    setTitle(courseTitle);
+    // Cədvəl: qrupsuz cədvəl sətri varsa ondan, yoxsa ilk qrupdan götürülür.
+    const rows = (resourcesQuery.data ?? []).filter((resource) => resource.courseId === lesson.courseId && resource.termNumber === termNumber);
+    const source = rows.find((resource) => !resource.teacherClerkUserId) ?? rows[0];
+    const days = lessonDayOptions.map(([day]) => day as string).filter((day) => (source?.lessonDays as string[] | undefined)?.includes(day));
+    const times = parseDayTimes(source?.lessonTime, days);
+    setLessonDays(days);
+    setDayTimes(times);
+    setInitialSchedule(scheduleKey(days, times));
+    setNotice('');
+    // Kitablar «Kitablar» panelində dəyişmiş ola bilər — həmişə təzə siyahı yüklənir.
+    setBookDrafts([]);
+    setBookDraftsReady(false);
+    void courseBooks.reload();
+    window.setTimeout(() => document.querySelector('[data-testid="form-schedule-prep"]')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 0);
+  };
+
+  useEffect(() => {
+    if (editingCourseId === null || bookDraftsReady || booksLoading) return;
+    fillDraftsFor(editingCourseId);
+    setBookDraftsReady(true);
+  }, [editingCourseId, bookDraftsReady, booksLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -2159,18 +2222,32 @@ function SchedulePrepSection() {
     setIsSaving(true);
     try {
       if (!title.trim()) throw new Error('Dərs adı mütləqdir.');
+      const orderedDays = lessonDayOptions.map(([day]) => day as string).filter((day) => lessonDays.includes(day));
+      if (orderedDays.some((day) => !/^\d{2}:\d{2}$/.test(dayTimes[day] ?? ''))) throw new Error('Hər seçilmiş gün üçün dərs saatı yazın.');
+      const scheduleChanged = editingId === null ? orderedDays.length > 0 : scheduleKey(orderedDays, dayTimes) !== initialSchedule;
+      const schedulePayload = scheduleChanged ? { lessonDays: orderedDays, lessonDayTimes: Object.fromEntries(orderedDays.map((day) => [day, dayTimes[day]])) } : {};
+      const { entries, dropped } = courseBookEntriesFromDrafts(bookDrafts, bookBySlug);
+      // Yeni dərsdə yalnız seçilən kitablar göndərilir; redaktədə siyahı tam yazılır (boş = kitablar çıxarılır).
+      const sendBooks = booksAvailable && !booksLoading && bookDraftsReady && (editingId !== null || entries.length > 0);
       const response = await fetch(apiUrl(editingId === null ? '/admin/schedule-lessons' : `/admin/schedule-lessons/${editingId}`), {
         method: editingId === null ? 'POST' : 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ termNumber, title: title.trim() }),
+        body: JSON.stringify({ termNumber, title: title.trim(), ...schedulePayload, ...(sendBooks ? { books: entries } : {}) }),
       });
-      const result = await response.json().catch(() => ({})) as { error?: string };
+      const result = await response.json().catch(() => ({})) as { error?: string; booksSaved?: boolean; booksError?: string | null };
       if (!response.ok) throw new Error(result.error || 'Dərs yadda saxlanılmadı.');
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetAdminResourcesQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetCoursesQueryKey() }),
+        sendBooks ? courseBooks.reload() : Promise.resolve(),
       ]);
-      setNotice(editingId === null ? 'Dərs əlavə edildi.' : 'Dərs adı yeniləndi.');
+      const base = editingId === null ? 'Dərs əlavə edildi. Növbəti addım: «Qruplar» bölməsində qrup yaradın.' : scheduleChanged ? 'Dərs yeniləndi; gün və saat dərsin bütün qruplarına tətbiq olundu.' : 'Dərs yeniləndi.';
+      const booksText = result.booksError
+        ? ` ${result.booksError}`
+        : result.booksSaved
+          ? entries.length ? ` ${entries.length} kitab dərsə bağlandı.` : ' Dərsdən kitablar çıxarıldı.'
+          : '';
+      setNotice(`${base}${booksText}${dropped && !result.booksError ? ` Kitabxanadan silinmiş ${dropped} kitab siyahıdan çıxarıldı.` : ''}`);
       reset();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Dərs yadda saxlanılmadı.');
@@ -2196,17 +2273,21 @@ function SchedulePrepSection() {
     setNotice('Dərs silindi.');
   };
 
+  const bookCountFor = (courseId: number) => courseBooks.items.find((item) => item.courseId === courseId && item.termNumber === termNumber)?.books.filter((book) => book.available).length ?? 0;
+
   return (
     <section className="space-y-5" data-testid="section-schedule-prep">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Semestr cədvəli</p>
+        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Tədris quruluşu · 1-ci addım</p>
         <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Cədvəl hazırlama</h3>
-        <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hər semestr üçün yalnız dərsin adını yazın. Gün, saat və müəllim tədris proqramından idarə olunur.</p>
+        <div className="mt-2"><SetupSteps active={1} onOpenGroups={onOpenGroups} /></div>
+        <p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Əvvəlcə hər semestr üçün dərsləri hazırlayın: adı, həftənin günləri və saatı, Kitabxanadan kitablar. Sonra «Qruplar» bölməsində hər dərs üçün qrup yaradıb tələbələri əlavə edin və müəllim təyin edin.</p>
       </div>
-      <form onSubmit={save} className="space-y-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-4">
+      <form onSubmit={save} className="space-y-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] p-4" data-testid="form-schedule-prep">
+        {editingId !== null && <p className="text-xs font-black text-[hsl(var(--secondary-foreground))]" data-testid="text-schedule-prep-editing">Dərs redaktə olunur</p>}
         <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
           <Field label="Semestr">
-            <select className={inputClass} value={termNumber} onChange={(event) => { setTermNumber(Number(event.target.value)); reset(); }} data-testid="select-schedule-prep-term">
+            <select className={inputClass} value={termNumber} onChange={(event) => { setTermNumber(Number(event.target.value)); reset(); }} disabled={editingId !== null} data-testid="select-schedule-prep-term">
               {Array.from({ length: 8 }, (_, index) => index + 1).map((term) => <option key={term} value={term}>{term}-{termSuffixes[term] ?? 'ci'} semestr</option>)}
             </select>
           </Field>
@@ -2214,22 +2295,51 @@ function SchedulePrepSection() {
             <input required className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Dərsin adını yazın" data-testid="input-schedule-prep-title" />
           </Field>
         </div>
+        <Field label="Həftənin dərs günləri və saatı" hint={editingId !== null ? 'Dəyişsəniz, bu dərsin bütün qruplarına tətbiq olunur.' : 'İstəyə bağlıdır; sonra da əlavə etmək olar. Hər günün saatı ayrı yazılır.'}>
+          <div className="grid gap-1.5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 sm:grid-cols-2" data-testid="schedule-prep-days">
+            {lessonDayOptions.map(([value, label]) => {
+              const selected = lessonDays.includes(value);
+              return (
+                <div key={value} className="flex min-h-10 flex-wrap items-center gap-2">
+                  <label className="flex min-w-36 items-center gap-2 text-xs font-semibold text-[hsl(var(--primary))]">
+                    <input type="checkbox" checked={selected} onChange={(event) => setLessonDays((current) => event.target.checked ? [...current, value] : current.filter((day) => day !== value))} data-testid={`checkbox-schedule-prep-day-${value}`} />
+                    {label}
+                  </label>
+                  {selected && <input required type="time" className={`${inputClass} max-w-36 py-2`} value={dayTimes[value] ?? ''} onChange={(event) => setDayTimes((current) => ({ ...current, [value]: event.target.value }))} aria-label={`${label} saatı`} data-testid={`input-schedule-prep-time-${value}`} />}
+                </div>
+              );
+            })}
+          </div>
+        </Field>
+        <Field label="Dərs kitabları (Kitabxanadan)" hint="İstəyə bağlıdır. Bir neçə kitab seçə, hər kitab üçün mündəricatdan bab və ya səhifə aralığı göstərə bilərsiniz.">
+          <div className="space-y-2" data-testid="schedule-prep-books">
+            {!booksAvailable
+              ? <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900" data-testid="text-schedule-prep-books-unavailable">{catalog.error || courseBooks.message || 'Dərs kitabları hələ aktiv deyil.'}</p>
+              : booksLoading || !bookDraftsReady
+                ? <p className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]"><RefreshCw size={13} className="animate-spin" /> Kitabxana yüklənir…</p>
+                : <>
+                    {bookDrafts.length === 0 && <p className="text-xs text-[hsl(var(--muted-foreground))]">Kitab seçilməyib.</p>}
+                    <CourseBookDraftsFields drafts={bookDrafts} onChange={setBookDrafts} books={libraryBooks} courseTitle={title} testIdPrefix="schedule-prep-book" />
+                  </>}
+          </div>
+        </Field>
         <div className="flex flex-wrap justify-end gap-2">
           {editingId !== null && <button type="button" onClick={reset} className="focus-ring rounded-xl px-4 py-2.5 text-xs font-bold text-[hsl(var(--muted-foreground))]">Ləğv et</button>}
-          <button type="submit" className={buttonClass} disabled={isSaving} data-testid="button-save-schedule-prep">{isSaving ? 'Yadda saxlanılır...' : editingId === null ? 'Dərs əlavə et' : 'Adı yenilə'}</button>
+          <button type="submit" className={buttonClass} disabled={isSaving} data-testid="button-save-schedule-prep">{isSaving ? 'Yadda saxlanılır...' : editingId === null ? 'Dərs əlavə et' : 'Dəyişiklikləri saxla'}</button>
         </div>
       </form>
-      {notice && <FormNotice text={notice} error={notice.includes('bil') || notice.includes('mütləq') || notice.includes('silinmə') || notice.includes('artıq var') || notice.includes('bağlıdır')} />}
+      {notice && <FormNotice text={notice} error={notice.includes('bil') || notice.includes('mütləq') || notice.includes('silinmə') || notice.includes('artıq var') || notice.includes('bağlıdır') || notice.includes('saxlanılmadı') || notice.includes('aktiv deyil') || notice.includes('tapılmadı') || notice.includes('düzgün deyil')} />}
       <div className="space-y-2" data-testid="list-schedule-prep">
         {resourcesQuery.isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Siyahı yüklənir...</p> : lessons.length ? lessons.map((lesson) => {
           const courseTitle = coursesQuery.data?.find((course) => course.id === lesson.courseId)?.title ?? lesson.title;
+          const bookCount = bookCountFor(lesson.courseId);
           return (
-            <div key={lesson.courseId} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3">
+            <div key={lesson.courseId} className={`rounded-xl border bg-[hsl(var(--card))] px-4 py-3 ${editingId === lesson.id ? 'border-[hsl(var(--primary))]' : 'border-[hsl(var(--border))]'}`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm font-bold text-[hsl(var(--primary))]">{courseTitle}</p>
-                <div className="flex gap-2">
-                  <button type="button" className={`focus-ring inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--secondary-foreground))] hover:bg-[hsl(var(--muted))] ${booksCourseId === lesson.courseId ? 'bg-[hsl(var(--muted))]' : ''}`} onClick={() => setBooksCourseId((current) => current === lesson.courseId ? null : lesson.courseId)} aria-expanded={booksCourseId === lesson.courseId} data-testid={`button-schedule-prep-books-${lesson.courseId}`}><BookMarked size={14} /> Kitablar</button>
-                  <button type="button" className="focus-ring rounded-lg px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" onClick={() => { setEditingId(lesson.id); setTitle(courseTitle); }}>Redaktə et</button>
+                <p className="text-sm font-bold text-[hsl(var(--primary))]">{courseTitle}<span className="ml-2 text-[11px] font-semibold text-[hsl(var(--muted-foreground))]">{(() => { const rows = (resourcesQuery.data ?? []).filter((resource) => resource.courseId === lesson.courseId && resource.termNumber === termNumber); const source = rows.find((resource) => !resource.teacherClerkUserId) ?? rows[0]; return source?.lessonDays.length ? source.lessonDays.map((day) => `${lessonDayOptions.find(([value]) => value === day)?.[1] ?? day} ${parseDayTimes(source.lessonTime, [day])[day] || ''}`.trim()).join(', ') : 'gün/saat yoxdur'; })()}</span>{bookCount > 0 && <span className="ml-2 rounded-full bg-[hsl(var(--secondary)/.45)] px-2 py-0.5 text-[10px] font-bold text-[hsl(var(--secondary-foreground))]">{bookCount} kitab</span>}</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className={`focus-ring inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--secondary-foreground))] hover:bg-[hsl(var(--muted))] ${booksCourseId === lesson.courseId ? 'bg-[hsl(var(--muted))]' : ''}`} onClick={() => { if (booksCourseId === lesson.courseId) void courseBooks.reload(); setBooksCourseId((current) => current === lesson.courseId ? null : lesson.courseId); }} aria-expanded={booksCourseId === lesson.courseId} data-testid={`button-schedule-prep-books-${lesson.courseId}`}><BookMarked size={14} /> Kitablar</button>
+                  <button type="button" className="focus-ring rounded-lg px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" onClick={() => startEdit(lesson, courseTitle)} data-testid={`button-schedule-prep-edit-${lesson.courseId}`}>Redaktə et</button>
                   <button type="button" className="focus-ring rounded-lg px-2.5 py-1.5 text-xs font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--muted))]" onClick={() => void remove(lesson.id)}>Sil</button>
                 </div>
               </div>
@@ -4707,7 +4817,8 @@ export function AdminPanel() {
     t === 'student-notifications' && rolePermissions.has('announcements') && <StudentNotificationForm />,
     t === 'exams' && canManageAssignments && <AdminExamsSection resources={resourcesQuery.data ?? []} teacherClerkUserId={activeRole === 'teacher' || activeRole === 'admin' ? user?.id : undefined} owner={owner} />,
     t === 'course-activation' && (owner || ownerAssistant) && <CourseActivationSettings />,
-    t === 'course-content' && canEditCourseContent && <div className="space-y-8" data-testid="section-course-content-management"><section><div className="mb-4"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Dərs idarəetməsi</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Semestr cədvəli</h3><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hər semestr üçün fənni, günü və saatı yazın. Eyni fənnə bir neçə müəllim əlavə edin və tələbələri qrupa seçin. Tələbə yalnız öz qrupunu görür.</p></div><ResourceForm teacherOnly={activeRole === 'teacher'} teacherName={fullName} onSaved={() => setLocation('/admin')} /></section></div>,
+    t === 'course-content' && canEditCourseContent && <div className="space-y-8" data-testid="section-course-content-management"><section><div className="mb-4"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Dərs idarəetməsi</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Semestr cədvəli</h3><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Bu bölmədə mövcud dərs qrupunun saatı, dərs linki, məzmunu və mövzuları redaktə olunur. Yeni tədris quruluşu üç addımla qurulur: 1) «Cədvəl hazırlama»da semestr dərsləri, 2) «Qruplar»da qrup və tələbələr, 3) həmin qrupa müəllim. Tələbə yalnız öz qrupunu görür.</p><button type="button" onClick={() => { scrollTabRef.current = 'groups'; setTab('groups'); }} className="focus-ring mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-open-groups-from-curriculum"><Users size={14} /> Qrup yaratmaq, tələbə və müəllim təyin etmək üçün «Qruplar»a keçin</button></div><ResourceForm teacherOnly={activeRole === 'teacher'} teacherName={fullName} onSaved={() => setLocation('/admin')} /></section></div>,
+    t === 'groups' && canEditCourseContent && <GroupManagementSection onOpenSchedule={(owner || ownerAssistant || activeRole === 'admin') ? () => { scrollTabRef.current = 'schedule-prep'; setTab('schedule-prep'); } : undefined} />,
     t === 'announcement' && <><button type="button" onClick={() => setIsAnnouncementListOpen((current) => !current)} aria-expanded={isAnnouncementListOpen} className="focus-ring mb-5 inline-flex items-center gap-2.5 rounded-xl border border-[hsl(var(--border))] px-5 py-3.5 text-sm font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-existing-announcements"><Megaphone size={18} /> Mövcud elanlar</button>{isAnnouncementListOpen && <AnnouncementList />}<AnnouncementForm onSaved={() => setLocation('/admin')} /></>,
     t === 'article' && <ArticleForm />,
     t === 'benefit' && <DailyBenefitForm />,
@@ -4717,7 +4828,7 @@ export function AdminPanel() {
     t === 'statistics' && owner && <><AnalyticsDashboard applications={applicationsQuery.data ?? []} profiles={academicProfilesQuery.data ?? []} resources={resourcesQuery.data ?? []} onRefresh={() => { void Promise.all([applicationsQuery.refetch(), academicProfilesQuery.refetch(), resourcesQuery.refetch()]); }} /><SystemStatisticsSettings /><StudentAiExternalSettings /></>,
     t === 'audit-history' && owner && <AuditHistory />,
     t === 'graduation-certificates' && (owner || ownerAssistant) && <GraduateCertificateSection canRevoke={owner} />,
-    t === 'schedule-prep' && (owner || ownerAssistant || activeRole === 'admin') && <SchedulePrepSection />,
+    t === 'schedule-prep' && (owner || ownerAssistant || activeRole === 'admin') && <SchedulePrepSection onOpenGroups={() => { scrollTabRef.current = 'groups'; setTab('groups'); }} />,
     t === 'library' && <MedreseLibrary canManage={owner || ownerAssistant || activeRole === 'admin'} />,
     t === 'schedule' && <TeacherSchedule ownerName={fullName} />,
     t === 'teachers-schedule' && <TeachersSchedule ownerName={fullName} />,
@@ -4781,9 +4892,9 @@ export function AdminPanel() {
         <section className="mt-5 min-w-0 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 shadow-[var(--shadow-sm)] sm:p-4">
            <h2 className="mb-3 flex items-center gap-2 font-serif text-2xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]"><ShieldCheck size={18} /> İdarə paneli</h2>
             <div className="grid grid-flow-row-dense grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
-                  {([['announcement', 'Yeni elan', Megaphone, 'announcements'], ['student-notifications', 'Tələbələrə bildiriş', Send, 'announcements'], ['article', 'Məqalə', BookOpenText, 'articles'], ['benefit', 'Günün faydası', Quote, 'dailyBenefits'], ['student-management', 'Tələbələri idarə et', UsersRound, 'students'], ['application', 'Müraciətlər', UsersRound, 'applications'], ['exams', 'İmtahan və testlər', ClipboardList, 'assignments'], ['course-content', 'Tədris proqramı', BookOpenText, 'schedule'], ['users', 'İstifadəçi rolları', UserCog, 'userRoleManagement'], ['course-activation', 'Dərsləri idarə et', BookOpen, 'schedule'], ['statistics', 'Statistika', UsersRound, null], ['audit-history', 'Audit tarixçəsi', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <Fragment key={value}><button type="button" onClick={() => toggleTab(value)} className={adminTileClass(value, tab === value)} aria-expanded={tab === value} aria-controls={tab === value ? `panel-admin-${value}` : undefined} data-testid={`tab-admin-${value}`}><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Icon size={16} /></span><span className="leading-4">{label} {value === 'application' && pendingApplicationCount > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'exams' && pendingExamReviewCount > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" title="Yoxlama gözləyən açıq cavablar" data-testid="badge-pending-exam-reviews">{pendingExamReviewCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</span>{tab === value && <TilePointer />}</button>{inlinePanel(value)}</Fragment>)}
+                  {([['announcement', 'Yeni elan', Megaphone, 'announcements'], ['student-notifications', 'Tələbələrə bildiriş', Send, 'announcements'], ['article', 'Məqalə', BookOpenText, 'articles'], ['benefit', 'Günün faydası', Quote, 'dailyBenefits'], ['student-management', 'Tələbələri idarə et', UsersRound, 'students'], ['application', 'Müraciətlər', UsersRound, 'applications'], ['exams', 'İmtahan və testlər', ClipboardList, 'assignments'], ['schedule-prep', 'Cədvəl hazırlama', CalendarRange, null], ['groups', 'Qruplar', Users, 'schedule'], ['course-content', 'Tədris proqramı', BookOpenText, 'schedule'], ['users', 'İstifadəçi rolları', UserCog, 'userRoleManagement'], ['course-activation', 'Dərsləri idarə et', BookOpen, 'schedule'], ['statistics', 'Statistika', UsersRound, null], ['audit-history', 'Audit tarixçəsi', ShieldCheck, null]] as const).filter(([value, , , permission]) => owner || (value === 'schedule-prep' && (ownerAssistant || activeRole === 'admin')) || (value === 'student-management' && canManageAssignments) || (activeRole !== 'teacher' && (value === 'users' || value === 'course-activation')) || (value !== 'users' && value !== 'course-activation' && value !== 'statistics' && value !== 'audit-history' && permission !== null && rolePermissions.has(permission))).map(([value, label, Icon]) => <Fragment key={value}><button type="button" onClick={() => toggleTab(value)} className={adminTileClass(value, tab === value)} aria-expanded={tab === value} aria-controls={tab === value ? `panel-admin-${value}` : undefined} data-testid={`tab-admin-${value}`}><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Icon size={16} /></span><span className="leading-4">{label} {value === 'application' && pendingApplicationCount > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" data-testid="badge-pending-applications">{pendingApplicationCount}</span>}{value === 'exams' && pendingExamReviewCount > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white" title="Yoxlama gözləyən açıq cavablar" data-testid="badge-pending-exam-reviews">{pendingExamReviewCount}</span>}{value === 'student-management' && (pendingExcuseCount + pendingSubjectRequestCount) > 0 && <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingExcuseCount + pendingSubjectRequestCount}</span>}</span>{tab === value && <TilePointer />}</button>{inlinePanel(value)}</Fragment>)}
                    {(owner || ownerAssistant) && <button type="button" onClick={() => toggleTab('graduation-certificates')} className={adminTileClass('graduation-certificates', tab === 'graduation-certificates')} aria-expanded={tab === 'graduation-certificates'} aria-controls={tab === 'graduation-certificates' ? 'panel-admin-graduation-certificates' : undefined} data-testid="tab-admin-graduation-certificates"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><FileBadge size={16} /></span><span className="leading-4">Şəhadətnamə idarəsi</span>{tab === 'graduation-certificates' && <TilePointer />}</button>}{inlinePanel('graduation-certificates')}
-                   {(owner || ownerAssistant || activeRole === 'admin') && <button type="button" onClick={() => toggleTab('schedule-prep')} className={adminTileClass('schedule-prep', tab === 'schedule-prep')} aria-expanded={tab === 'schedule-prep'} aria-controls={tab === 'schedule-prep' ? 'panel-admin-schedule-prep' : undefined} data-testid="tab-admin-schedule-prep"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><CalendarRange size={16} /></span><span className="leading-4">Cədvəl hazırlama</span>{tab === 'schedule-prep' && <TilePointer />}</button>}{inlinePanel('schedule-prep')}
+                   
                    <button type="button" onClick={() => toggleTab('library')} className={adminTileClass('library', tab === 'library')} aria-expanded={tab === 'library'} aria-controls={tab === 'library' ? 'panel-admin-library' : undefined} data-testid="tab-admin-library"><span className="grid size-7 place-items-center rounded-lg bg-white/70"><Library size={16} /></span><span className="leading-4">Mədrəsə Kitabxanası</span>{tab === 'library' && <TilePointer />}</button>{inlinePanel('library')}
             </div>
                <div className="mt-3 flex flex-wrap gap-1.5 border-t border-[hsl(var(--border))] pt-3">

@@ -10,7 +10,7 @@ import { answerScrollTop, initialShown, pagerState, revealMore } from '@/lib/pag
 import { courseBookRange, type CourseBookView } from '@/lib/course-books';
 import { courseTermLabel } from '@/components/course-books';
 import { AiTestBuilder, loadTestBuilderConfig, type TestBuilderConfig } from '@/components/ai-test-builder';
-import { LanguageSwitch } from '@/lib/i18n';
+import { LanguageSwitch, useI18n, type MessageKey } from '@/lib/i18n';
 
 // Mədinə AI — saytın daxili köməkçisi.
 // Söhbət tarixçəsi YALNIZ bu brauzerin localStorage-ində saxlanılır (açar: medine-ai-chat:<clerkUserId>).
@@ -71,7 +71,7 @@ type ChatMessage = {
   at: number;
 };
 
-type Tile = { label: string; hint: string; prompt: string; Icon: typeof BookOpen; fill?: boolean; action?: 'test-builder' };
+type Tile = { label: string; labelKey: MessageKey; hintKey: MessageKey; prompt: string; Icon: typeof BookOpen; fill?: boolean; action?: 'test-builder' };
 
 const STORAGE_PREFIX = 'medine-ai-chat:';
 const MAX_STORED_MESSAGES = 100;
@@ -79,30 +79,30 @@ const HISTORY_TURNS_SENT = 6;
 const MAX_MESSAGE_LENGTH = 1000;
 
 const studentTiles: Tile[] = [
-  { label: 'Dərs cədvəlim', hint: 'Həftəlik dərs günləri və saatlar', prompt: 'Dərs cədvəlim', Icon: CalendarDays },
-  { label: 'Tapşırıqlarım', hint: 'Açıq ev tapşırıqları və son tarixlər', prompt: 'Tapşırıqlarım', Icon: ClipboardList },
-  { label: 'Qiymətlərim', hint: 'Fənn qiymətləri və orta bal', prompt: 'Qiymətlərim', Icon: GraduationCap },
-  { label: 'Resurslar', hint: 'Dərs materialları və linklər', prompt: 'Resurslar', Icon: LibraryBig },
-  { label: 'Saytdan istifadə', hint: 'Hansı düymə harada, addım-addım', prompt: 'Saytdan necə istifadə edim?', Icon: Compass },
-  { label: 'Kitabxana', hint: 'Ərəbcə və ya mövzu: dəstəmaz, fail…', prompt: 'Kitabxanada axtar: ', Icon: BookText, fill: true },
+  { label: 'Dərs cədvəlim', labelKey: 'aiMySchedule', hintKey: 'aiMyScheduleHint', prompt: 'Dərs cədvəlim', Icon: CalendarDays },
+  { label: 'Tapşırıqlarım', labelKey: 'aiMyTasks', hintKey: 'aiMyTasksHint', prompt: 'Tapşırıqlarım', Icon: ClipboardList },
+  { label: 'Qiymətlərim', labelKey: 'aiMyGrades', hintKey: 'aiMyGradesHint', prompt: 'Qiymətlərim', Icon: GraduationCap },
+  { label: 'Resurslar', labelKey: 'aiResources', hintKey: 'aiResourcesHint', prompt: 'Resurslar', Icon: LibraryBig },
+  { label: 'Saytdan istifadə', labelKey: 'aiHow', hintKey: 'aiHowHint', prompt: 'Saytdan necə istifadə edim?', Icon: Compass },
+  { label: 'Kitabxana', labelKey: 'aiLibrary', hintKey: 'aiLibraryHint', prompt: 'Kitabxanada axtar: ', Icon: BookText, fill: true },
 ];
 
 const adminTiles: Tile[] = [
-  { label: 'Tələbə axtar', hint: 'Ad, e-poçt, telefon, T-nömrə — səhvlə yazsanız da', prompt: 'Tələbə axtar', Icon: Search },
-  { label: 'Qayıbı çox olanlar', hint: 'Davamiyyət və zəif qiymət filtrləri', prompt: 'Qayıbı çox olanlar', Icon: CalendarDays },
-  { label: 'Müraciətlər', hint: 'Gözləyən müraciətlər və statuslar', prompt: 'Neçə müraciət gözləyir?', Icon: ClipboardList },
-  { label: 'Ümumi statistika', hint: 'Tələbə, müəllim, tapşırıq, test sayları', prompt: 'Ümumi statistika', Icon: UsersRound },
-  { label: 'Paneldən istifadə', hint: 'Bölmələr və düymələr üzrə bələdçi', prompt: 'Admin paneldən necə istifadə edim?', Icon: Compass },
-  { label: 'Kitabxana', hint: 'Ərəbcə və ya mövzu: dəstəmaz, fail…', prompt: 'Kitabxanada axtar: ', Icon: BookText, fill: true },
+  { label: 'Tələbə axtar', labelKey: 'aiFindStudent', hintKey: 'aiFindStudentHint', prompt: 'Tələbə axtar', Icon: Search },
+  { label: 'Qayıbı çox olanlar', labelKey: 'aiAbsences', hintKey: 'aiAbsencesHint', prompt: 'Qayıbı çox olanlar', Icon: CalendarDays },
+  { label: 'Müraciətlər', labelKey: 'aiApps', hintKey: 'aiAppsHint', prompt: 'Neçə müraciət gözləyir?', Icon: ClipboardList },
+  { label: 'Ümumi statistika', labelKey: 'aiStats', hintKey: 'aiStatsHint', prompt: 'Ümumi statistika', Icon: UsersRound },
+  { label: 'Paneldən istifadə', labelKey: 'aiPanel', hintKey: 'aiPanelHint', prompt: 'Admin paneldən necə istifadə edim?', Icon: Compass },
+  { label: 'Kitabxana', labelKey: 'aiLibrary', hintKey: 'aiLibraryHint', prompt: 'Kitabxanada axtar: ', Icon: BookText, fill: true },
 ];
 
 // «Xarici» rejimdə nümunə sorğular (seçilmiş mənbədə axtarılır).
 const externalTiles: Tile[] = [
-  { label: 'Niyyət hədisi', hint: 'إنما الأعمال بالنيات', prompt: 'إنما الأعمال بالنيات', Icon: ScrollText },
-  { label: 'Elm tələbi', hint: 'طلب العلم فريضة', prompt: 'طلب العلم فريضة', Icon: BookText },
-  { label: 'Səbr', hint: 'فضل الصبر', prompt: 'فضل الصبر', Icon: BookOpen },
-  { label: 'Valideynə hörmət', hint: 'بر الوالدين', prompt: 'بر الوالدين', Icon: LibraryBig },
-  { label: 'Öz sorğum', hint: 'Ərəbcə açar söz yazın', prompt: '', Icon: Search, fill: true },
+  { label: 'Niyyət hədisi', labelKey: 'aiIntent', hintKey: 'aiOwnHint', prompt: 'إنما الأعمال بالنيات', Icon: ScrollText },
+  { label: 'Elm tələbi', labelKey: 'aiSeek', hintKey: 'aiOwnHint', prompt: 'طلب العلم فريضة', Icon: BookText },
+  { label: 'Səbr', labelKey: 'aiPatience', hintKey: 'aiOwnHint', prompt: 'فضل الصبر', Icon: BookOpen },
+  { label: 'Valideynə hörmət', labelKey: 'aiParents', hintKey: 'aiOwnHint', prompt: 'بر الوالدين', Icon: LibraryBig },
+  { label: 'Öz sorğum', labelKey: 'aiOwn', hintKey: 'aiOwnHint', prompt: '', Icon: Search, fill: true },
 ];
 
 const gold = '#e3c27a';
@@ -152,8 +152,6 @@ function saveSourcePreference(userId: string | null | undefined, preference: Sou
     // localStorage bağlıdırsa seçim yalnız bu səhifədə qalır.
   }
 }
-
-const TARGET_LABELS: Record<ExternalTarget, string> = { shamela: 'Şamilə', dorar: 'Hədis (Dorar)', all: 'Hamısı' };
 
 function storageKey(userId: string | null | undefined) {
   return userId ? `${STORAGE_PREFIX}${userId}` : null;
@@ -584,6 +582,7 @@ function BrandTile({ size = 'lg' }: { size?: 'lg' | 'sm' }) {
 }
 
 export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { mode: AiAssistantMode; backHref?: string; backLabel?: string; canReadLms?: boolean }) {
+  const { t } = useI18n();
   const { user } = useUser();
   const { getToken } = useAuth();
   const key = storageKey(user?.id);
@@ -621,7 +620,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
     return () => { cancelled = true; };
   }, [isStaff, user?.id]);
   const visibleTiles: Tile[] = !external && testBuilder
-    ? [{ label: 'Test hazırla', hint: 'Kitab, bab/səhifə və mövzu seçin — ərəbcə test hazırlanır', prompt: '', Icon: ClipboardCheck, action: 'test-builder' }, ...tiles]
+    ? [{ label: 'Test hazırla', labelKey: 'aiTest' as const, hintKey: 'aiTestHint' as const, prompt: '', Icon: ClipboardCheck, action: 'test-builder' as const }, ...tiles]
     : tiles;
 
   async function loadStudentConfig() {
@@ -703,14 +702,14 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
       const data = await response.json().catch(() => null) as { reply?: string; suggestions?: string[]; sources?: unknown; blocks?: unknown; frame?: unknown; error?: string } | null;
       if (!response.ok || !data?.reply) {
         if (response.status === 403 && external && !isStaff) void loadStudentConfig();
-        throw new Error(data?.error || 'Cavab almaq mümkün olmadı. Bir az sonra yenidən cəhd edin.');
+        throw new Error(data?.error || t('aiNoReply'));
       }
       const groups = sourceGroups(data.sources);
       const blocks = readBlocks(data.blocks);
       const frame = readFrame(data.frame);
       setMessages((current) => [...current, { id: newId(), role: 'assistant', text: data.reply as string, suggestions: Array.isArray(data.suggestions) ? data.suggestions.slice(0, 4) : [], sources: groups.length ? groups : undefined, blocks, frame, mode: requestMode, at: Date.now() }]);
     } catch (error) {
-      setMessages((current) => [...current, { id: newId(), role: 'assistant', text: error instanceof Error ? error.message : 'Xəta baş verdi.', error: true, mode: requestMode, at: Date.now() }]);
+      setMessages((current) => [...current, { id: newId(), role: 'assistant', text: error instanceof Error ? error.message : t('aiError'), error: true, mode: requestMode, at: Date.now() }]);
     } finally {
       setSending(false);
       // Telefonda klaviaturanı yenidən açmamaq üçün fokus yalnız geniş ekranda qaytarılır.
@@ -742,20 +741,20 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
 
   function clearHistory() {
     if (!messages.length) return;
-    if (typeof window !== 'undefined' && !window.confirm('Söhbət tarixçəsi bu brauzerdən silinsin?')) return;
+    if (typeof window !== 'undefined' && !window.confirm(t('aiClearAsk'))) return;
     setMessages([]);
     saveMessages(key, []);
   }
 
   const hasChat = messages.length > 0;
   const placeholder = external
-    ? target === 'dorar' ? 'Hədis mətnindən bir hissə yazın (ərəbcə)…' : target === 'all' ? 'Şamilə və Dorar-da axtarış (ərəbcə)…' : 'Şamilədə axtarış (ərəbcə açar söz)…'
-    : isStaff ? 'Akademiya üzrə sual verin…' : 'Nə ilə kömək edim?';
+    ? target === 'dorar' ? t('aiPhDorar') : target === 'all' ? t('aiPhAll') : t('aiPhShamela')
+    : isStaff ? t('aiPhStaff') : t('aiPhStudent');
   const intro = external
-    ? `Xarici rejim: yazdığınızı yalnız ${allowedTargets.includes('all') ? 'Şamilə kitabxanasında və/və ya Dorar hədis bazasında' : target === 'dorar' ? 'Dorar hədis bazasında' : 'Şamilə kitabxanasında'} axtarıram. Akademiya ${isStaff ? 'məlumatlarına' : 'məlumatlarınıza'} baxılmır. Mətnlər burada göstərilir, saytda saxlanmır.`
+    ? (allowedTargets.includes('all') ? t('aiIntroBoth') : target === 'dorar' ? t('aiIntroDorar') : t('aiIntroShamela'))
     : !isStaff
-      ? 'Yalnız sizin dərsləriniz, cədvəliniz, tapşırıqlarınız və nəticələriniz əsasında cavab verirəm. Kitabxanadakı kitablarda axtarmaq üçün ərəbcə yazın və ya mövzunu deyin: «dəstəmazı pozan şeylər», «Tuhfədə fail».'
-      : 'Daxili rejim: tələbələr, müəllimlər, dərslər, müraciətlər, tapşırıqlar, testlər və elanlar üzrə yalnız Akademiya bazasından cavab verirəm — hərf səhvlərini də başa düşürəm. Kitabxanada axtarmaq üçün ərəbcə yazın və ya mövzunu deyin: «dəstəmazı pozan şeylər», «Tuhfədə fail».';
+      ? t('aiIntroStudent')
+      : t('aiIntroStaff');
   // Telefon və planşetdə (≤1024px) kartlar bir sətirlik, üfüqi sürüşən kiçik düymələrdir; yalnız böyük ekranda iri kartlar.
   const chipRow = 'flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
@@ -767,12 +766,12 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
             <BrandTile size="sm" />
             <div className="min-w-0">
               <p className="font-serif text-lg leading-none text-[#f4ead5]">Mədinə <span style={{ color: gold }}>AI</span></p>
-              <p className="mt-1 truncate text-[10px] uppercase tracking-[.14em] text-[#f4ead5]/55 sm:tracking-[.18em]">{isStaff ? 'Admin köməkçisi' : 'Tələbə köməkçisi'} · {external ? 'xarici' : 'daxili'}</p>
+              <p className="mt-1 truncate text-[10px] uppercase tracking-[.14em] text-[#f4ead5]/55 sm:tracking-[.18em]">{isStaff ? t('aiAdmin') : t('aiStudent')} · {external ? t('aiExternal') : t('aiInternal')}</p>
             </div>
           </div>
           <div className="relative flex shrink-0 items-center gap-2">
             <LanguageSwitch tone="onDark" />
-            <button type="button" onClick={() => setHelpOpen((open) => !open)} aria-expanded={helpOpen} aria-label="İzah" className="inline-flex shrink-0 items-center justify-center rounded-full border border-[#e3c27a]/30 p-2 text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6]" data-testid="button-ai-help">
+            <button type="button" onClick={() => setHelpOpen((open) => !open)} aria-expanded={helpOpen} aria-label={t('aiHelp')} className="inline-flex shrink-0 items-center justify-center rounded-full border border-[#e3c27a]/30 p-2 text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6]" data-testid="button-ai-help">
               <HelpCircle size={14} />
             </button>
             {helpOpen && (
@@ -780,11 +779,11 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
                 {intro}
               </div>
             )}
-            <button type="button" onClick={clearHistory} disabled={!hasChat || sending} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#e3c27a]/30 px-2.5 py-2 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6] disabled:cursor-not-allowed disabled:opacity-40 sm:px-3" aria-label="Tarixçəni təmizlə" data-testid="button-ai-clear-history">
-              <Trash2 size={13} /> <span className="hidden sm:inline">Tarixçəni təmizlə</span>
+            <button type="button" onClick={clearHistory} disabled={!hasChat || sending} className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#e3c27a]/30 px-2.5 py-2 text-[11px] font-semibold text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6] disabled:cursor-not-allowed disabled:opacity-40 sm:px-3" aria-label={t('aiClear')} data-testid="button-ai-clear-history">
+              <Trash2 size={13} /> <span className="hidden sm:inline">{t('aiClear')}</span>
             </button>
             {backHref && (
-              <Link href={backHref} className="inline-flex shrink-0 items-center justify-center rounded-full border border-[#e3c27a]/30 p-2 text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6]" aria-label={backLabel ?? 'Panelə qayıt'} data-testid="link-ai-back">
+              <Link href={backHref} className="inline-flex shrink-0 items-center justify-center rounded-full border border-[#e3c27a]/30 p-2 text-[#f4ead5]/80 transition hover:border-[#e3c27a]/70 hover:text-[#f3dca6]" aria-label={backLabel ?? t('aiBack')} data-testid="link-ai-back">
                 <ArrowLeft size={14} />
               </Link>
             )}
@@ -792,8 +791,8 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
         </div>
         {showSwitch && (
           <div className="mt-2.5 flex flex-wrap items-center gap-2 sm:mt-3">
-            <div role="radiogroup" aria-label="Mənbə rejimi" className="inline-flex rounded-full border border-[#e3c27a]/40 bg-black/30 p-0.5" data-testid="ai-source-switch">
-              {([['internal', 'Daxili', isStaff ? 'Yalnız Akademiya məlumatları' : 'Yalnız sizin Akademiya məlumatlarınız'], ['external', 'Xarici', 'Yalnız xarici mənbələr: Şamilə, Dorar']] as const).map(([value, label, title]) => (
+            <div role="radiogroup" aria-label={t('aiSourceMode')} className="inline-flex rounded-full border border-[#e3c27a]/40 bg-black/30 p-0.5" data-testid="ai-source-switch">
+              {([['internal', t('aiInternalBtn'), isStaff ? t('aiInternalTitle') : t('aiStudentData')], ['external', t('aiExternalBtn'), t('aiExternalTitle')]] as const).map(([value, label, title]) => (
                 <button key={value} type="button" role="radio" aria-checked={source.mode === value} title={title} onClick={() => changeSource({ mode: value })} disabled={sending}
                   className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition sm:px-4 ${source.mode === value ? 'bg-gradient-to-br from-[#f3dca6] to-[#c49a4c] text-[#17130c] shadow-[0_0_14px_rgba(227,194,122,.3)]' : 'text-[#f4ead5]/70 hover:text-[#f3dca6]'}`}
                   data-testid={`button-ai-source-${value}`}>
@@ -802,18 +801,18 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
               ))}
             </div>
             {external && allowedTargets.length > 1 && (
-              <div role="radiogroup" aria-label="Xarici mənbə" className="inline-flex flex-wrap gap-1" data-testid="ai-external-target">
+              <div role="radiogroup" aria-label={t('aiExternalSource')} className="inline-flex flex-wrap gap-1" data-testid="ai-external-target">
                 {allowedTargets.map((value) => (
                   <button key={value} type="button" role="radio" aria-checked={target === value} onClick={() => changeSource({ target: value })} disabled={sending}
                     className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${target === value ? 'border-[#e3c27a] bg-[#e3c27a]/15 text-[#f3dca6]' : 'border-[#e3c27a]/25 text-[#f4ead5]/65 hover:border-[#e3c27a]/60'}`}
                     data-testid={`button-ai-target-${value}`}>
-                    {TARGET_LABELS[value]}
+                    {value === 'dorar' ? t('targetDorar') : value === 'all' ? t('targetAll') : t('targetShamela')}
                   </button>
                 ))}
               </div>
             )}
-            {external && allowedTargets.length === 1 && <span className="text-[11px] font-semibold text-[#f3dca6]">{TARGET_LABELS[allowedTargets[0]]}</span>}
-            {isStaff && !external && !canReadLms && <span className="text-[10px] text-[#f4ead5]/50">Akademiya məlumatları üçün «Tələbələr» icazəsi lazımdır.</span>}
+            {external && allowedTargets.length === 1 && <span className="text-[11px] font-semibold text-[#f3dca6]">{allowedTargets[0] === 'dorar' ? t('targetDorar') : t('targetShamela')}</span>}
+            {isStaff && !external && !canReadLms && <span className="text-[10px] text-[#f4ead5]/50">{t('aiNeedStudents')}</span>}
           </div>
         )}
       </header>
@@ -821,14 +820,14 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
       <div ref={scrollRef} className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3 pt-3 [overflow-anchor:none] sm:px-5 sm:pb-4 sm:pt-4 md:px-7" data-testid="ai-chat-scroll" data-ai-scroll="">
         {!hasChat ? (
           <div className="relative mx-auto mt-1 flex max-w-md flex-col items-center rounded-t-[999px] border border-b-0 border-[#e3c27a]/45 bg-[linear-gradient(180deg,rgba(227,194,122,.08),rgba(0,0,0,0)_70%)] px-5 pb-5 pt-8 text-center shadow-[inset_0_0_60px_rgba(227,194,122,.06)] sm:mt-2 sm:px-6 sm:pb-8 sm:pt-14">
-            {isStaff && <p className="absolute right-4 top-6 hidden max-w-[9rem] text-right font-serif text-xs italic text-[#f4ead5]/70 sm:block">“Rəbbim, elmimi artır.”<span className="mt-1 block text-[10px] not-italic text-[#f4ead5]/45">— Taha, 114</span></p>}
+            {isStaff && <p className="absolute right-4 top-6 hidden max-w-[9rem] text-right font-serif text-xs italic text-[#f4ead5]/70 sm:block">“{t('aiVerse')}”<span className="mt-1 block text-[10px] not-italic text-[#f4ead5]/45">— {t('aiVerseRef')}</span></p>}
             <BrandTile />
             <h2 className="mt-4 font-serif text-3xl font-semibold tracking-tight text-[#f4ead5] sm:mt-6 sm:text-4xl">Mədinə <span style={{ color: gold }}>AI</span></h2>
             {!isStaff && <p dir="rtl" className="mt-3 max-w-xs text-[15px] font-semibold leading-8 sm:text-base" style={{ color: gold, fontFamily: arabicFont }} data-testid="text-student-hadith">مَنْ يُرِدِ اللَّهُ بِهِ خَيْرًا يُفَقِّهْهُ فِي الدِّينِ</p>}
             <img src={`${import.meta.env.BASE_URL}student-ai-books.png`} alt="" className="mt-3 h-32 w-auto sm:h-40" data-testid="img-ai-books" />
             <div className="mt-4 hidden w-full items-center gap-3 text-xs text-[#f4ead5]/80 sm:mt-5 sm:flex">
               <span className="h-px flex-1 bg-gradient-to-r from-transparent to-[#e3c27a]/50" />
-              <span>Sual edin · Öyrənin · Dərinləşin</span>
+              <span>{t('aiAsk')}</span>
               <span className="h-px flex-1 bg-gradient-to-l from-transparent to-[#e3c27a]/50" />
             </div>
           </div>
@@ -872,7 +871,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
             {sending && (
               <li className="flex justify-start">
                 <div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-[#e3c27a]/20 bg-white/[.04] px-4 py-3 text-sm text-[#f4ead5]/70">
-                  <Loader2 size={14} className="animate-spin" /> {external ? 'Xarici mənbələrdə axtarılır…' : 'Hazırlanır…'}
+                  <Loader2 size={14} className="animate-spin" /> {external ? t('aiSearching') : t('aiPreparing')}
                 </div>
               </li>
             )}
@@ -891,7 +890,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
           </div>
         )}
         <form onSubmit={onSubmit} className="flex items-end gap-2 rounded-2xl border border-[#e3c27a]/60 bg-black/40 p-2 shadow-[0_0_30px_rgba(227,194,122,.08)] focus-within:border-[#e3c27a]">
-          <label htmlFor={`ai-input-${mode}`} className="sr-only">Mədinə AI-a sual</label>
+          <label htmlFor={`ai-input-${mode}`} className="sr-only">{t('aiQuestion')}</label>
           <textarea
             id={`ai-input-${mode}`}
             ref={inputRef}
@@ -905,17 +904,17 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
             className="max-h-28 min-h-[3.25rem] w-full flex-1 resize-none bg-transparent px-2 py-2 text-sm leading-5 text-[#f4ead5] outline-none placeholder:text-[#f4ead5]/45"
             data-testid="input-ai-message"
           />
-          <button type="submit" disabled={!input.trim() || sending} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#f3dca6] to-[#c49a4c] text-[#17130c] shadow-[0_0_20px_rgba(227,194,122,.35)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Göndər" data-testid="button-ai-send">
+          <button type="submit" disabled={!input.trim() || sending} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#f3dca6] to-[#c49a4c] text-[#17130c] shadow-[0_0_20px_rgba(227,194,122,.35)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40" aria-label={t('aiSend')} data-testid="button-ai-send">
             {sending ? <Loader2 size={16} className="animate-spin" /> : <SendHorizontal size={16} />}
           </button>
         </form>
         <div className={`${chipRow} min-[1025px]:grid min-[1025px]:gap-1 min-[1025px]:overflow-visible min-[1025px]:pb-0`} style={{ gridTemplateColumns: `repeat(${visibleTiles.length}, minmax(0, 1fr))` }} data-testid="ai-tiles">
-          {visibleTiles.map(({ label, hint, prompt, Icon, fill, action }) => (
-            <button key={label} type="button" onClick={() => (action === 'test-builder' ? setTestBuilderOpen(true) : fill ? prefill(prompt) : void send(prompt))} disabled={sending} title={hint}
+          {visibleTiles.map(({ label, labelKey, hintKey, prompt, Icon, fill, action }) => (
+            <button key={label} type="button" onClick={() => (action === 'test-builder' ? setTestBuilderOpen(true) : fill ? prefill(prompt) : void send(prompt))} disabled={sending} title={t(hintKey)}
               className="group flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-[#e3c27a]/25 bg-white/[.03] px-2 py-0.5 text-center transition hover:border-[#e3c27a]/60 hover:bg-[#e3c27a]/[.06] disabled:opacity-50 min-[1025px]:justify-center min-[1025px]:whitespace-normal min-[1025px]:rounded-lg min-[1025px]:px-1.5 min-[1025px]:py-1"
               data-testid={`button-ai-tile-${label}`}>
               <Icon size={12} style={{ color: gold }} />
-              <span className="text-[10px] font-bold leading-4 text-[#f4ead5]">{label}</span>
+              <span className="text-[10px] font-bold leading-4 text-[#f4ead5]">{t(labelKey)}</span>
             </button>
           ))}
         </div>

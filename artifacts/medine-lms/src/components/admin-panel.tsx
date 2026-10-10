@@ -437,6 +437,21 @@ function lessonScheduleLabel(lesson: Pick<RollCallLesson, 'lessonDays' | 'lesson
 }
 
 function RollCallAttendance() {
+  const { t, locale } = useI18n();
+  const statusLabel = (status: string) => status === 'present' ? t('statusPresent') : status === 'absent' ? t('statusAbsent') : status === 'late' ? t('statusLate') : status === 'excused' ? t('statusExcused') : status;
+  const statusShort = (status: string) => status === 'present' ? t('shortPresent') : status === 'absent' ? t('shortAbsent') : status === 'late' ? t('shortLate') : t('shortExcused');
+  const dayName = (day: string) => {
+    const key = { monday: 'dayMon', tuesday: 'dayTue', wednesday: 'dayWed', thursday: 'dayThu', friday: 'dayFri', saturday: 'daySat', sunday: 'daySun' }[day];
+    return key ? t(key as 'dayMon') : day;
+  };
+  const scheduleLabel = (lesson: Pick<RollCallLesson, 'lessonDays' | 'lessonTime'>) => lesson.lessonDays.map((day) => {
+    let time: string | null = null;
+    if (lesson.lessonTime?.startsWith('{')) {
+      try { const map = JSON.parse(lesson.lessonTime) as Record<string, string>; time = map[day] ?? null; } catch { time = null; }
+    } else time = lesson.lessonTime;
+    return time ? `${dayName(day)} ${time}` : dayName(day);
+  }).join(', ');
+  const sessionDate = (value: string) => new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'az-AZ', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`));
   const [lessons, setLessons] = useState<RollCallLesson[]>([]);
   const [lessonsLoading, setLessonsLoading] = useState(true);
   const [lessonsError, setLessonsError] = useState('');
@@ -498,53 +513,53 @@ function RollCallAttendance() {
         body: JSON.stringify({ marks: Object.fromEntries(rows.map((row) => [row.profileId, marks[row.profileId] ?? row.defaultStatus])) }),
       });
       const data = await response.json().catch(() => ({})) as RollCallDetail & { error?: string };
-      if (!response.ok) { setNotice({ text: data.error ?? 'Davamiyyəti yadda saxlamaq alınmadı.', error: true }); return; }
+      if (!response.ok) { setNotice({ text: data.error ?? t('attendanceSaveFail'), error: true }); return; }
       setDetail(data);
       setMarks(Object.fromEntries(data.rows.map((row) => [row.profileId, row.defaultStatus])));
-      setNotice({ text: `Davamiyyət təsdiqləndi: ${data.written ?? data.rows.length} tələbə üçün yazıldı.`, error: false });
+      setNotice({ text: t('attendanceSaved'), error: false });
       loadLessons(true);
     } catch {
-      setNotice({ text: 'Davamiyyəti yadda saxlamaq alınmadı. İnternet bağlantısını yoxlayın.', error: true });
+      setNotice({ text: t('attendanceSaveFail'), error: true });
     } finally { setBusy(false); }
   };
 
   return <section className="space-y-4" data-testid="section-roll-call">
     <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 sm:p-4">
-      <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">Davamiyyət yoxlaması</p>
-      <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Dərsi və tarixi seçin. Saytdakı Zoom / Google Meet düyməsi ilə dərsə qoşulan tələbələr avtomatik «İştirak edib», qoşulmayanlar «İştirak etməyib» kimi işarələnir. Lazım olsa işarəni dəyişin və «Təsdiq et» düyməsini basın.</p>
+      <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--primary))]">{t('rollTitle')}</p>
+      <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('rollHint')}</p>
       {pending.length > 0 && <div className="mt-3">
-        <p className="mb-1.5 text-[11px] font-bold text-[hsl(var(--secondary-foreground))]">Təsdiq gözləyən onlayn dərslər</p>
+        <p className="mb-1.5 text-[11px] font-bold text-[hsl(var(--secondary-foreground))]">{t('pendingOnline')}</p>
         <div className="flex gap-2 overflow-x-auto pb-1">{pending.map(({ lesson, session }) => {
           const active = String(lesson.resourceId) === resourceId && session.sessionDate === date;
           return <button key={`${lesson.resourceId}:${session.sessionDate}`} type="button" onClick={() => { setResourceId(String(lesson.resourceId)); setDate(session.sessionDate); }} className={`focus-ring shrink-0 rounded-xl border px-3 py-2 text-left text-[11px] transition ${active ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent)/.14)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] hover:bg-[hsl(var(--muted))]'}`} data-testid={`button-roll-call-pending-${lesson.resourceId}-${session.sessionDate}`}>
             <span className="block max-w-[180px] truncate font-bold text-[hsl(var(--primary))]">{lesson.courseTitle}</span>
-            <span className="block text-[hsl(var(--muted-foreground))]">{formatSessionDate(session.sessionDate)} · <span className="font-semibold text-emerald-700">Girib {session.summary.joined}/{session.summary.total}</span></span>
+            <span className="block text-[hsl(var(--muted-foreground))]">{sessionDate(session.sessionDate)} · <span className="font-semibold text-emerald-700">{t('joined')} {session.summary.joined}/{session.summary.total}</span></span>
           </button>;
         })}</div>
       </div>}
       <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
-        <Field label="Dərs">
+        <Field label={t('attLesson')}>
           <select className={inputClass} value={resourceId} onChange={(event) => setResourceId(event.target.value)} disabled={lessonsLoading} data-testid="select-roll-call-lesson">
-            <option value="">{lessonsLoading ? 'Dərslər yüklənir...' : lessons.length ? 'Dərs seçin' : 'Dərs tapılmadı'}</option>
-            {lessons.map((lesson) => <option key={lesson.resourceId} value={lesson.resourceId}>{lesson.courseTitle}{lesson.teacherName ? ` · ${lesson.teacherName}` : ''} · {lesson.termNumber}-{termSuffixes[lesson.termNumber] ?? 'ci'} semestr{lessonScheduleLabel(lesson) ? ` · ${lessonScheduleLabel(lesson)}` : ''} ({lesson.studentCount} tələbə)</option>)}
+            <option value="">{lessonsLoading ? t('lessonsLoading') : lessons.length ? t('chooseLesson') : t('noLessonFound')}</option>
+            {lessons.map((lesson) => <option key={lesson.resourceId} value={lesson.resourceId}>{lesson.courseTitle}{lesson.teacherName ? ` · ${lesson.teacherName}` : ''} · {lesson.termNumber}. {t('termLabel')}{scheduleLabel(lesson) ? ` · ${scheduleLabel(lesson)}` : ''} ({lesson.studentCount})</option>)}
           </select>
         </Field>
-        <Field label="Tarix">
+        <Field label={t('attDate')}>
           <input type="date" value={date} max={today} onChange={(event) => setDate(event.target.value)} className={inputClass} data-testid="input-roll-call-date" />
         </Field>
       </div>
       {lessonsError && <p className="mt-2 text-xs font-semibold text-[hsl(var(--destructive))]">{lessonsError}</p>}
-      {!lessonsLoading && !lessonsError && !lessons.length && <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Sizə təyin olunmuş dərs yoxdur. Dərslər «Cədvəl» bölməsində yaradılır.</p>}
-      {selectedLesson && detail && !detail.scheduled && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Bu tarix cədvəldə həmin dərsin günü deyil{lessonScheduleLabel(selectedLesson) ? ` (dərs günləri: ${lessonScheduleLabel(selectedLesson)})` : ''}. Yenə də qeyd etmək olar.</p>}
+      {!lessonsLoading && !lessonsError && !lessons.length && <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{t('noAssignedLesson')}</p>}
+      {selectedLesson && detail && !detail.scheduled && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">{t('notScheduledDay')}</p>}
     </div>
 
     {resourceId && <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]" data-testid="roll-call-list">
-      {detailLoading ? <p className="p-4 text-sm text-[hsl(var(--muted-foreground))]">Tələbə siyahısı yüklənir...</p> : !detail ? null : !rows.length ? <p className="p-4 text-sm text-[hsl(var(--muted-foreground))]">Bu dərsə təyin olunmuş tələbə tapılmadı.</p> : <>
+      {detailLoading ? <p className="p-4 text-sm text-[hsl(var(--muted-foreground))]">{t('rosterLoading')}</p> : !detail ? null : !rows.length ? <p className="p-4 text-sm text-[hsl(var(--muted-foreground))]">{t('noStudentsOnLesson')}</p> : <>
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--border))] p-3">
-          <p className="text-xs font-bold text-[hsl(var(--primary))]">{detail.courseTitle} · {formatSessionDate(detail.sessionDate)} · {rows.length} tələbə · <span className="text-emerald-700">Girib: {detail.summary.joined}</span></p>
+          <p className="text-xs font-bold text-[hsl(var(--primary))]">{detail.courseTitle} · {sessionDate(detail.sessionDate)} · {rows.length} · <span className="text-emerald-700">{t('joined')}: {detail.summary.joined}</span></p>
           <div className="flex flex-wrap gap-1.5">
-            <button type="button" onClick={() => setAll('present')} className="focus-ring rounded-lg border border-emerald-600/40 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 hover:bg-emerald-50" data-testid="button-roll-call-all-present">Hamısı iştirak edib</button>
-            <button type="button" onClick={resetToJoins} className="focus-ring rounded-lg border border-[hsl(var(--border))] px-2.5 py-1.5 text-[11px] font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-roll-call-reset">Girişə görə doldur</button>
+            <button type="button" onClick={() => setAll('present')} className="focus-ring rounded-lg border border-emerald-600/40 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 hover:bg-emerald-50" data-testid="button-roll-call-all-present">{t('allPresent')}</button>
+            <button type="button" onClick={resetToJoins} className="focus-ring rounded-lg border border-[hsl(var(--border))] px-2.5 py-1.5 text-[11px] font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-roll-call-reset">{t('fillFromJoins')}</button>
           </div>
         </div>
         <ul className="divide-y divide-[hsl(var(--border))]">{rows.map((row) => {
@@ -554,21 +569,21 @@ function RollCallAttendance() {
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-[hsl(var(--primary))]">{row.studentName} <span className="text-[10px] font-semibold text-[hsl(var(--muted-foreground))]">T{String(row.studentNumber).padStart(4, '0')}</span></p>
                 <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px]">
-                  {row.joined && row.joinedAt ? <span className="font-semibold text-emerald-700">Girib {formatBakuTime(row.joinedAt)}{row.punctuality === 'late' ? ' (gec)' : ''}</span> : <span className="font-semibold text-red-700">Girməyib</span>}
-                  {row.finalStatus && <span className="text-[hsl(var(--muted-foreground))]">· Yadda saxlanıb: {rollCallHistoryLabels[row.finalStatus]}</span>}
-                  <button type="button" onClick={() => setHistoryOpen((current) => current === row.profileId ? null : row.profileId)} className="font-semibold text-[hsl(var(--secondary-foreground))] underline-offset-2 hover:underline" aria-expanded={historyOpen === row.profileId} data-testid={`button-roll-call-history-${row.profileId}`}>Tarixçə{row.absenceCount ? ` · qayıb ${row.absenceCount}` : ''}</button>
+                  {row.joined && row.joinedAt ? <span className="font-semibold text-emerald-700">{t('joined')} {formatBakuTime(row.joinedAt)}{row.punctuality === 'late' ? ` (${t('lateMark')})` : ''}</span> : <span className="font-semibold text-red-700">{t('notJoined')}</span>}
+                  {row.finalStatus && <span className="text-[hsl(var(--muted-foreground))]">· {t('savedAs')}: {statusLabel(row.finalStatus)}</span>}
+                  <button type="button" onClick={() => setHistoryOpen((current) => current === row.profileId ? null : row.profileId)} className="font-semibold text-[hsl(var(--secondary-foreground))] underline-offset-2 hover:underline" aria-expanded={historyOpen === row.profileId} data-testid={`button-roll-call-history-${row.profileId}`}>{t('history')}{row.absenceCount ? ` · ${t('absence')} ${row.absenceCount}` : ''}</button>
                 </p>
               </div>
               <div className="grid shrink-0 grid-cols-4 gap-1 sm:flex" role="radiogroup" aria-label={`${row.studentName} davamiyyəti`}>
-                {rollCallStatusOptions.map((option) => <button key={option.value} type="button" role="radio" aria-checked={chosen === option.value} title={option.label} onClick={() => setMarks((current) => ({ ...current, [row.profileId]: option.value }))} className={`focus-ring rounded-lg border px-2 py-1.5 text-[11px] font-bold leading-tight transition ${chosen === option.value ? option.active : 'border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`} data-testid={`button-roll-call-${option.value}-${row.profileId}`}>{chosen === option.value ? '✓ ' : ''}{option.short}</button>)}
+                {rollCallStatusOptions.map((option) => <button key={option.value} type="button" role="radio" aria-checked={chosen === option.value} title={statusLabel(option.value)} onClick={() => setMarks((current) => ({ ...current, [row.profileId]: option.value }))} className={`focus-ring rounded-lg border px-2 py-1.5 text-[11px] font-bold leading-tight transition ${chosen === option.value ? option.active : 'border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`} data-testid={`button-roll-call-${option.value}-${row.profileId}`}>{chosen === option.value ? '✓ ' : ''}{statusShort(option.value)}</button>)}
               </div>
             </div>
-            {historyOpen === row.profileId && <div className="mt-2 rounded-lg bg-[hsl(var(--muted)/.4)] p-2 text-[11px]">{row.history.length ? <ul className="space-y-0.5">{row.history.map((item) => <li key={item.attendanceDate} className="flex justify-between gap-2"><span>{formatSessionDate(item.attendanceDate)}</span><span className={`font-semibold ${item.status === 'absent' ? 'text-red-700' : item.status === 'late' ? 'text-amber-700' : item.status === 'excused' ? 'text-sky-700' : 'text-emerald-700'}`}>{rollCallHistoryLabels[item.status] ?? item.status}</span></li>)}</ul> : <p className="text-[hsl(var(--muted-foreground))]">Bu dərs üzrə əvvəlki qeyd yoxdur.</p>}</div>}
+            {historyOpen === row.profileId && <div className="mt-2 rounded-lg bg-[hsl(var(--muted)/.4)] p-2 text-[11px]">{row.history.length ? <ul className="space-y-0.5">{row.history.map((item) => <li key={item.attendanceDate} className="flex justify-between gap-2"><span>{sessionDate(item.attendanceDate)}</span><span className={`font-semibold ${item.status === 'absent' ? 'text-red-700' : item.status === 'late' ? 'text-amber-700' : item.status === 'excused' ? 'text-sky-700' : 'text-emerald-700'}`}>{statusLabel(item.status)}</span></li>)}</ul> : <p className="text-[hsl(var(--muted-foreground))]">{t('noPriorMark')}</p>}</div>}
           </li>;
         })}</ul>
         <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-b-2xl border-t border-[hsl(var(--border))] bg-[hsl(var(--card)/.97)] p-3 backdrop-blur">
-          <p className="flex flex-wrap gap-x-3 text-[11px] font-semibold">{counts.map((item) => <span key={item.value} className="text-[hsl(var(--muted-foreground))]">{item.label}: <b className="text-[hsl(var(--primary))]">{item.count}</b></span>)}</p>
-          <button type="button" disabled={busy} onClick={() => void save()} className="focus-ring w-full rounded-xl bg-[hsl(var(--primary))] px-5 py-2.5 text-sm font-black text-[hsl(var(--primary-foreground))] disabled:opacity-50 sm:w-auto" data-testid="button-roll-call-save">{busy ? 'Yazılır...' : allSaved ? 'Təsdiqlənib · yenidən təsdiq et' : `Təsdiq et (${rows.length} tələbə)`}</button>
+          <p className="flex flex-wrap gap-x-3 text-[11px] font-semibold">{counts.map((item) => <span key={item.value} className="text-[hsl(var(--muted-foreground))]">{statusLabel(item.value)}: <b className="text-[hsl(var(--primary))]">{item.count}</b></span>)}</p>
+          <button type="button" disabled={busy} onClick={() => void save()} className="focus-ring w-full rounded-xl bg-[hsl(var(--primary))] px-5 py-2.5 text-sm font-black text-[hsl(var(--primary-foreground))] disabled:opacity-50 sm:w-auto" data-testid="button-roll-call-save">{busy ? t('writing') : allSaved ? t('confirmedAgain') : `${t('confirmStudents')} (${rows.length})`}</button>
         </div>
       </>}
       {notice && <p className={`px-3 pb-3 text-xs font-semibold ${notice.error ? 'text-[hsl(var(--destructive))]' : 'text-emerald-700'}`} role="status">{notice.text}</p>}

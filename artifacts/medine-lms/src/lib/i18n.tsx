@@ -627,7 +627,6 @@ const az = {
   myLessons: 'Mənim dərslərim',
   weeklySchedule: 'Həftəlik cədvəl',
   academySchedule: 'Akademiyanın cədvəli',
-  teachersSchedule: 'Müəllimlər cədvəli',
   scheduleLoading: 'Cədvəl yüklənir...',
   noLessonToday: 'Bu gün üçün dərs yoxdur.',
 } as const;
@@ -1257,7 +1256,6 @@ const ar: Record<MessageKey, string> = {
   myLessons: 'دروسي',
   weeklySchedule: 'الجدول الأسبوعي',
   academySchedule: 'جدول الأكاديمية',
-  teachersSchedule: 'جدول المعلمين',
   scheduleLoading: 'جارٍ تحميل الجدول...',
   noLessonToday: 'لا درس لهذا اليوم.',
 };

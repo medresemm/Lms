@@ -4,8 +4,8 @@ import { Link } from 'wouter';
 import { useAuth, useUser } from '@clerk/react';
 import { DidYouMean, LibraryHitList } from '@/components/library-search-results';
 import { LIBRARY_SLUG, libraryPageTextApi, libraryReaderHref, searchLibraryApi, type LibraryChapterSuggestion, type LibrarySearchItem } from '@/lib/library';
-import { AiBlocksView, keepAnchor, MoreButton, PagedList } from '@/components/ai-blocks';
-import { readBlocks, type AiBlock } from '@/lib/ai-blocks';
+import { AiAnswerCard, keepAnchor, MoreButton, PagedList } from '@/components/ai-blocks';
+import { frameOf, inferFrame, readBlocks, readFrame, type AiBlock, type AiFrame } from '@/lib/ai-blocks';
 import { answerScrollTop, initialShown, pagerState, revealMore } from '@/lib/paginate';
 import { courseBookRange, type CourseBookView } from '@/lib/course-books';
 import { courseTermLabel } from '@/components/course-books';
@@ -62,6 +62,10 @@ type ChatMessage = {
   sources?: ResearchSources | ResearchSources[];
   /** Strukturlu kartlar (yeni cavablar). Yoxdursa `text` göstərilir. */
   blocks?: AiBlock[];
+  /** Vahid cavab kartının başlığı (daxili cavablar). */
+  frame?: AiFrame;
+  /** Sorğu hansı rejimdə verilib: daxili cavablar kartda, xarici (Şamilə/Dorar) öz kartlarında göstərilir. */
+  mode?: SourceMode;
   error?: boolean;
   at: number;
 };
@@ -164,6 +168,8 @@ function loadMessages(key: string | null): ChatMessage[] {
       && typeof (item as ChatMessage).text === 'string')
       .map((item) => (item.sources && !sourceGroups(item.sources).length ? { ...item, sources: undefined } : item))
       .map((item) => (item.blocks !== undefined ? { ...item, blocks: readBlocks(item.blocks) } : item))
+      .map((item) => (item.frame !== undefined ? { ...item, frame: readFrame(item.frame) } : item))
+      .map((item) => (item.mode !== undefined && item.mode !== 'internal' && item.mode !== 'external' ? { ...item, mode: undefined } : item))
       .slice(-MAX_STORED_MESSAGES);
   } catch {
     return [];
@@ -554,6 +560,19 @@ function ResearchResults({ sources, getToken, heading, endpoints }: { sources: R
   );
 }
 
+/** Daxili cavabın kart başlığı: serverin frame-i; köhnə tarixçədə — mövzudan təxmin. */
+function answerFrame(message: ChatMessage, groups: ResearchSources[]): AiFrame {
+  if (message.error) return frameOf('warn', { title: 'Cavab alınmadı', tone: 'warn' });
+  if (message.frame) return message.frame;
+  const library = groups.find((group) => group.kind === 'library');
+  if (library && library.kind === 'library') {
+    const total = typeof library.total === 'number' ? library.total : library.items.length;
+    return frameOf('library', { title: 'Kitabxanada axtarış', subtitle: library.query ? `«${library.query}»` : undefined, badge: library.query ? { text: total ? `${total} nəticə` : 'nəticə yoxdur', tone: total ? 'default' : 'muted' } : undefined });
+  }
+  if (groups.some((group) => group.kind === 'course-books')) return frameOf('book');
+  return inferFrame(message.blocks, message.text);
+}
+
 function BrandTile({ size = 'lg' }: { size?: 'lg' | 'sm' }) {
   const classes = size === 'lg' ? 'h-14 w-14 rounded-[18px] text-3xl sm:h-20 sm:w-20 sm:rounded-[22px] sm:text-4xl' : 'h-9 w-9 rounded-xl text-base';
   return (
@@ -671,6 +690,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
     setMessages((current) => [...current, userMessage]);
     setInput('');
     setSending(true);
+    const requestMode: SourceMode = external ? 'external' : 'internal';
     try {
       const token = await getToken().catch(() => null);
       const response = await fetch(endpoint, {
@@ -679,16 +699,17 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
         body: JSON.stringify(showSwitch ? { message, history, source: external ? 'external' : 'internal', target } : { message, history }),
         cache: 'no-store',
       });
-      const data = await response.json().catch(() => null) as { reply?: string; suggestions?: string[]; sources?: unknown; blocks?: unknown; error?: string } | null;
+      const data = await response.json().catch(() => null) as { reply?: string; suggestions?: string[]; sources?: unknown; blocks?: unknown; frame?: unknown; error?: string } | null;
       if (!response.ok || !data?.reply) {
         if (response.status === 403 && external && !isStaff) void loadStudentConfig();
         throw new Error(data?.error || 'Cavab almaq mümkün olmadı. Bir az sonra yenidən cəhd edin.');
       }
       const groups = sourceGroups(data.sources);
       const blocks = readBlocks(data.blocks);
-      setMessages((current) => [...current, { id: newId(), role: 'assistant', text: data.reply as string, suggestions: Array.isArray(data.suggestions) ? data.suggestions.slice(0, 4) : [], sources: groups.length ? groups : undefined, blocks, at: Date.now() }]);
+      const frame = readFrame(data.frame);
+      setMessages((current) => [...current, { id: newId(), role: 'assistant', text: data.reply as string, suggestions: Array.isArray(data.suggestions) ? data.suggestions.slice(0, 4) : [], sources: groups.length ? groups : undefined, blocks, frame, mode: requestMode, at: Date.now() }]);
     } catch (error) {
-      setMessages((current) => [...current, { id: newId(), role: 'assistant', text: error instanceof Error ? error.message : 'Xəta baş verdi.', error: true, at: Date.now() }]);
+      setMessages((current) => [...current, { id: newId(), role: 'assistant', text: error instanceof Error ? error.message : 'Xəta baş verdi.', error: true, mode: requestMode, at: Date.now() }]);
     } finally {
       setSending(false);
       // Telefonda klaviaturanı yenidən açmamaq üçün fokus yalnız geniş ekranda qaytarılır.
@@ -813,16 +834,31 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
           <ol className="space-y-4" aria-live="polite">
             {messages.map((message) => {
               const groups = message.role === 'assistant' ? sourceGroups(message.sources) : [];
-              const blocks = message.role === 'assistant' && !message.error ? message.blocks : undefined;
+              const external = message.mode === 'external' || groups.some((group) => group.kind === 'shamela' || group.kind === 'dorar');
+              // Daxili cavab (tələbə və heyət): hamısı bir vahid kartın içində — başlıq, bölmələr, nəticələr.
+              if (message.role === 'assistant' && !external) {
+                return (
+                  <li key={message.id} data-message-id={message.id} className="flex scroll-mt-2 flex-col items-start">
+                    <AiAnswerCard frame={answerFrame(message, groups)} blocks={message.error ? undefined : message.blocks}>
+                      {(message.error || !message.blocks) && (
+                        <p dir="auto" className={`whitespace-pre-wrap break-words text-sm leading-6 ${message.error ? 'text-amber-50/90' : 'text-[#f4ead5]'}`} data-testid="ai-message-assistant">
+                          <LinkifiedText text={message.text} />
+                        </p>
+                      )}
+                      {groups.map((group, index) => <ResearchResults key={`${group.kind}-${index}`} sources={group} getToken={getToken} endpoints={endpoints} />)}
+                    </AiAnswerCard>
+                  </li>
+                );
+              }
               return (
                 <li key={message.id} data-message-id={message.id} className={`flex scroll-mt-2 flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  {blocks ? <AiBlocksView blocks={blocks} /> : <div className={`max-w-[92%] whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-6 sm:max-w-[88%] ${message.role === 'user'
+                  <div className={`max-w-[92%] whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-6 sm:max-w-[88%] ${message.role === 'user'
                     ? 'rounded-br-md bg-gradient-to-br from-[#e3c27a] to-[#c49a4c] text-[#17130c]'
                     : message.error
                       ? 'rounded-bl-md border border-red-400/40 bg-red-950/40 text-red-100'
                       : 'rounded-bl-md border border-[#e3c27a]/20 bg-white/[.04] text-[#f4ead5]'}`} data-testid={`ai-message-${message.role}`}>
                     {message.role === 'assistant' ? <LinkifiedText text={message.text} /> : <span dir="auto">{message.text}</span>}
-                  </div>}
+                  </div>
                   {groups.length > 0 && (
                     <div className="w-full">
                       {groups.map((group, index) => <ResearchResults key={`${group.kind}-${index}`} sources={group} getToken={getToken} heading={groups.length > 1} endpoints={endpoints} />)}

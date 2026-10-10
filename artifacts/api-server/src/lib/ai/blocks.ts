@@ -26,8 +26,28 @@ export type AiBlock =
   | { type: "steps"; title?: string; steps: string[]; tips?: string[] }
   | { type: "table"; title?: string; columns: string[]; rows: string[][]; note?: string };
 
+/** Cavab kartının başlığı üçün ikon növləri (brauzer bunları ikonlara çevirir). */
+export const FRAME_ICONS = [
+  "student", "students", "teacher", "staff", "stats", "course", "schedule", "grades", "attendance", "assignment", "exam",
+  "application", "notice", "resource", "library", "book", "guide", "question", "excuse", "search", "help", "info", "warn",
+] as const;
+export type AiFrameIcon = typeof FRAME_ICONS[number];
+
+/**
+ * Daxili cavabın vahid kartı: başlıq sətri (ikon + ad), istəyə görə alt başlıq və nişan (semestr, say).
+ * Bütün bloklar bu kartın içində göstərilir.
+ */
+export interface AiFrame {
+  icon: AiFrameIcon;
+  title: string;
+  subtitle?: string;
+  badge?: { text: string; tone?: AiTone };
+  tone?: AiTone;
+}
+
 export interface AiStructuredReply extends AiReply {
   blocks?: AiBlock[];
+  frame?: AiFrame;
 }
 
 const MAX_BLOCKS = 24;
@@ -101,6 +121,15 @@ function isRow(value: AiItem | AiRow): value is AiRow {
   return "label" in value;
 }
 
+// «Etiket: dəyər» sətri (qısa etiket) — kartda açar–dəyər sətri kimi göstərilir.
+const KEY_VALUE = /^([^:•?!]{2,44}):\s+(\S.{0,240})$/;
+
+function keyValue(line: string): AiRow | null {
+  const match = KEY_VALUE.exec(line.trim());
+  if (!match || /https?$/i.test(match[1]) || /\.\s/.test(match[1])) return null;
+  return { label: match[1].trim(), value: match[2].trim() };
+}
+
 export function textToBlocks(text: string): AiBlock[] {
   const sections = text.replace(/\r/g, "").split(/\n\s*(?:— — —\s*)?\n/).map((section) => section.trim()).filter(Boolean);
   const blocks: AiBlock[] = [];
@@ -108,7 +137,15 @@ export function textToBlocks(text: string): AiBlock[] {
     const lines = section.split("\n").map((line) => line.replace(/\s+$/, "")).filter((line) => line.trim());
     const firstBullet = lines.findIndex((line) => BULLET.test(line) || /^\d+\.\s/.test(line));
     if (firstBullet < 0) {
-      blocks.push({ type: "text", text: lines.join("\n") });
+      // Bütün sətirlər (başlıqdan sonra) «Etiket: dəyər»dirsə — açar–dəyər kartı.
+      const head = lines.length > 1 && !keyValue(lines[0]) ? lines[0] : undefined;
+      const rest = head ? lines.slice(1) : lines;
+      const rows = rest.map(keyValue);
+      if (rest.length && rows.every(Boolean) && (rows.length > 1 || head)) {
+        blocks.push({ type: "card", title: head?.replace(/:\s*$/, ""), rows: rows as AiRow[] });
+      } else {
+        blocks.push({ type: "text", text: lines.join("\n") });
+      }
       continue;
     }
     const lead = lines.slice(0, firstBullet);
@@ -124,6 +161,24 @@ export function textToBlocks(text: string): AiBlock[] {
     const rows: AiRow[] = [];
     const items: AiItem[] = [];
     const notes: string[] = [];
+    // Giriş sətirləri: «…:» ilə bitən və ya adi cümlə başlıqdır; «Etiket: dəyər» sətirləri kartın açar–dəyər sətirləridir.
+    const leadText: string[] = [];
+    const leadRows: AiRow[] = [];
+    const plainIndexes = lead.map((line, index) => (/:\s*$/.test(line.trim()) || !keyValue(line) ? index : -1)).filter((index) => index >= 0);
+    const headingIndex = plainIndexes.length ? plainIndexes[plainIndexes.length - 1] : -1;
+    let heading: string | undefined = headingIndex >= 0 ? lead[headingIndex].trim() : undefined;
+    lead.forEach((line, index) => {
+      if (index === headingIndex) return;
+      const pair = keyValue(line);
+      if (pair && !/:\s*$/.test(line.trim())) leadRows.push(pair);
+      else leadText.push(line.trim());
+    });
+    // Başlıq yoxdursa və tək «Etiket: dəyər» varsa (məs. «Müəllim sayı: 4»), o başlıq olur.
+    if (!heading && leadRows.length === 1) {
+      heading = `${leadRows[0].label}: ${leadRows[0].value}`;
+      leadRows.length = 0;
+    }
+    rows.push(...leadRows);
     for (const line of body) {
       if (BULLET.test(line)) {
         const parsed = parseItem(line);
@@ -144,8 +199,7 @@ export function textToBlocks(text: string): AiBlock[] {
         notes.push(line.trim());
       }
     }
-    const heading = lead.length ? lead[lead.length - 1] : undefined;
-    if (lead.length > 1) blocks.push({ type: "text", text: lead.slice(0, -1).join("\n") });
+    if (leadText.length) blocks.push({ type: "text", text: leadText.join("\n") });
     blocks.push({
       type: "card",
       title: heading?.replace(/:\s*$/, ""),
@@ -161,6 +215,109 @@ export function textToBlocks(text: string): AiBlock[] {
 export function ensureBlocks<T extends AiReply & { blocks?: AiBlock[] }>(result: T): T & { blocks: AiBlock[] } {
   if (Array.isArray(result.blocks) && result.blocks.length) return result as T & { blocks: AiBlock[] };
   return { ...result, blocks: textToBlocks(result.reply) };
+}
+
+// ---------------------------------------------------------------------------
+// Vahid cavab kartı (frame): başlıq ikonu + adı
+
+const FRAME_TITLES: Record<AiFrameIcon, string> = {
+  student: "Tələbə məlumatı",
+  students: "Tələbələr",
+  teacher: "Müəllimlər",
+  staff: "Heyət",
+  stats: "Statistika",
+  course: "Dərslər",
+  schedule: "Dərs cədvəli",
+  grades: "Qiymətlər",
+  attendance: "Davamiyyət",
+  assignment: "Tapşırıqlar",
+  exam: "İmtahan və testlər",
+  application: "Müraciətlər",
+  notice: "Elan və bildirişlər",
+  resource: "Dərs materialları",
+  library: "Kitabxana",
+  book: "Dərs kitabları",
+  guide: "Saytdan istifadə",
+  question: "Sual-cavab",
+  excuse: "Üzrlər",
+  search: "Axtarış nəticələri",
+  help: "Mədinə AI",
+  info: "Məlumat",
+  warn: "Diqqət",
+};
+
+/** Başlıqsız frame: yalnız ikon növü verilir, ad standart olur. */
+export function frameOf(icon: AiFrameIcon, extra: Partial<Omit<AiFrame, "icon">> = {}): AiFrame {
+  return { icon, title: FRAME_TITLES[icon], ...extra };
+}
+
+function fold(value: string) {
+  return value
+    .toLocaleLowerCase("az-AZ")
+    .replace(/ə/g, "e").replace(/ı/g, "i").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ş/g, "s").replace(/ç/g, "c").replace(/ğ/g, "g");
+}
+
+// Sıra vacibdir: daha dəqiq mövzular əvvəl yoxlanılır.
+const FRAME_RULES: Array<[AiFrameIcon, RegExp]> = [
+  ["warn", /icaze(si)? (teleb|lazim)|aciq deyil|mexfidir|baglidir|sondurulub/],
+  ["book", /kecceyiniz kitab|ders kitab|kitab teyin|kitabi:/],
+  ["library", /kitabxana|kitabinda|kitabda/],
+  ["schedule", /ders cedvel|cedvel|ders gunleri|bu gun dersin|dersiniz (yox|var)|dersiniz/],
+  ["attendance", /qayib|davamiyyet|buraxmisiniz|istirak/],
+  ["grades", /qiymet|orta bal|ortalama/],
+  ["exam", /imtahan|test|yoxlanilir/],
+  ["assignment", /tapsiriq/],
+  ["application", /muraciet/],
+  ["excuse", /uzr/],
+  ["notice", /elan|bildiris/],
+  ["question", /sual-cavab|cavabsiz sual/],
+  ["resource", /material|resurs/],
+  ["staff", /heyet/],
+  ["teacher", /muellim/],
+  ["stats", /statistika|umumi gosterici/],
+  ["students", /telebe/],
+  ["course", /ders|fenn|kurs/],
+];
+
+/** Bloklardan cavabın mövzusunu təxmin edir (frame verilməyən cavablar üçün). */
+export function inferFrame(blocks: AiBlock[], reply = ""): AiFrame {
+  const firstCard = blocks.find((block) => block.type !== "text");
+  if (blocks.length && blocks.every((block) => block.type === "steps")) {
+    const first = blocks[0] as Extract<AiBlock, { type: "steps" }>;
+    return frameOf("guide", first.title ? { subtitle: first.title } : {});
+  }
+  const lead = blocks.filter((block) => block.type === "text").map((block) => (block as { text: string }).text).join(" ");
+  const titles = blocks.map((block) => (block.type === "text" ? "" : block.title ?? "")).join(" ");
+  const haystack = fold(`${lead} ${titles}`.trim() || reply.slice(0, 400));
+  const hasData = blocks.some((block) => (block.type === "card" && Boolean(block.rows?.length)) || block.type === "table");
+  if (/basa dusmedim|tapa bilmedim|tapilmadi|tapmadim/.test(haystack) && !hasData && !/nezerde tuturdunuz|kitabxana|kitabinda/.test(haystack)) {
+    return frameOf("info", { title: "Nəticə tapılmadı" });
+  }
+  if (/nezerde tuturdunuz/.test(haystack)) return frameOf("search", { title: "Bunu nəzərdə tuturdunuz?" });
+  if (/uygun netice tapdim/.test(haystack)) return frameOf("search");
+  if (/salam|men medine ai|meden sorusa|numuneler/.test(haystack)) return frameOf("help");
+  if (/deymez/.test(haystack)) return frameOf("help");
+  for (const [icon, pattern] of FRAME_RULES) if (pattern.test(haystack)) return frameOf(icon, icon === "warn" ? { title: "İcazə yoxdur", tone: "warn" } : {});
+  return frameOf("info");
+}
+
+/** Bir neçə mövzu birləşəndə: hamısı eynidirsə həmin, deyilsə ümumi «Sizin məlumatlarınız». */
+export function mergeFrames(frames: Array<AiFrame | undefined>): AiFrame | undefined {
+  const clean = frames.filter((frame): frame is AiFrame => Boolean(frame));
+  if (!clean.length) return undefined;
+  if (clean.every((frame) => frame.icon === clean[0].icon)) return clean[0];
+  return { icon: "info", title: clean.map((frame) => frame.title).slice(0, 3).join(" · ") };
+}
+
+/** Daxili cavab: bloklar + vahid kart başlığı (verilməyibsə təxmin edilir). */
+export function finalizeInternal<T extends AiReply & { blocks?: AiBlock[]; frame?: AiFrame }>(result: T, frame?: AiFrame): T & { blocks: AiBlock[]; frame: AiFrame } {
+  const withBlocks = ensureBlocks(result);
+  return { ...withBlocks, frame: frame ?? withBlocks.frame ?? inferFrame(withBlocks.blocks, withBlocks.reply) };
+}
+
+/** Cavaba frame əlavə edir (əgər artıq yoxdursa). */
+export function framed<T extends AiReply & { frame?: AiFrame }>(frame: AiFrame, result: T): T & { frame: AiFrame } {
+  return { ...result, frame: result.frame ?? frame };
 }
 
 // ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ import type { AiReply } from "./aiProvider.js";
 import { cleanQuery, detectResearchIntent, type ResearchIntent, type ResearchKind, type ResearchReply, type ResearchSources } from "./research.js";
 import { findGuideTopic, guideReply } from "./siteGuide.js";
 import { parse } from "./text.js";
+import { frameOf } from "./blocks.js";
 
 export type AiSourceMode = "internal" | "external";
 export type ExternalTarget = "shamela" | "dorar" | "all";
@@ -73,6 +74,7 @@ export async function routeAdminMessage(input: AdminRoutingInput, deps: AdminRou
   if (detectResearchIntent(input.message)) {
     return {
       mode: "internal",
+      frame: frameOf("info", { title: "Xarici mənbə sorğusu" }),
       reply: "Bu, xarici mənbə (Şamilə / Dorar) sorğusuna oxşayır. «Daxili» rejimdə yalnız Akademiya məlumatlarında axtarıram və xarici saytlara müraciət etmirəm.\n\nŞamilə və ya Dorar-da axtarmaq üçün yuxarıdakı «Xarici» rejimə keçin.",
       suggestions: [],
     };
@@ -82,6 +84,7 @@ export async function routeAdminMessage(input: AdminRoutingInput, deps: AdminRou
     if (topic && (topic.id === "admin-research" || topic.id === "ai")) return { mode: "internal", ...guideReply(topic) };
     return {
       mode: "internal",
+      frame: frameOf("warn", { title: "İcazə yoxdur", subtitle: "«Tələbələr» icazəsi lazımdır", tone: "warn" }),
       reply: "Bağışlayın, Akademiya məlumatlarına (tələbələr, dərslər, qiymətlər və s.) baxmaq üçün «Tələbələr» icazəsi lazımdır. Bunun üçün idarəçiyə müraciət edin.\n\nŞamilə kitabxanasında və Dorar hədis bazasında axtarmaq üçün yuxarıdakı «Xarici» rejimə keçin.",
       suggestions: [],
     };

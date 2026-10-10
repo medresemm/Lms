@@ -6,7 +6,7 @@
 // seçilə bilər. Provayder heç nə saxlamamalıdır: söhbət tarixçəsi yalnız brauzerdə (localStorage) qalır.
 import type { AiExamScore } from "./examText.js";
 import { internalAiProvider } from "./internalProvider.js";
-import type { AiBlock } from "./blocks.js";
+import type { AiBlock, AiFrame } from "./blocks.js";
 
 export type AiMode = "student" | "admin";
 
@@ -20,6 +20,8 @@ export interface AiReply {
   suggestions: string[];
   /** Strukturlu kart blokları (bax: blocks.ts). Köhnə müştərilər `reply` mətnini göstərir. */
   blocks?: AiBlock[];
+  /** Vahid cavab kartının başlığı (ikon + ad). */
+  frame?: AiFrame;
 }
 
 export interface AiScheduleAccess {

@@ -4,7 +4,7 @@
 // interfeysindən (artifacts/medine-lms/src/...) götürülüb. İnterfeys dəyişəndə bu fayl da yenilənməlidir.
 import type { AiMode, AiReply } from "./aiProvider.js";
 import { countKeywords, hasKeyword, type ParsedMessage } from "./text.js";
-import { blockReply } from "./blocks.js";
+import { blockReply, frameOf, framed } from "./blocks.js";
 
 export interface GuideTopic {
   id: string;
@@ -519,13 +519,13 @@ export function findGuideTopic(parsed: ParsedMessage, mode: AiMode): GuideTopic 
 export function guideReply(topic: GuideTopic, access?: AdminGuideAccess): AiReply {
   if (access && topic.section && !adminSectionsFor(access).some((section) => section.id === topic.section)) {
     const label = ADMIN_SECTIONS.find((section) => section.id === topic.section)?.label ?? topic.title;
-    return blockReply([{
+    return framed(frameOf("warn", { title: "Bölmə açıq deyil", subtitle: label, tone: "warn" }), blockReply([{
       type: "text",
       text: `«${label}» bölməsi sizin hesabınızda açıq deyil. Bu imkan lazımdırsa, sistem sahibindən icazə istəyin.`,
-    }], ["Admin paneldən necə istifadə edim?"]);
+    }], ["Admin paneldən necə istifadə edim?"]));
   }
   const steps = access && topic.id === "admin-overview" ? adminOverviewSteps(topic, access) : topic.steps;
-  return blockReply([{ type: "steps", title: topic.title, steps, tips: topic.tips?.length ? topic.tips : undefined }], topic.related ?? []);
+  return framed(frameOf("guide", { badge: { text: `${steps.length} addım` } }), blockReply([{ type: "steps", title: topic.title, steps, tips: topic.tips?.length ? topic.tips : undefined }], topic.related ?? []));
 }
 
 export function guideTopicList(mode: AiMode) {

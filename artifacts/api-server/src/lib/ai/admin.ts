@@ -23,6 +23,7 @@ import { countKeywords, fuzzyKeywordMatch, hasKeyword, normalizeText, tokenize, 
 import { KW, STOPWORDS } from "./keywords.js";
 import { IGNORED_TITLE_WORDS, detectWeekday, formatDate, formatGrade, lessonDaysLabel, reply, snippet, studentCode } from "./format.js";
 import { answerGuide } from "./siteGuide.js";
+import { frameOf, framed, type AiFrameIcon } from "./blocks.js";
 import { bestMatches, looseSimilarity, normalizePhone, phoneMatches, rankItems, tokenSimilarity, type Ranked } from "./fuzzy.js";
 
 // ---------------------------------------------------------------------------
@@ -153,7 +154,14 @@ function studentLine(student: AiStudentMatch, extra?: string) {
 }
 
 function noPermission(label: string) {
-  return reply([`Bu məlumat «${label}» icazəsi tələb edir. Rolunuz üçün bu icazə verilməyib.`], ["Tələbə axtar", "Ümumi statistika"]);
+  return framed(frameOf("warn", { title: "İcazə yoxdur", subtitle: `«${label}» icazəsi lazımdır`, tone: "warn" }),
+    reply([`Bu məlumat «${label}» icazəsi tələb edir. Rolunuz üçün bu icazə verilməyib.`], ["Tələbə axtar", "Ümumi statistika"]));
+}
+
+/** Budaq cavabına vahid kart başlığı (budaq özü frame verməyibsə). */
+async function as<T extends AiReply | null>(icon: AiFrameIcon, result: T | Promise<T>, title?: string): Promise<T> {
+  const value = await result;
+  return (value ? framed(frameOf(icon, title ? { title } : {}), value) : value) as T;
 }
 
 function significantTitleWords(title: string) {
@@ -194,7 +202,7 @@ export const ADMIN_SUGGESTIONS = ["Tələbə axtar", "Qayıbı çox olanlar", "N
 
 export function adminHelp(ctx: AdminAiContext) {
   const can = (permission: string) => ctx.isOwner || ctx.permissions.has(permission);
-  return reply([
+  return framed(frameOf("help", { title: "Mədinə AI nə bacarır" }), reply([
     "Mən Mədinə AI-yam — admin paneli üçün daxili köməkçi. Cavablar yalnız Akademiya bazasındakı məlumatlardan qurulur; hərf səhvlərini də başa düşürəm.",
     "Nümunələr:",
     "• Tələbə: «Əli Məmmədov», «mammadov ali», «T0012», «ali@mail.com», «050 123 45 67»",
@@ -209,7 +217,7 @@ export function adminHelp(ctx: AdminAiContext) {
     (ctx.isOwner || ctx.role === "owner_assistant") && can("userRoleManagement") ? "• Heyət: «heyət siyahısı», «neçə admin var»" : null,
     "• «Ümumi statistika» — bütün göstəricilər bir yerdə",
     "• Paneldən istifadə: «Elanı necə yayımlayım?», «Tələbələri harada idarə edim?»",
-  ], ADMIN_SUGGESTIONS);
+  ], ADMIN_SUGGESTIONS));
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +260,7 @@ function studentDetailsReply(details: AiStudentDetails): AiReply {
       lines.push(`• ${exam.title} — ${exam.courseTitle}${exam.isOnboarding ? " (qəbul testi)" : ""}: ${examResultText(exam, true)} · ${formatDate(exam.submittedAt)}`);
     }
   }
-  return reply(lines, ["Tələbə axtar", "Ümumi statistika"]);
+  return framed(frameOf("student", { subtitle: `${match.firstName} ${match.lastName}`, badge: { text: studentCode(match.studentNumber) } }), reply(lines, ["Tələbə axtar", "Ümumi statistika"]));
 }
 
 async function showStudents(ctx: AdminAiContext, matches: AiStudentMatch[], heading?: string): Promise<AiReply> {
@@ -263,7 +271,7 @@ async function showStudents(ctx: AdminAiContext, matches: AiStudentMatch[], head
   }
   const lines = [heading ?? `${matches.length} tələbə tapdım. Ətraflı baxmaq üçün tələbə nömrəsini yazın (məs. T0012):`];
   bullet(lines, matches.map((student) => `${studentLine(student)} · ${student.email}`), 15);
-  return reply(lines, matches.slice(0, 4).map((student) => studentCode(student.studentNumber)));
+  return framed(frameOf("students", { badge: { text: `${matches.length} nəfər` } }), reply(lines, matches.slice(0, 4).map((student) => studentCode(student.studentNumber))));
 }
 
 /** E-poçt, T-nömrə, tələbə nömrəsi və ya telefonla dəqiq axtarış. */
@@ -541,7 +549,7 @@ async function teacherBranch(ctx: AdminAiContext, parsed: ParsedMessage, entitie
       lines.push("", `${teacher.name}:`, ...teacherLessonLines({ ...teacher, lessons }));
     }
     if (lines.length === 1) lines.push("Bu filtrə uyğun dərs tapılmadı.");
-    return reply(lines, ["Dərs siyahısı", "Neçə müəllim var?"]);
+    return framed(frameOf("schedule", { title: "Müəllim cədvəli", badge: weekday ? { text: weekday.label } : undefined }), reply(lines, ["Dərs siyahısı", "Neçə müəllim var?"]));
   }
 
   if (matched.length) {
@@ -894,7 +902,7 @@ async function overallStats(ctx: AdminAiContext): Promise<AiReply> {
     `• Sual-cavab: ${questions.length} (cavabsız: ${questions.filter((item) => !item.answered).length})`,
     notices ? `• Elan: ${notices.filter((item) => item.kind === "announcement").length} · bildiriş: ${notices.filter((item) => item.kind === "notification").length}` : null,
   ];
-  return reply(lines, ["Qayıbı çox olanlar", "Gözləyən müraciətlər", "Cavabsız suallar"]);
+  return framed(frameOf("stats", { title: "Ümumi statistika" }), reply(lines, ["Qayıbı çox olanlar", "Gözləyən müraciətlər", "Cavabsız suallar"]));
 }
 
 interface SearchCandidate {
@@ -1011,38 +1019,38 @@ export async function answerAdmin(parsed: ParsedMessage, ctx: AdminAiContext): P
 
   // 2) Fənnin / dərs qrupunun adı tam yazılıbsa («TEST Fiqh dərsi») — həmin dərs (cədvəl, müəllim, tələbələr).
   const titled = await courseTitleLookup(ctx, parsed);
-  if (titled && !studentFilterRequested(parsed, entities)) return courseDetailsReply(ctx, parsed, entities, titled);
+  if (titled && !studentFilterRequested(parsed, entities)) return as("course", courseDetailsReply(ctx, parsed, entities, titled), "Dərs məlumatı");
 
   // 3) Müraciət, üzr, heyət, sual, elan kimi aydın obyektlər.
-  if (entities.has("subjectRequest")) return subjectRequestBranch(ctx, status, isCount);
-  if (entities.has("excuse")) return excuseBranch(ctx, parsed, status, isCount);
-  if (entities.has("application")) return applicationBranch(ctx, parsed, status, isCount);
-  if (entities.has("staff") && !entities.has("student")) return staffBranch(ctx, parsed, isCount);
-  if (entities.has("question") && !entities.has("student")) return questionBranch(ctx, parsed, status, isCount);
-  if ((entities.has("announcement") || entities.has("notification")) && !entities.has("student")) return noticeBranch(ctx, parsed, entities, isCount);
+  if (entities.has("subjectRequest")) return as("application", subjectRequestBranch(ctx, status, isCount), "Fənn silmə müraciətləri");
+  if (entities.has("excuse")) return as("excuse", excuseBranch(ctx, parsed, status, isCount));
+  if (entities.has("application")) return as("application", applicationBranch(ctx, parsed, status, isCount));
+  if (entities.has("staff") && !entities.has("student")) return as("staff", staffBranch(ctx, parsed, isCount));
+  if (entities.has("question") && !entities.has("student")) return as("question", questionBranch(ctx, parsed, status, isCount));
+  if ((entities.has("announcement") || entities.has("notification")) && !entities.has("student")) return as("notice", noticeBranch(ctx, parsed, entities, isCount));
 
   // 4) Tapşırıq/test: «təhvil verməyənlər» tələbə filtridir.
   const missingFilter = entities.has("assignment") && has(parsed, NEGATION);
-  if (entities.has("assignment") && !missingFilter && !entities.has("student")) return assignmentBranch(ctx, parsed, entities, isCount);
-  if (entities.has("exam") && !entities.has("student")) return examBranch(ctx, parsed, isCount);
+  if (entities.has("assignment") && !missingFilter && !entities.has("student")) return as("assignment", assignmentBranch(ctx, parsed, entities, isCount));
+  if (entities.has("exam") && !entities.has("student")) return as("exam", examBranch(ctx, parsed, isCount));
 
   // 4) Müəllim (tələbə sözü yoxdursa və ya «Əli müəllimin tələbələri»).
   if (entities.has("teacher") && !entities.has("attendance") && !entities.has("grade")) {
-    if (!entities.has("student") || residual.length) return teacherBranch(ctx, parsed, entities, isCount);
+    if (!entities.has("student") || residual.length) return as("teacher", teacherBranch(ctx, parsed, entities, isCount));
   }
 
   // 5) Kurs (tələbə filtrləri olmadan): «Kurs siyahısı», «Quran tələbələri», «neçə kurs var».
   const studentFilterWords = detectTerm(parsed) !== null || entities.has("attendance") || entities.has("grade") || missingFilter;
   if ((entities.has("course") || entities.has("resource")) && !studentFilterWords && !(entities.has("student") && residual.length > 1)) {
-    const result = await courseBranch(ctx, parsed, entities, isCount);
+    const result = await as("course", courseBranch(ctx, parsed, entities, isCount));
     if (result) return result;
   } else if (!studentFilterWords && entities.has("student") && (ctx.isOwner || ctx.permissions.has("schedule"))) {
-    const result = await courseBranch(ctx, parsed, entities, isCount);
+    const result = await as("course", courseBranch(ctx, parsed, entities, isCount));
     if (result) return result;
   }
 
   // 6) Tələbələr: filtr, statistika və ya ad axtarışı.
-  const studentResult = await studentBranch(ctx, parsed, entities, isCount);
+  const studentResult = await as(entities.has("attendance") ? "attendance" : entities.has("grade") ? "grades" : "students", studentBranch(ctx, parsed, entities, isCount));
   if (studentResult) return studentResult;
 
   if (isCount && !residual.length) return overallStats(ctx);

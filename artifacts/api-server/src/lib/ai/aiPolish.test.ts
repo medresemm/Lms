@@ -14,7 +14,8 @@ import {
   searchShamelaPage,
   type FetchLike,
 } from "./research.js";
-import { blockReply, blocksToText, copyProblems, ensureBlocks, textToBlocks, type AiBlock } from "./blocks.js";
+import { blockReply, blocksToText, copyProblems, ensureBlocks, FRAME_ICONS, finalizeInternal, inferFrame, textToBlocks, type AiBlock } from "./blocks.js";
+import { routeAdminMessage } from "./adminRouting.js";
 import { internalAiProvider } from "./internalProvider.js";
 import { libraryPageText } from "../library/search.js";
 import { LIBRARY_BOOKS } from "../library/catalog.js";
@@ -235,4 +236,58 @@ test("fetchHadithFull respects its time budget when sources hang", async () => {
   );
   assert.equal(result.status, "fragment");
   assert.ok(Date.now() - started < 2500, `took ${Date.now() - started}ms`);
+});
+
+// ---------------------------------------------------------------------------
+// Vahid cavab kartı: hər daxili cavabda başlıq (ikon + ad) və bloklar
+
+const FRAME_STUDENT = [...STUDENT_QUESTIONS, "Bu gün dərsim var?", "başqa tələbələrin qiyməti", "sağ ol", "qiymət və davamiyyət"];
+const FRAME_ADMIN = [...ADMIN_QUESTIONS, "", "zzzz qqqq", "heyət siyahısı", "gözləyən üzrlər", "cavabsız suallar", "Müəllim cədvəli", "Neçə tələbə var"];
+
+test("answer card: every internal answer (student + staff) carries one frame with icon and title", async () => {
+  const expected: Record<string, string> = {
+    "Dərs cədvəlim": "schedule", "Tapşırıqlarım": "assignment", "Qiymətlərim": "grades", "Davamiyyətim": "attendance", "Resurslar": "resource",
+    "Profilim": "student", "Elanlar": "notice", "İmtahanlarım": "exam", "Saytdan necə istifadə edim?": "guide", "salam": "help", "blabla qwerty": "info",
+    "başqa tələbələrin qiyməti": "warn",
+  };
+  for (const question of FRAME_STUDENT) {
+    const reply = await internalAiProvider.answer({ message: question, history: [] }, studentContext());
+    assert.ok(reply.frame && FRAME_ICONS.includes(reply.frame.icon) && reply.frame.title, `student «${question}»: frame expected`);
+    assert.ok(reply.blocks?.length, `student «${question}»: blocks expected`);
+    if (expected[question]) assert.equal(reply.frame.icon, expected[question], `student «${question}»`);
+    assert.deepEqual(copyProblems(reply.frame), [], `student «${question}» frame copy`);
+  }
+  const adminExpected: Record<string, string> = {
+    "Ümumi statistika": "stats", "T0013": "student", "Tələbə axtar Əli": "students", "Neçə müraciət gözləyir?": "application", "Müəllimlər": "teacher",
+    "Tapşırıqlar": "assignment", "Testlər": "exam", "Elanlar": "notice", "Admin paneldən necə istifadə edim?": "guide", "Qayıbı çox olanlar": "attendance",
+    "Müəllim cədvəli": "schedule", "zzzz qqqq": "info", "": "help",
+  };
+  for (const question of FRAME_ADMIN) {
+    const reply = await internalAiProvider.answer({ message: question, history: [] }, adminContext(["students", "schedule", "applications", "assignments", "announcements", "excuses", "userRoleManagement"], { isOwner: true }));
+    assert.ok(reply.frame && FRAME_ICONS.includes(reply.frame.icon) && reply.frame.title, `admin «${question}»: frame expected`);
+    assert.ok(reply.blocks?.length, `admin «${question}»: blocks expected`);
+    if (adminExpected[question] !== undefined) assert.equal(reply.frame.icon, adminExpected[question], `admin «${question}»`);
+    assert.deepEqual(copyProblems(reply.frame), [], `admin «${question}» frame copy`);
+  }
+  // Single student: name + T-number in the header.
+  const one = await internalAiProvider.answer({ message: "T0013", history: [] }, adminContext(["students"], { isOwner: true }));
+  assert.equal(one.frame?.title, "Tələbə məlumatı");
+  assert.equal(one.frame?.badge?.text, "T0013");
+});
+
+test("answer card: routing hints, no-permission and plain replies are framed too", async () => {
+  const deps = { internal: async () => ({ reply: "x", suggestions: [] }), research: async () => { throw new Error("must not call"); } };
+  const hint = finalizeInternal(await routeAdminMessage({ message: "dorar إنما الأعمال بالنيات", mode: "internal", target: "shamela", canReadLms: true }, deps));
+  assert.equal(hint.frame.icon, "info");
+  assert.ok(hint.blocks.length);
+  const denied = finalizeInternal(await routeAdminMessage({ message: "tələbələr", mode: "internal", target: "shamela", canReadLms: false }, deps));
+  assert.equal(denied.frame.icon, "warn");
+  assert.equal(denied.frame.tone, "warn");
+  // Frame-siz köhnə mətn → təxmin + açar–dəyər sətirləri.
+  const plain = finalizeInternal({ reply: "Gözləyən müraciətlər: 3\nVəziyyət üzrə: gözləyir: 3\n• Əli Məmmədov · ali@mail.az", suggestions: [] });
+  assert.equal(plain.frame.icon, "application");
+  const card = plain.blocks.find((block) => block.type === "card");
+  assert.ok(card && card.type === "card" && card.rows?.length === 2 && card.items?.length === 1);
+  assert.equal(inferFrame([{ type: "steps", steps: ["a"] }]).icon, "guide");
+  assert.equal(inferFrame([{ type: "text", text: "Bu sualı başa düşmədim." }]).title, "Nəticə tapılmadı");
 });

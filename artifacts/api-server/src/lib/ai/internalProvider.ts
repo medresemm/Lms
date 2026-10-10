@@ -25,7 +25,7 @@ import {
   ATTENDANCE_STATUS, WEEKDAY_LABELS, WEEKDAY_ORDER, bakuWeekday, detectTermNumber, detectWeekday, formatDate, formatDateTime,
   formatGrade, lessonDaysLabel, reply, snippet, studentCode, titleMatches,
 } from "./format.js";
-import { blockReply, ensureBlocks, type AiBlock, type AiItem, type AiRow } from "./blocks.js";
+import { blockReply, ensureBlocks, finalizeInternal, frameOf, framed, mergeFrames, type AiBlock, type AiItem, type AiRow } from "./blocks.js";
 import { answerAdmin } from "./admin.js";
 import { answerGuide, guideTopicList } from "./siteGuide.js";
 
@@ -42,7 +42,7 @@ function plural(count: number, word: string) {
 }
 
 function studentHelp(name?: string) {
-  return blockReply([
+  return framed(frameOf("help", { title: "Mədinə AI nə bacarır" }), blockReply([
     { type: "text", text: name ? `Salam, ${name}! Mən Mədinə AI-yam. Dərsləriniz, tapşırıqlarınız və nəticələrinizlə bağlı sizə kömək edə bilərəm.` : "Mən Mədinə AI-yam. Dərsləriniz, tapşırıqlarınız və nəticələrinizlə bağlı sizə kömək edə bilərəm." },
     {
       type: "card",
@@ -68,7 +68,7 @@ function studentHelp(name?: string) {
         { title: "Profilimi necə dəyişim?" },
       ],
     },
-  ], STUDENT_SUGGESTIONS);
+  ], STUDENT_SUGGESTIONS));
 }
 
 function lessonItem(lesson: AiLesson, joinToday = false): AiItem {
@@ -370,9 +370,9 @@ async function answerStudent(parsed: ParsedMessage, ctx: StudentAiContext): Prom
   const courseFilter = matchedCourses.size ? matchedCourses : null;
 
   if (countKeywords(parsed, KW.others)) {
-    return reply([
+    return framed(frameOf("warn", { title: "Məxfi məlumat", tone: "warn" }), reply([
       "Bağışlayın, başqa tələbələrin məlumatları məxfidir. Mən yalnız sizin öz dərsləriniz və nəticələriniz barədə danışa bilərəm.",
-    ], STUDENT_SUGGESTIONS);
+    ], STUDENT_SUGGESTIONS));
   }
 
   const scores = {
@@ -393,26 +393,26 @@ async function answerStudent(parsed: ParsedMessage, ctx: StudentAiContext): Prom
   // "Qiymət" sözü testlə birlikdə gələndə test nəticələri kifayətdir.
   const results: AiReply[] = [];
   for (const intent of intents.slice(0, 3)) {
-    if (intent === "schedule") results.push(await studentSchedule(ctx, parsed, courseFilter));
-    if (intent === "assignments") results.push(await studentAssignments(ctx, courseFilter, courseTitles));
-    if (intent === "exams") results.push(await studentExams(ctx, courseFilter, courseTitles));
-    if (intent === "grades") results.push(await studentGrades(ctx, parsed, courseFilter));
-    if (intent === "attendance") results.push(await studentAttendance(ctx, parsed, courseFilter));
-    if (intent === "resources") results.push(await studentResources(ctx, courseFilter));
-    if (intent === "notices") results.push(await studentNotices(ctx));
-    if (intent === "profile") results.push(await studentProfile(ctx));
+    if (intent === "schedule") results.push(framed(frameOf("schedule", { badge: { text: overview.termLabel } }), await studentSchedule(ctx, parsed, courseFilter)));
+    if (intent === "assignments") results.push(framed(frameOf("assignment"), await studentAssignments(ctx, courseFilter, courseTitles)));
+    if (intent === "exams") results.push(framed(frameOf("exam"), await studentExams(ctx, courseFilter, courseTitles)));
+    if (intent === "grades") results.push(framed(frameOf("grades"), await studentGrades(ctx, parsed, courseFilter)));
+    if (intent === "attendance") results.push(framed(frameOf("attendance"), await studentAttendance(ctx, parsed, courseFilter)));
+    if (intent === "resources") results.push(framed(frameOf("resource"), await studentResources(ctx, courseFilter)));
+    if (intent === "notices") results.push(framed(frameOf("notice"), await studentNotices(ctx)));
+    if (intent === "profile") results.push(framed(frameOf("student", { title: "Profilim" }), await studentProfile(ctx)));
   }
   if (results.length) return mergeReplies(results);
 
   if (courseFilter) {
     const focus = await studentCourseFocus(ctx, courseFilter);
-    if (focus) return focus;
+    if (focus) return framed(frameOf("course", { title: "Fənn məlumatı" }), focus);
   }
-  if (countKeywords(parsed, KW.courses)) return studentCourses(ctx);
+  if (countKeywords(parsed, KW.courses)) return framed(frameOf("course", { title: "Fənlərim" }), await studentCourses(ctx));
   if (countKeywords(parsed, KW.thanks)) return reply(["Dəyməz! Başqa sualınız olsa, buradayam."], STUDENT_SUGGESTIONS);
   if (countKeywords(parsed, KW.greeting)) return studentHelp(overview.firstName);
   if (countKeywords(parsed, KW.help)) return studentHelp();
-  return blockReply([
+  return framed(frameOf("info", { title: "Sualı tam başa düşmədim" }), blockReply([
     { type: "text", text: "Bağışlayın, sualınızı tam başa düşmədim. Bir az başqa cür yaza bilərsiniz?" },
     {
       type: "card",
@@ -425,7 +425,7 @@ async function answerStudent(parsed: ParsedMessage, ctx: StudentAiContext): Prom
       ],
       note: "Dini və ya elmi suallarınızı kabinetdəki «Sual-cavab» bölməsində müəllimlərə yaza bilərsiniz.",
     },
-  ], STUDENT_SUGGESTIONS);
+  ], STUDENT_SUGGESTIONS));
 }
 
 function mergeReplies(replies: AiReply[]): AiReply {
@@ -434,6 +434,7 @@ function mergeReplies(replies: AiReply[]): AiReply {
     reply: replies.map((item) => item.reply).join("\n\n— — —\n\n"),
     suggestions: Array.from(new Set(replies.flatMap((item) => item.suggestions))).slice(0, 4),
     blocks: replies.flatMap((item) => ensureBlocks(item).blocks),
+    frame: mergeFrames(replies.map((item) => item.frame)),
   };
 }
 
@@ -446,6 +447,6 @@ export const internalAiProvider: AiProvider = {
   async answer(input: { message: string; history: AiChatTurn[] }, context: AiContext): Promise<AiReply> {
     const parsed = parse(input.message, context.mode === "admin");
     // Hər daxili cavab kart blokları ilə qaytarılır (əl ilə qurulmayıbsa, mətndən çevrilir).
-    return ensureBlocks(context.mode === "student" ? await answerStudent(parsed, context) : await answerAdmin(parsed, context));
+    return finalizeInternal(context.mode === "student" ? await answerStudent(parsed, context) : await answerAdmin(parsed, context));
   },
 };

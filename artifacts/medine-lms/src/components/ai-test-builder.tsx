@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { AiAnswerCard } from '@/components/ai-blocks';
+import { frameOf } from '@/lib/ai-blocks';
 
 // Mədinə AI → «Test hazırla» (yalnız müəllim və adminlər).
 // Kitabxanadakı kitabın mətnindən (OCR qatı) qayda əsaslı suallar hazırlanır — xarici AI yoxdur.
@@ -124,7 +126,7 @@ export function AiTestBuilder({ config, getToken, onClose }: { config: TestBuild
   const [description, setDescription] = useState('');
   const [groupId, setGroupId] = useState<string>(() => (config.groups.length === 1 ? String(config.groups[0].id) : ''));
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState<{ title: string; group: string } | null>(null);
+  const [saved, setSaved] = useState<{ title: string; group: string; questions: number; open: number } | null>(null);
 
   useEffect(() => { setChapterIndex(''); setFromPage(''); setToPage(''); }, [slug]);
 
@@ -225,7 +227,7 @@ export function AiTestBuilder({ config, getToken, onClose }: { config: TestBuild
             : { type: 'open', prompt: draft.prompt.trim(), options: [], correctOptionIndex: 0, maxPoints: Math.min(100, Math.max(1, Math.round(draft.maxPoints) || 5)), modelAnswer: draft.modelAnswer.trim().slice(0, 4000) || null }),
         },
       });
-      setSaved({ title: title.trim(), group: groupLabel(group) });
+      setSaved({ title: title.trim(), group: groupLabel(group), questions: Math.min(50, drafts.length), open: drafts.slice(0, 50).filter((draft) => draft.type !== 'choice').length });
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : 'Test yadda saxlanmadı.');
     } finally {
@@ -399,9 +401,21 @@ export function AiTestBuilder({ config, getToken, onClose }: { config: TestBuild
                     </>
                   )}
                   {saved && (
-                    <p className="flex items-start gap-1.5 rounded-xl border border-emerald-400/40 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-100" data-testid="text-test-saved">
-                      <CheckCircle2 size={14} className="mt-0.5 shrink-0" /> «{saved.title}» qaralama kimi saxlanıldı ({saved.group}). Status: bağlı — tələbələr görmür. «İmtahan və testlər» bölməsində yoxlayıb açın.
-                    </p>
+                    <div data-testid="text-test-saved">
+                      <AiAnswerCard
+                        testId="ai-test-saved-card"
+                        frame={frameOf('exam', { title: 'Test yadda saxlanıldı', badge: { text: 'qaralama', tone: 'good' } })}
+                        blocks={[
+                          { type: 'card', rows: [
+                            { label: 'Test', value: saved.title },
+                            { label: 'Qrup', value: saved.group },
+                            { label: 'Sual sayı', value: saved.open ? `${saved.questions} (${saved.open} açıq sual)` : String(saved.questions) },
+                            { label: 'Vəziyyət', value: 'bağlı — tələbələr görmür' },
+                          ] },
+                          { type: 'text', tone: 'muted', text: '«İmtahan və testlər» bölməsində yoxlayıb tələbələr üçün açın.' },
+                        ]}
+                      />
+                    </div>
                   )}
                 </div>
               ) : (

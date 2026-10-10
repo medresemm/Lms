@@ -72,7 +72,7 @@ import { computeExamScore, maskPendingScore, parseStoredAnswers } from "../lib/e
 import { answerLibrary, resolveLibraryMessage } from "../lib/library/search.js";
 import { searchableLibraryBooks } from "../lib/library/uploadedBooks.js";
 import { answerCourseBooks, courseBooksFromResources, detectCourseBooksQuestion, suggestedLibraryBooks, termLabel, type StudentCourseRef } from "../lib/library/courseBooks.js";
-import { blockReply, ensureBlocks } from "../lib/ai/blocks.js";
+import { blockReply, finalizeInternal, frameOf } from "../lib/ai/blocks.js";
 import { fullLibraryCatalog, loadCourseBooksRows } from "../lib/library/courseBooksRepo.js";
 import { parse as parseMessage } from "../lib/ai/text.js";
 import { titleMatches } from "../lib/ai/format.js";
@@ -968,6 +968,16 @@ const rateLimit: RequestHandler = (req, res, next) => {
   next();
 };
 
+/** Kitabxana axtarışının cavabı: «Kitabxana» kartı, alt başlıqda sorğu, nişanda nəticə sayı. */
+function libraryAnswer(query: string, result: ReturnType<typeof answerLibrary>) {
+  const total = typeof result.sources?.total === "number" ? result.sources.total : 0;
+  return finalizeInternal(result, frameOf("library", {
+    title: "Kitabxanada axtarış",
+    subtitle: query ? `«${query}»` : undefined,
+    badge: query ? { text: total ? `${total} nəticə` : "nəticə yoxdur", tone: total ? "default" : "muted" } : undefined,
+  }));
+}
+
 const noStore: RequestHandler = (_req, res, next) => {
   res.setHeader("Cache-Control", "no-store");
   next();
@@ -1006,14 +1016,14 @@ router.post("/ai/student/chat", noStore, requireApprovedStudent, rateLimit, asyn
         res.status(404).json({ error: "Tələbə profili tapılmadı." });
         return;
       }
-      res.json(await answerStudentCourseBooks(buildStudentContext(studentProfile, studentApplication), input.message));
+      res.json(finalizeInternal(await answerStudentCourseBooks(buildStudentContext(studentProfile, studentApplication), input.message), frameOf("book")));
       return;
     }
     // Mədrəsə Kitabxanası daxili məlumatdır: «Daxili» rejimdə tələbəyə də açıqdır.
     // «Kitabxanada axtar» yazılmasa da: ərəbcə mətn, kitab adı, «hansı səhifədə …» və ya tanınan mövzu sözü.
     const libraryIntent = resolveLibraryMessage(input.message);
     if (libraryIntent) {
-      res.json(ensureBlocks(answerLibrary(libraryIntent.query, { books: await searchableLibraryBooks() })));
+      res.json(libraryAnswer(libraryIntent.query, answerLibrary(libraryIntent.query, { books: await searchableLibraryBooks() })));
       return;
     }
     const userId = getAuth(req).userId as string;
@@ -1028,7 +1038,7 @@ router.post("/ai/student/chat", noStore, requireApprovedStudent, rateLimit, asyn
       return;
     }
     const result = await getAiProvider().answer(input, buildStudentContext(profile, application));
-    res.json(result);
+    res.json(finalizeInternal(result));
   } catch (error) {
     next(error);
   }
@@ -1049,7 +1059,7 @@ router.post("/ai/admin/chat", noStore, requireAiStaff, rateLimit, async (req, re
     if (selection.mode === "internal") {
       const libraryIntent = resolveLibraryMessage(input.message);
       if (libraryIntent) {
-        res.json(ensureBlocks(answerLibrary(libraryIntent.query, { books: await searchableLibraryBooks() })));
+        res.json(libraryAnswer(libraryIntent.query, answerLibrary(libraryIntent.query, { books: await searchableLibraryBooks() })));
         return;
       }
     }
@@ -1062,7 +1072,8 @@ router.post("/ai/admin/chat", noStore, requireAiStaff, rateLimit, async (req, re
         research: (intent) => answerResearch(intent, { onUpstreamStatus: logUpstreamStatus }),
       },
     );
-    res.json(result);
+    // Daxili cavablar həmişə vahid kartla (bloklar + başlıq) qaytarılır; xarici (Şamilə/Dorar) olduğu kimi.
+    res.json(result.mode === "internal" ? finalizeInternal(result) : result);
   } catch (error) {
     next(error);
   }

@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { anchorCorrection, answerScrollTop, hiddenCount, initialShown, moreLabel, pagerState, pageSlice, revealMore } from "./paginate";
-import { readBlocks, safeBlockHref, type AiBlock } from "./ai-blocks";
+import { inferFrame, readBlocks, readFrame, safeBlockHref, type AiBlock } from "./ai-blocks";
 
 // ---------------------------------------------------------------------------
 // Səhifələmə
@@ -60,4 +60,16 @@ test("client blocks: only known blocks, safe links", () => {
   assert.equal(safeBlockHref("//evil.example"), null);
   assert.equal(safeBlockHref("http://plain.example"), null);
   assert.deepEqual(safeBlockHref("https://dorar.net/h/x"), { href: "https://dorar.net/h/x", internal: false });
+});
+
+test("answer card frame: sanitised from server, inferred for old history", () => {
+  assert.deepEqual(readFrame({ icon: "schedule", title: "Dərs cədvəli", badge: { text: "1-ci semestr" } }), { icon: "schedule", title: "Dərs cədvəli", subtitle: undefined, badge: { text: "1-ci semestr", tone: undefined }, tone: undefined });
+  assert.equal(readFrame({ icon: "<script>", title: "x" }), undefined);
+  assert.equal(readFrame({ icon: "info" }), undefined);
+  assert.equal(readFrame(null), undefined);
+  assert.equal(inferFrame([{ type: "steps", steps: ["a"] }]).icon, "guide");
+  assert.equal(inferFrame([{ type: "text", text: "Qiymətləriniz (5 ballıq şkala ilə):" }]).icon, "grades");
+  assert.equal(inferFrame(undefined, "Bu sualı başa düşmədim.").title, "Nəticə tapılmadı");
+  assert.equal(inferFrame(undefined, "Bu məlumat «Cədvəl» icazəsi tələb edir.").icon, "warn");
+  assert.equal(inferFrame(undefined, "").icon, "info");
 });

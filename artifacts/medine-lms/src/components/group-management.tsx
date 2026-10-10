@@ -14,11 +14,12 @@ import {
   useGetAdminTeachers,
 } from '@workspace/api-client-react';
 import { authFetch } from '@/lib/clerk-token';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type MessageKey } from '@/lib/i18n';
 import { resourceTeacherIds, resourceTeacherLabel, isCoTaught } from '@/lib/co-teachers';
 import {
-  filterGroups, groupCapacityLabel, groupHasTeacher, groupIsFull, groupScheduleLabel, matchesStudentSearch,
-  NO_TEACHER_FILTER, NO_TEACHER_LABEL, sortForTeacherAssignment, teacherAssignmentSummary, type GroupView,
+  filterGroups, groupHasTeacher, groupIsFull, matchesStudentSearch,
+  NO_TEACHER_FILTER, sortForTeacherAssignment, teacherAssignmentSummary, type GroupView,
+  dayTimes,
 } from '@/lib/groups';
 
 export type GroupsView = 'students' | 'teachers';
@@ -96,8 +97,20 @@ function Badge({ tone, children }: { tone: 'warn' | 'ok' | 'muted'; children: Re
   return <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold ${cls}`}>{children}</span>;
 }
 
-function groupTeacherText(group: GroupView) {
-  return groupHasTeacher(group) ? `${isCoTaught(group) ? 'Müəllimlər' : 'Müəllim'}: ${resourceTeacherLabel(group)}` : NO_TEACHER_LABEL;
+function groupTeacherText(group: GroupView, t: (key: MessageKey) => string) {
+  return groupHasTeacher(group) ? `${isCoTaught(group) ? t('teachersLabel') : t('roleTeacher')}: ${resourceTeacherLabel(group)}` : t('noTeacherAssigned');
+}
+
+function scheduleText(group: { lessonDays: string[]; lessonTime: string | null }, t: (key: MessageKey) => string) {
+  if (!group.lessonDays.length) return t('noDaySet');
+  const dayKey: Record<string, MessageKey> = { monday: 'dayMon', tuesday: 'dayTue', wednesday: 'dayWed', thursday: 'dayThu', friday: 'dayFri', saturday: 'daySat', sunday: 'daySun' };
+  const order = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  const times = dayTimes(group.lessonTime, group.lessonDays);
+  return [...group.lessonDays].sort((a, b) => order.indexOf(a) - order.indexOf(b)).map((day) => `${dayKey[day] ? t(dayKey[day]) : day}${times[day] ? ` ${times[day]}` : ''}`).join(', ');
+}
+
+function capacityText(group: GroupView, t: (key: MessageKey) => string) {
+  return group.studentCapacity > 0 ? `${group.studentCount} / ${group.studentCapacity} ${t('studentWord')}` : `${group.studentCount} ${t('studentWord')} · ${t('unlimitedShort')}`;
 }
 
 export function GroupManagementSection({ view: controlledView, onViewChange, onOpenSchedule }: { view?: GroupsView; onViewChange?: (view: GroupsView) => void; onOpenSchedule?: () => void }) {
@@ -225,7 +238,7 @@ export function GroupManagementSection({ view: controlledView, onViewChange, onO
         </select>
         <select aria-label={t('roleTeacher')} className={selectClass} value={teacherId} onChange={(event) => setTeacherId(event.target.value)} data-testid="select-groups-teacher">
           <option value="">{t('allTeachers')}</option>
-          {canManageAll && <option value={NO_TEACHER_FILTER}>{NO_TEACHER_LABEL}</option>}
+          {canManageAll && <option value={NO_TEACHER_FILTER}>{t('noTeacherAssigned')}</option>}
           {teacherOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
         </select>
         <label className="relative">
@@ -274,7 +287,7 @@ export function GroupManagementSection({ view: controlledView, onViewChange, onO
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0">
                             <p className="text-sm font-black text-[hsl(var(--primary))]">{lesson.courseTitle} <span className="font-semibold text-[hsl(var(--muted-foreground))]">· {lesson.termNumber}. {t('termLabel')}</span></p>
-                            <p className="mt-0.5 flex items-center gap-1 text-[11px] text-[hsl(var(--muted-foreground))]"><CalendarRange size={12} className="shrink-0" /> {groupScheduleLabel(lesson)}</p>
+                            <p className="mt-0.5 flex items-center gap-1 text-[11px] text-[hsl(var(--muted-foreground))]"><CalendarRange size={12} className="shrink-0" /> {scheduleText(lesson, t)}</p>
                             {canManageAll && <div className="mt-1 flex flex-wrap gap-1">
                               {lesson.groupCount === 0 ? <Badge tone="warn">{t('noGroup')}</Badge> : <Badge tone="ok">{lesson.groupCount} {t('groupsWord')}</Badge>}
                               {empty > 0 && <Badge tone="warn">{empty} {t('groupsWithoutStudents')}</Badge>}
@@ -441,12 +454,14 @@ function TeacherAssignmentView({ groups, termGroups, teachers, onSaved }: {
   teachers: Teacher[];
   onSaved: (text: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const summary = teacherAssignmentSummary(termGroups);
+  const summaryText = !termGroups.length ? t('createGroupsFirst') : summary.missing ? `${summary.missing} ${t('noTeacherInGroup')}` : t('allHaveTeacher');
   return (
     <div className="space-y-3" data-testid="section-group-teachers">
-      <p className={`rounded-xl px-3 py-2 text-sm font-bold ${summary.complete ? 'bg-emerald-50 text-emerald-800' : summary.missing ? 'bg-amber-50 text-amber-900' : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]'}`} data-testid="text-teacher-assignment-summary">{summary.text}</p>
+      <p className={`rounded-xl px-3 py-2 text-sm font-bold ${summary.complete ? 'bg-emerald-50 text-emerald-800' : summary.missing ? 'bg-amber-50 text-amber-900' : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]'}`} data-testid="text-teacher-assignment-summary">{summaryText}</p>
       {groups.length === 0
-        ? <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">{termGroups.length ? 'Süzgəcə uyğun qrup tapılmadı.' : 'Əvvəlcə «2 Tələbələr» addımında qrup yaradın.'}</p>
+        ? <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-5 text-center text-sm text-[hsl(var(--muted-foreground))]">{termGroups.length ? t('noFilterGroup') : t('createGroupsFirst')}</p>
         : <ul className="space-y-2" data-testid="list-group-teachers">
             {groups.map((group) => <TeacherAssignmentRow key={group.id} group={group} teachers={teachers} onSaved={onSaved} />)}
           </ul>}
@@ -455,6 +470,7 @@ function TeacherAssignmentView({ groups, termGroups, teachers, onSaved }: {
 }
 
 function TeacherAssignmentRow({ group, teachers, onSaved }: { group: GroupView; teachers: Teacher[]; onSaved: (text: string) => Promise<void> }) {
+  const { t } = useI18n();
   const hasTeacher = groupHasTeacher(group);
   const [open, setOpen] = useState(!hasTeacher);
   const currentIds = resourceTeacherIds(group);
@@ -469,7 +485,7 @@ function TeacherAssignmentRow({ group, teachers, onSaved }: { group: GroupView; 
   }, [group]);
 
   const save = async () => {
-    if (!mainTeacher) { setError('Əsas müəllimi seçin.'); return; }
+    if (!mainTeacher) { setError(t('chooseMainTeacher')); return; }
     const ordered = [mainTeacher, ...coTeachers.filter((id) => id && id !== mainTeacher)];
     setBusy(true);
     setError('');
@@ -482,7 +498,7 @@ function TeacherAssignmentRow({ group, teachers, onSaved }: { group: GroupView; 
       const result = await readJson<object>(response);
       if (!response.ok) throw new Error(result.error || 'Qrupun müəllimləri yadda saxlanıla bilmədi.');
       setOpen(false);
-      await onSaved(`${group.courseTitle} (${termLabel(group.termNumber)}): ${ordered.length > 1 ? `${ordered.length} müəllim eyni tələbələrlə birgə dərs keçəcək` : 'müəllim təyin olundu'}.${hasTeacher ? '' : ' Qrup indi tələbələrə görünür.'}`);
+      await onSaved(`${group.courseTitle} (${group.termNumber}. ${t('termLabel')}): ${ordered.length > 1 ? `${ordered.length} ${t('coTeachSaved')}` : t('teacherAssigned')}.${hasTeacher ? '' : ` ${t('groupVisibleNow')}`}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Qrupun müəllimləri yadda saxlanıla bilmədi.');
     } finally {
@@ -494,25 +510,25 @@ function TeacherAssignmentRow({ group, teachers, onSaved }: { group: GroupView; 
     <li className={`rounded-xl border bg-[hsl(var(--card))] p-3 ${hasTeacher ? 'border-[hsl(var(--border))]' : 'border-amber-300'}`} data-testid={`row-group-teachers-${group.id}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm font-black text-[hsl(var(--primary))]">{group.courseTitle} <span className="font-semibold text-[hsl(var(--muted-foreground))]">· {termLabel(group.termNumber)} · {groupCapacityLabel(group)}</span></p>
-          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-[hsl(var(--muted-foreground))]"><CalendarRange size={12} className="shrink-0" /> {groupScheduleLabel(group)}</p>
-          <p className="mt-1">{hasTeacher ? <span className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{groupTeacherText(group)}</span> : <Badge tone="warn">{NO_TEACHER_LABEL}</Badge>}</p>
+          <p className="text-sm font-black text-[hsl(var(--primary))]">{group.courseTitle} <span className="font-semibold text-[hsl(var(--muted-foreground))]">· {group.termNumber}. {t('termLabel')} · {capacityText(group, t)}</span></p>
+          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-[hsl(var(--muted-foreground))]"><CalendarRange size={12} className="shrink-0" /> {scheduleText(group, t)}</p>
+          <p className="mt-1">{hasTeacher ? <span className="text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{groupTeacherText(group, t)}</span> : <Badge tone="warn">{t('noTeacherAssigned')}</Badge>}</p>
         </div>
-        <button type="button" className={smallButton} aria-expanded={open} onClick={() => setOpen((value) => !value)} data-testid={`button-group-teachers-toggle-${group.id}`}><UserCog size={13} /> {hasTeacher ? 'Müəllim əlavə et / çıxar' : 'Müəllim təyin et'}</button>
+        <button type="button" className={smallButton} aria-expanded={open} onClick={() => setOpen((value) => !value)} data-testid={`button-group-teachers-toggle-${group.id}`}><UserCog size={13} /> {hasTeacher ? t('addOrRemoveTeacher') : t('assignGroupTeacher')}</button>
       </div>
       {open && (
         <div className="mt-3 grid gap-3 border-t border-[hsl(var(--border))] pt-3 md:grid-cols-2" data-testid={`panel-group-teacher-editor-${group.id}`}>
-          <label className="block text-[11px] font-bold text-[hsl(var(--primary))]">Əsas müəllim
+          <label className="block text-[11px] font-bold text-[hsl(var(--primary))]">{t('mainTeacher')}
             <select className={`${selectClass} mt-1`} value={mainTeacher} onChange={(event) => { setMainTeacher(event.target.value); setCoTeachers((current) => current.filter((id) => id !== event.target.value)); }} data-testid={`select-group-main-teacher-${group.id}`}>
-              <option value="">Müəllim seçin</option>
+              <option value="">{t('chooseTeacher')}</option>
               {teachers.map((teacher) => <option key={teacher.clerkUserId} value={teacher.clerkUserId}>{teacher.displayName}</option>)}
             </select>
           </label>
           <div>
-            <p className="text-[11px] font-bold text-[hsl(var(--primary))]">Əlavə müəllimlər (birgə tədris)</p>
+            <p className="text-[11px] font-bold text-[hsl(var(--primary))]">{t('coTeachers')}</p>
             <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-[hsl(var(--border))] p-1.5">
               {teachers.filter((teacher) => teacher.clerkUserId !== mainTeacher).length === 0
-                ? <p className="p-1.5 text-xs text-[hsl(var(--muted-foreground))]">Başqa aktiv müəllim yoxdur.</p>
+                ? <p className="p-1.5 text-xs text-[hsl(var(--muted-foreground))]">{t('noOtherTeacher')}</p>
                 : teachers.filter((teacher) => teacher.clerkUserId !== mainTeacher).map((teacher) => {
                   const checked = coTeachers.includes(teacher.clerkUserId);
                   return (
@@ -524,11 +540,11 @@ function TeacherAssignmentRow({ group, teachers, onSaved }: { group: GroupView; 
                 })}
             </div>
           </div>
-          <p className="text-[11px] text-[hsl(var(--muted-foreground))] md:col-span-2">Seçilən bütün müəllimlər bu qrupun eyni tələbələri ilə dərs keçir: cədvəldə görür, dərs linki yerləşdirir, davamiyyət yazır, tapşırıq və test verir. Müəllim təyin olunanda qrup tələbələrə görünür.</p>
+          <p className="text-[11px] text-[hsl(var(--muted-foreground))] md:col-span-2">{t('coTeachHint')}</p>
           {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 md:col-span-2" role="alert">{error}</p>}
           <div className="flex justify-end gap-2 md:col-span-2">
-            {hasTeacher && <button type="button" className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))]" onClick={() => setOpen(false)}>Ləğv et</button>}
-            <button type="button" className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" disabled={busy || !mainTeacher} onClick={() => void save()} data-testid={`button-group-save-teachers-${group.id}`}>{busy ? 'Saxlanılır...' : 'Yadda saxla'}</button>
+            {hasTeacher && <button type="button" className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))]" onClick={() => setOpen(false)}>{t('cancel')}</button>}
+            <button type="button" className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" disabled={busy || !mainTeacher} onClick={() => void save()} data-testid={`button-group-save-teachers-${group.id}`}>{busy ? t('saving') : t('save')}</button>
           </div>
         </div>
       )}
@@ -538,6 +554,8 @@ function TeacherAssignmentRow({ group, teachers, onSaved }: { group: GroupView; 
 
 /** «Linklər»: dərsin Telegram / Zoom / Google Meet / dərs linki (dərsin bütün qrupları üçün ortaqdır). */
 function CourseLinksEditor({ courseId, courseTitle, onClose, onSaved }: { courseId: number; courseTitle: string; onClose: () => void; onSaved: (text: string) => void }) {
+  const { t } = useI18n();
+  const linkLabel = (key: LinkKey) => key === 'telegramUrl' ? t('linkTelegram') : key === 'zoomUrl' ? t('linkZoom') : key === 'googleMeetUrl' ? t('linkMeet') : t('linkLesson');
   const [links, setLinks] = useState<Record<LinkKey, string> | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -555,7 +573,7 @@ function CourseLinksEditor({ courseId, courseTitle, onClose, onSaved }: { course
   const save = async () => {
     if (!links) return;
     const bad = LINK_FIELDS.find(([key]) => links[key].trim() && !/^https:\/\/\S+$/i.test(links[key].trim()));
-    if (bad) { setError(`${bad[1]} https:// ilə başlamalıdır.`); return; }
+    if (bad) { setError(`${linkLabel(bad[0])} https://`); return; }
     setBusy(true);
     setError('');
     try {
@@ -577,14 +595,14 @@ function CourseLinksEditor({ courseId, courseTitle, onClose, onSaved }: { course
   return (
     <div className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--background))] p-3" data-testid={`panel-course-links-${courseId}`}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-black text-[hsl(var(--primary))]">Dərs linkləri</p>
-        <button type="button" className="focus-ring rounded-lg p-1.5 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Bağla" onClick={onClose}><X size={15} /></button>
+        <p className="text-xs font-black text-[hsl(var(--primary))]">{t('courseLinks')}</p>
+        <button type="button" className="focus-ring rounded-lg p-1.5 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={t('close')} onClick={onClose}><X size={15} /></button>
       </div>
-      <p className="mt-1 text-[11px] text-[hsl(var(--muted-foreground))]">Linklər bu dərsin bütün qrupları üçün ortaqdır. Yeni link əlavə olunanda tələbələrə bildiriş gedir.</p>
-      {!links ? <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{error || 'Yüklənir...'}</p> : (
+      <p className="mt-1 text-[11px] text-[hsl(var(--muted-foreground))]">{t('courseLinksHint')}</p>
+      {!links ? <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{error || t('loading')}</p> : (
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
-          {LINK_FIELDS.map(([key, label]) => (
-            <label key={key} className="block text-[11px] font-bold text-[hsl(var(--primary))]">{label}
+          {LINK_FIELDS.map(([key]) => (
+            <label key={key} className="block text-[11px] font-bold text-[hsl(var(--primary))]">{linkLabel(key)}
               <input type="url" inputMode="url" placeholder="https://" className={`${selectClass} mt-1`} value={links[key]} onChange={(event) => setLinks((current) => current ? { ...current, [key]: event.target.value } : current)} data-testid={`input-course-link-${key}-${courseId}`} />
             </label>
           ))}
@@ -592,8 +610,8 @@ function CourseLinksEditor({ courseId, courseTitle, onClose, onSaved }: { course
       )}
       {links && error && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-800" role="alert">{error}</p>}
       <div className="mt-2 flex justify-end gap-2">
-        <button type="button" className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))]" onClick={onClose}>Ləğv et</button>
-        <button type="button" className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" disabled={busy || !links} onClick={() => void save()} data-testid={`button-save-course-links-${courseId}`}>{busy ? 'Saxlanılır...' : 'Yadda saxla'}</button>
+        <button type="button" className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))]" onClick={onClose}>{t('cancel')}</button>
+        <button type="button" className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" disabled={busy || !links} onClick={() => void save()} data-testid={`button-save-course-links-${courseId}`}>{busy ? t('saving') : t('save')}</button>
       </div>
     </div>
   );
@@ -616,22 +634,23 @@ function GroupCard({ group, open, onToggle, onAssignTeacher, onChanged, onNotice
   onNotice: (notice: Notice) => void;
   onDeleted: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const full = groupIsFull(group);
   const hasTeacher = groupHasTeacher(group);
   return (
     <article className={`min-w-0 rounded-xl border bg-[hsl(var(--card))] p-3 shadow-[var(--shadow-xs)] ${open ? 'border-[hsl(var(--primary))] md:col-span-2' : hasTeacher ? 'border-[hsl(var(--border))]' : 'border-amber-300'}`} data-testid={`card-group-${group.id}`}>
       <button type="button" onClick={onToggle} aria-expanded={open} aria-controls={`panel-group-${group.id}`} className="focus-ring flex w-full items-start justify-between gap-3 rounded-lg text-left" data-testid={`button-open-group-${group.id}`}>
         <div className="min-w-0">
-          <p className="truncate text-sm font-black text-[hsl(var(--primary))]">{group.courseTitle} <span className="font-semibold text-[hsl(var(--muted-foreground))]">· {termLabel(group.termNumber)}</span></p>
+          <p className="truncate text-sm font-black text-[hsl(var(--primary))]">{group.courseTitle} <span className="font-semibold text-[hsl(var(--muted-foreground))]">· {group.termNumber}. {t('termLabel')}</span></p>
           {hasTeacher
-            ? <p className="mt-0.5 truncate text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{groupTeacherText(group)}</p>
-            : <p className="mt-1"><Badge tone="warn">{NO_TEACHER_LABEL}</Badge></p>}
-          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-[hsl(var(--muted-foreground))]"><CalendarRange size={12} className="shrink-0" /> <span className="truncate">{groupScheduleLabel(group)}</span></p>
+            ? <p className="mt-0.5 truncate text-xs font-semibold text-[hsl(var(--secondary-foreground))]">{groupTeacherText(group, t)}</p>
+            : <p className="mt-1"><Badge tone="warn">{t('noTeacherAssigned')}</Badge></p>}
+          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-[hsl(var(--muted-foreground))]"><CalendarRange size={12} className="shrink-0" /> <span className="truncate">{scheduleText(group, t)}</span></p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
-          <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold ${full ? 'bg-amber-100 text-amber-900' : 'bg-[hsl(var(--secondary)/.45)] text-[hsl(var(--secondary-foreground))]'}`} data-testid={`text-group-capacity-${group.id}`}><UsersRound size={11} className="mr-1 inline" />{groupCapacityLabel(group)}</span>
-          {group.pendingCount > 0 && <span className="text-[10px] font-bold text-amber-800">{group.pendingCount} gözləyən seçim</span>}
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[hsl(var(--primary))]">{open ? 'Bağla' : 'Aç'} <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} /></span>
+          <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold ${full ? 'bg-amber-100 text-amber-900' : 'bg-[hsl(var(--secondary)/.45)] text-[hsl(var(--secondary-foreground))]'}`} data-testid={`text-group-capacity-${group.id}`}><UsersRound size={11} className="me-1 inline" />{capacityText(group, t)}</span>
+          {group.pendingCount > 0 && <span className="text-[10px] font-bold text-amber-800">{group.pendingCount} {t('pendingChoice')}</span>}
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[hsl(var(--primary))]">{open ? t('close') : t('open')} <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} /></span>
         </div>
       </button>
       {open && <GroupDetail group={group} onAssignTeacher={onAssignTeacher} onChanged={onChanged} onNotice={onNotice} onDeleted={onDeleted} />}
@@ -646,6 +665,7 @@ function GroupDetail({ group, onAssignTeacher, onChanged, onNotice, onDeleted }:
   onNotice: (notice: Notice) => void;
   onDeleted: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [roster, setRoster] = useState<RosterResponse | null>(null);
   const [rosterError, setRosterError] = useState('');
   const [notice, setNotice] = useState<Notice>(null);
@@ -730,7 +750,7 @@ function GroupDetail({ group, onAssignTeacher, onChanged, onNotice, onDeleted }:
         const result = await readJson<object>(response);
         throw new Error(result.error || 'Qrup silinə bilmədi.');
       }
-      onNotice({ error: false, text: `${group.courseTitle} · ${groupHasTeacher(group) ? resourceTeacherLabel(group) : NO_TEACHER_LABEL} (${termLabel(group.termNumber)}) qrupu silindi. Dərs qrupsuz qalıbsa, onu «Cədvəl hazırlama» bölməsindən silmək olar.` });
+      onNotice({ error: false, text: `${group.courseTitle} · ${groupHasTeacher(group) ? resourceTeacherLabel(group) : t('noTeacherAssigned')} (${group.termNumber}. ${t('termLabel')})` });
       await onDeleted();
     } catch (error) {
       setNotice({ text: error instanceof Error ? error.message : 'Qrup silinə bilmədi.', error: true });
@@ -747,34 +767,34 @@ function GroupDetail({ group, onAssignTeacher, onChanged, onNotice, onDeleted }:
     <div id={`panel-group-${group.id}`} className="mt-3 space-y-3 border-t border-[hsl(var(--border))] pt-3" data-testid={`panel-group-${group.id}`}>
       <NoticeLine notice={notice} />
       <div className="flex flex-wrap gap-2">
-        {group.canManageStudents && <button type="button" className={smallButton} aria-expanded={pickerOpen} onClick={() => { setPickerOpen((value) => !value); setPicked([]); }} disabled={!roster} data-testid={`button-group-add-students-${group.id}`}><UserPlus size={13} /> Tələbə əlavə et</button>}
-        {group.canEditLinks && <button type="button" className={smallButton} aria-expanded={linksOpen} onClick={() => setLinksOpen((value) => !value)} data-testid={`button-group-links-${group.id}`}><Link2 size={13} /> Linklər</button>}
-        {onAssignTeacher && <button type="button" className={smallButton} onClick={onAssignTeacher} data-testid={`button-group-edit-teachers-${group.id}`}><UserCog size={13} /> {groupHasTeacher(group) ? 'Müəllim əlavə et / çıxar' : 'Müəllim təyin et'} →</button>}
-        {group.canDelete && !deleteStep && <button type="button" className={`${smallButton} text-[hsl(var(--destructive))]`} onClick={() => setDeleteStep(true)} data-testid={`button-group-delete-${group.id}`}><Trash2 size={13} /> Qrupu sil</button>}
+        {group.canManageStudents && <button type="button" className={smallButton} aria-expanded={pickerOpen} onClick={() => { setPickerOpen((value) => !value); setPicked([]); }} disabled={!roster} data-testid={`button-group-add-students-${group.id}`}><UserPlus size={13} /> {t('addStudent')}</button>}
+        {group.canEditLinks && <button type="button" className={smallButton} aria-expanded={linksOpen} onClick={() => setLinksOpen((value) => !value)} data-testid={`button-group-links-${group.id}`}><Link2 size={13} /> {t('links')}</button>}
+        {onAssignTeacher && <button type="button" className={smallButton} onClick={onAssignTeacher} data-testid={`button-group-edit-teachers-${group.id}`}><UserCog size={13} /> {groupHasTeacher(group) ? t('addOrRemoveTeacher') : t('assignGroupTeacher')} →</button>}
+        {group.canDelete && !deleteStep && <button type="button" className={`${smallButton} text-[hsl(var(--destructive))]`} onClick={() => setDeleteStep(true)} data-testid={`button-group-delete-${group.id}`}><Trash2 size={13} /> {t('deleteGroup')}</button>}
       </div>
       {deleteStep && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-900" data-testid={`confirm-group-delete-${group.id}`}>
-          <span className="min-w-0 flex-1">{group.courseTitle} · {groupHasTeacher(group) ? resourceTeacherLabel(group) : NO_TEACHER_LABEL} ({termLabel(group.termNumber)}) qrupunu silmək istədiyinizə əminsiniz?</span>
-          <button type="button" className="focus-ring rounded-lg px-3 py-1.5 font-bold text-[hsl(var(--muted-foreground))]" onClick={() => setDeleteStep(false)} disabled={busy}>Ləğv et</button>
-          <button type="button" className="focus-ring rounded-lg bg-red-700 px-3 py-1.5 font-bold text-white disabled:opacity-50" onClick={() => void deleteGroup()} disabled={busy} data-testid={`button-group-delete-confirm-${group.id}`}>Bəli, sil</button>
+          <span className="min-w-0 flex-1">{group.courseTitle} · {groupHasTeacher(group) ? resourceTeacherLabel(group) : t('noTeacherAssigned')} ({group.termNumber}. {t('termLabel')}) {t('confirmDeleteGroup')}</span>
+          <button type="button" className="focus-ring rounded-lg px-3 py-1.5 font-bold text-[hsl(var(--muted-foreground))]" onClick={() => setDeleteStep(false)} disabled={busy}>{t('cancel')}</button>
+          <button type="button" className="focus-ring rounded-lg bg-red-700 px-3 py-1.5 font-bold text-white disabled:opacity-50" onClick={() => void deleteGroup()} disabled={busy} data-testid={`button-group-delete-confirm-${group.id}`}>{t('yesDelete')}</button>
         </div>
       )}
       {linksOpen && <CourseLinksEditor courseId={group.courseId} courseTitle={group.courseTitle} onClose={() => setLinksOpen(false)} onSaved={(text) => onNotice({ text, error: false })} />}
       {pickerOpen && roster && (
         <div className="rounded-xl border border-[hsl(var(--accent)/.7)] bg-[hsl(var(--background))] p-3" data-testid={`panel-group-student-picker-${group.id}`}>
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-black text-[hsl(var(--primary))]">{termLabel(group.termNumber)} tələbələri</p>
-            <button type="button" className="focus-ring rounded-lg p-1.5 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Bağla" onClick={() => setPickerOpen(false)}><X size={15} /></button>
+            <p className="text-xs font-black text-[hsl(var(--primary))]">{group.termNumber}. {t('termLabel')} {t('termStudents')}</p>
+            <button type="button" className="focus-ring rounded-lg p-1.5 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={t('close')} onClick={() => setPickerOpen(false)}><X size={15} /></button>
           </div>
           <label className="relative mt-2 block">
-            <span className="sr-only">Tələbə axtar</span>
-            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
-            <input value={pickerSearch} onChange={(event) => setPickerSearch(event.target.value)} placeholder="Ad, soyad və ya T-nömrə" className={`${selectClass} pl-8`} data-testid={`input-group-student-search-${group.id}`} />
+            <span className="sr-only">{t('search')}</span>
+            <Search size={14} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+            <input value={pickerSearch} onChange={(event) => setPickerSearch(event.target.value)} placeholder={t('searchStudent')} className={`${selectClass} ps-8`} data-testid={`input-group-student-search-${group.id}`} />
           </label>
-          {capacityLeft !== null && <p className="mt-2 text-[11px] font-semibold text-[hsl(var(--muted-foreground))]">Qrupda {capacityLeft} boş yer var.</p>}
+          {capacityLeft !== null && <p className="mt-2 text-[11px] font-semibold text-[hsl(var(--muted-foreground))]">{capacityLeft} {t('seatsLeft')}</p>}
           <div className="mt-2 max-h-64 space-y-1 overflow-y-auto">
             {pickerRows.length === 0
-              ? <p className="p-2 text-xs text-[hsl(var(--muted-foreground))]">{roster.candidates.some((candidate) => !candidate.inGroup) ? 'Axtarışa uyğun tələbə tapılmadı.' : 'Bu semestrdə qrupa əlavə ediləcək başqa tələbə yoxdur.'}</p>
+              ? <p className="p-2 text-xs text-[hsl(var(--muted-foreground))]">{roster.candidates.some((candidate) => !candidate.inGroup) ? t('noSearchStudent') : t('noMoreStudents')}</p>
               : pickerRows.map((candidate) => {
                 const checked = picked.includes(candidate.profileId);
                 const overCapacity = capacityLeft !== null && !checked && picked.length >= capacityLeft;
@@ -791,16 +811,16 @@ function GroupDetail({ group, onAssignTeacher, onChanged, onNotice, onDeleted }:
               })}
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-bold text-[hsl(var(--secondary-foreground))]">{picked.length} tələbə seçilib</span>
-            <button type="button" className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" disabled={busy || !picked.length} onClick={() => void addStudents()} data-testid={`button-group-add-selected-${group.id}`}>Seçilənləri əlavə et</button>
+            <span className="text-xs font-bold text-[hsl(var(--secondary-foreground))]">{picked.length} {t('studentsPicked')}</span>
+            <button type="button" className="focus-ring rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" disabled={busy || !picked.length} onClick={() => void addStudents()} data-testid={`button-group-add-selected-${group.id}`}>{t('addSelected')}</button>
           </div>
         </div>
       )}
       <div>
-        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Qrupun tələbələri{roster ? ` · ${roster.members.length}` : ''}</p>
+        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{t('groupStudents')}{roster ? ` · ${roster.members.length}` : ''}</p>
         {rosterError ? <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">{rosterError}</p>
-          : !roster ? <p className="text-xs text-[hsl(var(--muted-foreground))]">Tələbələr yüklənir...</p>
-          : roster.members.length === 0 ? <p className="rounded-lg border border-dashed border-[hsl(var(--border))] p-3 text-center text-xs text-[hsl(var(--muted-foreground))]">Bu qrupda hələ tələbə yoxdur.</p>
+          : !roster ? <p className="text-xs text-[hsl(var(--muted-foreground))]">{t('studentsLoading')}</p>
+          : roster.members.length === 0 ? <p className="rounded-lg border border-dashed border-[hsl(var(--border))] p-3 text-center text-xs text-[hsl(var(--muted-foreground))]">{t('noStudentsInThisGroup')}</p>
           : <ul className="divide-y divide-[hsl(var(--border))] rounded-xl border border-[hsl(var(--border))]" data-testid={`list-group-members-${group.id}`}>
               {roster.members.map((student) => (
                 <li key={student.profileId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2" data-testid={`row-group-member-${group.id}-${student.profileId}`}>
@@ -810,15 +830,15 @@ function GroupDetail({ group, onAssignTeacher, onChanged, onNotice, onDeleted }:
                   </span>
                   {group.canManageStudents && (confirmRemoveId === student.profileId
                     ? <span className="flex items-center gap-1.5 text-[11px] font-semibold">
-                        <span className="text-red-800">Qrupdan çıxarılsın?</span>
-                        <button type="button" className="focus-ring rounded-lg px-2 py-1 font-bold text-[hsl(var(--muted-foreground))]" onClick={() => setConfirmRemoveId(null)} disabled={busy}>Xeyr</button>
-                        <button type="button" className="focus-ring rounded-lg bg-red-700 px-2.5 py-1 font-bold text-white disabled:opacity-50" onClick={() => void removeStudent(student)} disabled={busy} data-testid={`button-group-remove-confirm-${group.id}-${student.profileId}`}>Bəli, çıxar</button>
+                        <span className="text-red-800">{t('removeAsk')}</span>
+                        <button type="button" className="focus-ring rounded-lg px-2 py-1 font-bold text-[hsl(var(--muted-foreground))]" onClick={() => setConfirmRemoveId(null)} disabled={busy}>{t('noWord')}</button>
+                        <button type="button" className="focus-ring rounded-lg bg-red-700 px-2.5 py-1 font-bold text-white disabled:opacity-50" onClick={() => void removeStudent(student)} disabled={busy} data-testid={`button-group-remove-confirm-${group.id}-${student.profileId}`}>{t('yesRemove')}</button>
                       </span>
-                    : <button type="button" className={`${smallButton} text-[hsl(var(--destructive))]`} onClick={() => setConfirmRemoveId(student.profileId)} data-testid={`button-group-remove-${group.id}-${student.profileId}`}><UserMinus size={13} /> Çıxar</button>)}
+                    : <button type="button" className={`${smallButton} text-[hsl(var(--destructive))]`} onClick={() => setConfirmRemoveId(student.profileId)} data-testid={`button-group-remove-${group.id}-${student.profileId}`}><UserMinus size={13} /> {t('remove')}</button>)}
                 </li>
               ))}
             </ul>}
-        {roster && roster.pendingCount > 0 && <p className="mt-1.5 text-[11px] font-semibold text-amber-800">{roster.pendingCount} tələbənin bu qrupa seçimi təsdiq gözləyir («Tələbələri idarə et» → «Müəllim seçimləri»).</p>}
+        {roster && roster.pendingCount > 0 && <p className="mt-1.5 text-[11px] font-semibold text-amber-800">{roster.pendingCount} {t('pendingManage')}</p>}
       </div>
     </div>
   );
@@ -826,6 +846,7 @@ function GroupDetail({ group, onAssignTeacher, onChanged, onNotice, onDeleted }:
 
 /** «Mənim cədvəlim» → dərsin tələbə siyahısı (yalnız baxış); dəyişiklik «Qruplar» bölməsində edilir. */
 export function GroupRosterReadOnly({ resourceId, onOpenGroups }: { resourceId: number; onOpenGroups?: () => void }) {
+  const { t } = useI18n();
   const [roster, setRoster] = useState<RosterResponse | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -844,18 +865,18 @@ export function GroupRosterReadOnly({ resourceId, onOpenGroups }: { resourceId: 
   return (
     <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.25)] p-3" data-testid={`section-teacher-lesson-roster-${resourceId}`}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]"><UsersRound size={13} /> Qrupun tələbələri{roster ? ` · ${roster.members.length}${roster.studentCapacity > 0 ? ` / ${roster.studentCapacity}` : ''}` : ''}</p>
-        {onOpenGroups && <button type="button" className={smallButton} onClick={onOpenGroups} data-testid={`button-roster-open-groups-${resourceId}`}><UserPlus size={13} /> Qruplarda idarə et</button>}
+        <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]"><UsersRound size={13} /> {t('groupStudents')}{roster ? ` · ${roster.members.length}${roster.studentCapacity > 0 ? ` / ${roster.studentCapacity}` : ''}` : ''}</p>
+        {onOpenGroups && <button type="button" className={smallButton} onClick={onOpenGroups} data-testid={`button-roster-open-groups-${resourceId}`}><UserPlus size={13} /> {t('manageInGroups')}</button>}
       </div>
       {error ? <p className="text-xs font-semibold text-red-800">{error}</p>
-        : !roster ? <p className="text-xs text-[hsl(var(--muted-foreground))]">Tələbələr yüklənir...</p>
-        : roster.members.length === 0 ? <p className="text-xs text-[hsl(var(--muted-foreground))]">Bu qrupda hələ tələbə yoxdur.</p>
+        : !roster ? <p className="text-xs text-[hsl(var(--muted-foreground))]">{t('studentsLoading')}</p>
+        : roster.members.length === 0 ? <p className="text-xs text-[hsl(var(--muted-foreground))]">{t('noStudentsInThisGroup')}</p>
         : <ul className="grid gap-1 sm:grid-cols-2">
             {roster.members.map((student) => (
               <li key={student.profileId} className="rounded-lg bg-[hsl(var(--card))] px-3 py-1.5 text-sm"><span className="font-semibold text-[hsl(var(--primary))]">{student.firstName} {student.lastName}</span> <span className="text-[11px] text-[hsl(var(--muted-foreground))]">{studentCode(student.studentNumber)}</span></li>
             ))}
           </ul>}
-      {roster && roster.pendingCount > 0 && <p className="mt-1.5 text-[11px] font-semibold text-amber-800">{roster.pendingCount} tələbənin seçimi təsdiq gözləyir.</p>}
+      {roster && roster.pendingCount > 0 && <p className="mt-1.5 text-[11px] font-semibold text-amber-800">{roster.pendingCount} {t('pendingManage')}</p>}
     </div>
   );
 }

@@ -1619,6 +1619,7 @@ function AnnouncementList() {
 }
 
 function ArticleForm() {
+  const { t } = useI18n();
   const [form, setForm] = useState<ArticleInput>({ title: '', excerpt: '', body: '', author: '' });
   const [notice, setNotice] = useState('');
   const mutation = useCreateArticle();
@@ -1634,34 +1635,35 @@ function ArticleForm() {
           queryClient.invalidateQueries({ queryKey: getGetArticlesQueryKey() }),
         ]);
         setForm({ title: '', excerpt: '', body: '', author: '' });
-        setNotice('Məqalə uğurla yayımlandı.');
+        setNotice(t('articlePublished'));
       },
-      onError: () => setNotice('Məqalə yayımlanmadı. Məlumatları yoxlayın.'),
+      onError: () => setNotice(t('articleNotPublished')),
     });
   };
 
   return (
     <form onSubmit={submit} className="space-y-5" data-testid="form-create-article">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Məqalənin başlığı"><input required minLength={3} maxLength={160} className={inputClass} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Məqalə başlığı" data-testid="input-article-title" /></Field>
-        <Field label="Müəllif"><input required maxLength={120} className={inputClass} value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} placeholder="Ad və soyad" data-testid="input-article-author" /></Field>
+        <Field label={t('artTitle')}><input required minLength={3} maxLength={160} className={inputClass} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder={t('artTitlePh')} data-testid="input-article-title" /></Field>
+        <Field label={t('artAuthor')}><input required maxLength={120} className={inputClass} value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} placeholder={t('authorPh')} data-testid="input-article-author" /></Field>
       </div>
-      <Field label="Qısa təqdimat" hint="Ana səhifədə oxucunun ilk görəcəyi qısa mətn.">
-        <textarea required maxLength={320} rows={3} className={`${inputClass} resize-y`} value={form.excerpt} onChange={(e) => setForm({ ...form, excerpt: e.target.value })} placeholder="Məqalənin qısa təqdimatını yazın." data-testid="textarea-article-excerpt" />
+      <Field label={t('artIntro')} hint={t('artIntroHint')}>
+        <textarea required maxLength={320} rows={3} className={`${inputClass} resize-y`} value={form.excerpt} onChange={(e) => setForm({ ...form, excerpt: e.target.value })} placeholder={t('artIntroPh')} data-testid="textarea-article-excerpt" />
       </Field>
-      <Field label="Məqalənin mətni" hint="Mətn təhlükəsiz plain text kimi göstəriləcək.">
-        <textarea required maxLength={12000} rows={10} className={`${inputClass} resize-y`} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="Məqalənin tam mətnini yazın." data-testid="textarea-article-body" />
+      <Field label={t('artBody')} hint={t('artBodyHint')}>
+        <textarea required maxLength={12000} rows={10} className={`${inputClass} resize-y`} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder={t('artBodyPh')} data-testid="textarea-article-body" />
       </Field>
-      <div className="flex justify-end"><button type="submit" className={buttonClass} disabled={mutation.isPending} data-testid="button-create-article"><BookOpenText size={16} /> {mutation.isPending ? 'Yayımlanır...' : 'Məqaləni yayımla'}</button></div>
-      <FormNotice text={notice} error={notice.includes('yayımlanmadı')} />
+      <div className="flex justify-end"><button type="submit" className={buttonClass} disabled={mutation.isPending} data-testid="button-create-article"><BookOpenText size={16} /> {mutation.isPending ? t('publishing') : t('publishArticle')}</button></div>
+      <FormNotice text={notice} error={notice.includes(t('articleNotPublished')) || notice.includes('yayımlanmadı')} />
     </form>
   );
 }
 
 function DailyBenefitForm() {
+  const { t } = useI18n();
   const days = [
-    ['monday', '1-ci gün'], ['tuesday', '2-ci gün'], ['wednesday', '3-cü gün'],
-    ['thursday', '4-cü gün'], ['friday', '5-ci gün'], ['saturday', '6-cı gün'], ['sunday', '7-ci gün'],
+    ['monday', `1. ${t('benefitDay')}`], ['tuesday', `2. ${t('benefitDay')}`], ['wednesday', `3. ${t('benefitDay')}`],
+    ['thursday', `4. ${t('benefitDay')}`], ['friday', `5. ${t('benefitDay')}`], ['saturday', `6. ${t('benefitDay')}`], ['sunday', `7. ${t('benefitDay')}`],
   ] as const;
   type Day = typeof days[number][0];
   type DayForm = Record<Day, { body: string; source: string }>;
@@ -1701,7 +1703,7 @@ function DailyBenefitForm() {
   const saveDay = async (day: Day, label: string) => {
     const entry = form[day];
     if (!entry.body.trim() || !entry.source.trim()) {
-      setNotice(`${label} üçün fayda və mənbəni doldurun.`);
+      setNotice(`${label}: ${t('fillBenefit')}`);
       return;
     }
     setSavingDay(day);
@@ -1718,9 +1720,9 @@ function DailyBenefitForm() {
         queryClient.invalidateQueries({ queryKey: getGetDailyBenefitQueryKey() }),
       ]);
       setRecentlyUpdatedDays((current) => ({ ...current, [day]: new Date().toISOString() }));
-      setNotice(`${label} üçün fayda əlavə edildi.`);
+      setNotice(`${label}: ${t('benefitAdded')}`);
     } catch {
-      setNotice(`${label} üçün fayda yadda saxlanılmadı.`);
+      setNotice(`${label}: ${t('benefitNotSaved')}`);
     } finally {
       setSavingDay(null);
     }
@@ -1748,26 +1750,27 @@ function DailyBenefitForm() {
         queryClient.invalidateQueries({ queryKey: getGetAdminDailyBenefitsQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetDailyBenefitQueryKey() }),
       ]);
-      setNotice('Həftənin 7 günü üçün faydalar yadda saxlanıldı.');
+      setNotice(t('weekSaved'));
     } catch {
-      setNotice('Faydalar yadda saxlanılmadı. Məlumatları yoxlayın.');
+      setNotice(t('benefitsNotSaved'));
     }
   };
 
   return (
     <form onSubmit={submit} className="space-y-5" data-testid="form-create-daily-benefit">
-      <div><p className="text-sm font-bold text-[hsl(var(--primary))]">Həftənin faydaları</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hər xana bir gün üçündür. Müəllim xananı doldurduqdan sonra həmin günün faydası avtomatik göstəriləcək.</p></div>
+      <div><p className="text-sm font-bold text-[hsl(var(--primary))]">{t('weekBenefits')}</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('weekBenefitsHint')}</p></div>
       <div className="space-y-4">{days.map(([day, label]) => <div key={day} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.22)] p-4">
-        <button type="button" onClick={() => setOpenDay((current) => current === day ? null : day)} aria-expanded={openDay === day} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-2.5 text-sm font-bold text-[hsl(var(--primary-foreground))]" data-testid={`button-daily-benefit-day-${day}`}>{isPastBenefitStale(day) && <span className="h-2.5 w-2.5 rounded-full bg-red-400 shadow-[0_0_0_3px_hsl(0_84%_60%/.2)]" title="Bu günün faydası yenilənməyib" aria-label="Fayda yenilənməyib" />}{label}</button>
-        {openDay === day && <div className="mt-3 space-y-3"><textarea maxLength={2000} rows={3} className={`${inputClass} resize-y`} value={form[day].body} onChange={(e) => setForm((current) => ({ ...current, [day]: { ...current[day], body: e.target.value } }))} placeholder={`${label} üçün faydanı yazın.`} data-testid={`textarea-daily-benefit-body-${day}`} /><input maxLength={200} className={inputClass} value={form[day].source} onChange={(e) => setForm((current) => ({ ...current, [day]: { ...current[day], source: e.target.value } }))} placeholder="Mənbə" data-testid={`input-daily-benefit-source-${day}`} /><div className="flex justify-end"><button type="button" onClick={() => void saveDay(day, label)} disabled={savingDay !== null} className={buttonClass} data-testid={`button-add-daily-benefit-${day}`}><Plus size={16} /> {savingDay === day ? 'Əlavə olunur...' : 'Əlavə et'}</button></div></div>}
+        <button type="button" onClick={() => setOpenDay((current) => current === day ? null : day)} aria-expanded={openDay === day} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-2.5 text-sm font-bold text-[hsl(var(--primary-foreground))]" data-testid={`button-daily-benefit-day-${day}`}>{isPastBenefitStale(day) && <span className="h-2.5 w-2.5 rounded-full bg-red-400 shadow-[0_0_0_3px_hsl(0_84%_60%/.2)]" title={t('staleBenefit')} aria-label={t('staleBenefit')} />}{label}</button>
+        {openDay === day && <div className="mt-3 space-y-3"><textarea maxLength={2000} rows={3} className={`${inputClass} resize-y`} value={form[day].body} onChange={(e) => setForm((current) => ({ ...current, [day]: { ...current[day], body: e.target.value } }))} placeholder={t('benefitPh')} data-testid={`textarea-daily-benefit-body-${day}`} /><input maxLength={200} className={inputClass} value={form[day].source} onChange={(e) => setForm((current) => ({ ...current, [day]: { ...current[day], source: e.target.value } }))} placeholder={t('source')} data-testid={`input-daily-benefit-source-${day}`} /><div className="flex justify-end"><button type="button" onClick={() => void saveDay(day, label)} disabled={savingDay !== null} className={buttonClass} data-testid={`button-add-daily-benefit-${day}`}><Plus size={16} /> {savingDay === day ? t('adding') : t('add')}</button></div></div>}
       </div>)}</div>
-      <div className="flex justify-end"><button type="submit" className={buttonClass} disabled={benefitsQuery.isLoading || benefitsQuery.isFetching} data-testid="button-create-daily-benefit"><Quote size={16} /> Yadda saxla</button></div>
-      <FormNotice text={notice} error={notice.includes('yadda saxlanılmadı')} />
+      <div className="flex justify-end"><button type="submit" className={buttonClass} disabled={benefitsQuery.isLoading || benefitsQuery.isFetching} data-testid="button-create-daily-benefit"><Quote size={16} /> {t('save')}</button></div>
+      <FormNotice text={notice} error={notice.includes(t('benefitNotSaved')) || notice.includes(t('benefitsNotSaved')) || notice.includes('saxlanılmadı')} />
     </form>
   );
 }
 
 function ArticleList({ articles }: { articles: Article[] }) {
+  const { t } = useI18n();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<ArticleInput>({ title: '', excerpt: '', body: '', author: '' });
   const [notice, setNotice] = useState('');
@@ -1776,22 +1779,22 @@ function ArticleList({ articles }: { articles: Article[] }) {
   const saveEdit = async (event: FormEvent) => {
     event.preventDefault();
     const response = await fetch(apiUrl(`/admin/articles/${editingId}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-    if (!response.ok) { setNotice('Məqalə yenilənmədi.'); return; }
-    setEditingId(null); setNotice('Məqalə yeniləndi.');
+    if (!response.ok) { setNotice(t('articleNotUpdated')); return; }
+    setEditingId(null); setNotice(t('articleUpdated'));
     await Promise.all([queryClient.invalidateQueries({ queryKey: getGetAdminArticlesQueryKey() }), queryClient.invalidateQueries({ queryKey: getGetArticlesQueryKey() })]);
   };
   const deleteArticle = async (articleId: number) => {
-    if (!window.confirm('Bu məqaləni silmək istədiyinizə əminsiniz?')) return;
+    if (!window.confirm(t('confirmDeleteArticle'))) return;
     const response = await fetch(apiUrl(`/admin/articles/${articleId}`), { method: 'DELETE' });
-    if (!response.ok) { setNotice('Məqalə silinmədi.'); return; }
-    setNotice('Məqalə silindi.');
+    if (!response.ok) { setNotice(t('articleNotDeleted')); return; }
+    setNotice(t('articleDeleted'));
     await Promise.all([queryClient.invalidateQueries({ queryKey: getGetAdminArticlesQueryKey() }), queryClient.invalidateQueries({ queryKey: getGetArticlesQueryKey() })]);
   };
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Son yayımlananlar</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Məqalələr</h3></div><BookOpenText className="text-[hsl(var(--secondary-foreground))]" size={20} /></div>
-      {articles.length ? <div className="space-y-2">{articles.slice(0, 5).map((article) => editingId === article.id ? <form key={article.id} onSubmit={saveEdit} className="space-y-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.55)] p-3"><input required className={inputClass} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Başlıq" /><input required className={inputClass} value={form.author} onChange={(event) => setForm({ ...form, author: event.target.value })} placeholder="Müəllif" /><textarea required rows={2} className={`${inputClass} resize-y`} value={form.excerpt} onChange={(event) => setForm({ ...form, excerpt: event.target.value })} placeholder="Qısa təqdimat" /><textarea required rows={5} className={`${inputClass} resize-y`} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder="Məqalənin mətni" /><div className="flex justify-end gap-2"><button type="button" onClick={() => setEditingId(null)} className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))]">Ləğv et</button><button type="submit" className={buttonClass}>Yadda saxla</button></div></form> : <div key={article.id} className="rounded-xl bg-[hsl(var(--muted)/.55)] p-3"><div className="flex items-start justify-between gap-2"><p className="text-sm font-bold text-[hsl(var(--primary))]">{article.title}</p><div className="flex shrink-0 gap-1"><button type="button" onClick={() => startEdit(article)} className="focus-ring rounded-lg px-2 py-1 text-[11px] font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))]">Redaktə et</button><button type="button" onClick={() => void deleteArticle(article.id)} className="focus-ring rounded-lg px-2 py-1 text-[11px] font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--card))]">Sil</button></div></div><p className="mt-1 line-clamp-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{article.excerpt}</p><p className="mt-2 text-[10px] font-bold uppercase tracking-[.1em] text-[hsl(var(--secondary-foreground))]">{formatPersonName(article.author)}</p></div>)}</div> : <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] px-5 py-10 text-center"><FileText className="mx-auto text-[hsl(var(--muted-foreground))]" size={22} /><p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Hələ məqalə əlavə edilməyib.</p></div>}
-      {notice && <FormNotice text={notice} error={notice.includes('məqalə') && !notice.includes('yeniləndi') && !notice.includes('silindi')} />}
+      <div className="mb-4 flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{t('recentPublished')}</p><h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('articles')}</h3></div><BookOpenText className="text-[hsl(var(--secondary-foreground))]" size={20} /></div>
+      {articles.length ? <div className="space-y-2">{articles.slice(0, 5).map((article) => editingId === article.id ? <form key={article.id} onSubmit={saveEdit} className="space-y-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.55)] p-3"><input required className={inputClass} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder={t('artTitlePh')} /><input required className={inputClass} value={form.author} onChange={(event) => setForm({ ...form, author: event.target.value })} placeholder={t('artAuthor')} /><textarea required rows={2} className={`${inputClass} resize-y`} value={form.excerpt} onChange={(event) => setForm({ ...form, excerpt: event.target.value })} placeholder={t('artIntro')} /><textarea required rows={5} className={`${inputClass} resize-y`} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder={t('artBody')} /><div className="flex justify-end gap-2"><button type="button" onClick={() => setEditingId(null)} className="focus-ring rounded-lg px-3 py-2 text-xs font-bold text-[hsl(var(--muted-foreground))]">{t('cancel')}</button><button type="submit" className={buttonClass}>{t('save')}</button></div></form> : <div key={article.id} className="rounded-xl bg-[hsl(var(--muted)/.55)] p-3"><div className="flex items-start justify-between gap-2"><p className="text-sm font-bold text-[hsl(var(--primary))]">{article.title}</p><div className="flex shrink-0 gap-1"><button type="button" onClick={() => startEdit(article)} className="focus-ring rounded-lg px-2 py-1 text-[11px] font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))]">{t('edit')}</button><button type="button" onClick={() => void deleteArticle(article.id)} className="focus-ring rounded-lg px-2 py-1 text-[11px] font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--card))]">{t('delete')}</button></div></div><p className="mt-1 line-clamp-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{article.excerpt}</p><p className="mt-2 text-[10px] font-bold uppercase tracking-[.1em] text-[hsl(var(--secondary-foreground))]">{formatPersonName(article.author)}</p></div>)}</div> : <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.2)] px-5 py-10 text-center"><FileText className="mx-auto text-[hsl(var(--muted-foreground))]" size={22} /><p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">{t('noArticles')}</p></div>}
+      {notice && <FormNotice text={notice} error={notice.includes(t('articleNotUpdated')) || notice.includes(t('articleNotDeleted')) || (notice.includes('məqalə') && !notice.includes('yeniləndi') && !notice.includes('silindi'))} />}
     </div>
   );
 }

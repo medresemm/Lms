@@ -638,9 +638,9 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
             {!scheduleAccessApproved && (
               <div className="rounded-xl border border-dashed border-[hsl(var(--accent)/.65)] bg-[hsl(var(--accent)/.12)] px-5 py-8 text-center" data-testid="state-schedule-access-pending">
                 <CalendarDays className="mx-auto text-[hsl(var(--secondary-foreground))]" size={24} />
-                 <p className="mt-3 text-sm font-bold text-[hsl(var(--primary))]">{onboardingRequired ? (onboardingExamId ? 'Dərs cədvəlini açmaq üçün qəbul testini tamamlayın' : 'Qəbul imtahanı hələ təyin edilməyib') : 'Dərs cədvəlinə giriş gözləmədədir'}</p>
-                 <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[hsl(var(--muted-foreground))]">{onboardingRequired ? (onboardingExamId ? 'Yeni tələbələr üçün olan testi verin. Test tamamlandıqdan və sahib nəticəni təsdiqlədikdən sonra dərs cədvəliniz açılacaq.' : 'Sahib qəbul imtahanını açdıqdan sonra test burada görünəcək. İmtahanı verib nəticənin təsdiqlənməsini gözləyin.') : 'Dərs cədvəlini görmək üçün akademiya əməkdaşının girişinizi təsdiqləməsi gözlənilir.'}</p>
-                 {onboardingRequired && onOpenOnboardingExam && <button type="button" onClick={() => onOpenOnboardingExam(onboardingExamId ?? undefined)} className="focus-ring mt-4 inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-xs font-bold text-[hsl(var(--primary-foreground))]" data-testid="button-open-onboarding-exam"><ClipboardList size={15} /> Qəbul testinə keç</button>}
+                 <p className="mt-3 text-sm font-bold text-[hsl(var(--primary))]">{onboardingRequired ? (onboardingExamId ? t('scheduleGateExam') : t('scheduleGateNoExam')) : t('scheduleGateWait')}</p>
+                 <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-[hsl(var(--muted-foreground))]">{onboardingRequired ? (onboardingExamId ? t('scheduleGateExamBody') : t('scheduleGateNoExamBody')) : t('scheduleGateWaitBody')}</p>
+                 {onboardingRequired && onOpenOnboardingExam && <button type="button" onClick={() => onOpenOnboardingExam(onboardingExamId ?? undefined)} className="focus-ring mt-4 inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-xs font-bold text-[hsl(var(--primary-foreground))]" data-testid="button-open-onboarding-exam"><ClipboardList size={15} /> {t('goExam')}</button>}
               </div>
             )}
             {scheduleAccessApproved && (

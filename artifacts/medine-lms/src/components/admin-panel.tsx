@@ -2093,11 +2093,12 @@ function lessonTimesForSave(stored: string | null | undefined, days: string[], a
 }
 
 function CourseActivationSettings() {
+  const { t } = useI18n();
   const [activeTerms, setActiveTerms] = useState<number[]>([1, 2, 3, 4]);
   const [isLoading, setIsLoading] = useState(true);
   const [savingTerm, setSavingTerm] = useState<number | null>(null);
   const [notice, setNotice] = useState('');
-  const labels = { 5: '3-cü tədris ili', 7: '4-cü tədris ili' } as const;
+  const labels = { 5: t('year3'), 7: t('year4') } as const;
   const courseTerms = { 5: [5, 6], 7: [7, 8] } as const;
 
   useEffect(() => {
@@ -2107,7 +2108,7 @@ function CourseActivationSettings() {
         return response.json() as Promise<{ activeTermNumbers: number[] }>;
       })
       .then((result) => setActiveTerms(result.activeTermNumbers))
-      .catch(() => setNotice('Dərs mərhələlərinin aktivlik məlumatı yüklənmədi.'))
+      .catch(() => setNotice(t('stagesLoadFail')))
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -2126,11 +2127,11 @@ function CourseActivationSettings() {
         body: JSON.stringify({ activeTermNumbers: nextActiveTerms }),
       });
       const result = await response.json().catch(() => ({})) as { activeTermNumbers?: number[]; error?: string };
-      if (!response.ok || !result.activeTermNumbers) throw new Error(result.error || 'Dərs mərhələsinin aktivliyi dəyişdirilə bilmədi.');
+      if (!response.ok || !result.activeTermNumbers) throw new Error(result.error || t('stageToggleFail'));
       setActiveTerms(result.activeTermNumbers);
-      setNotice(`${labels[courseStartTerm]} ${shouldActivate ? 'aktivləşdirildi' : 'deaktiv edildi'}.`);
+      setNotice(`${labels[courseStartTerm]} ${shouldActivate ? t('activated') : t('deactivated')}.`);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Dərs mərhələsinin aktivliyi dəyişdirilə bilmədi.');
+      setNotice(error instanceof Error ? error.message : t('stageToggleFail'));
     } finally {
       setSavingTerm(null);
     }
@@ -2139,28 +2140,28 @@ function CourseActivationSettings() {
   return (
     <section className="space-y-5" data-testid="section-course-activation">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Dərs mərhələləri</p>
-        <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Dərs mərhələlərini idarə et</h3>
-        <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">3-cü və 4-cü dərs mərhələsini aktivləşdirin. Aktiv olmayan mərhələ tələbə kabinetində görünməyəcək.</p>
+        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('stageEyebrow')}</p>
+        <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('stageTitle')}</h3>
+        <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('stageHint')}</p>
       </div>
-      {isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Dərs mərhələlərinin aktivlik vəziyyəti yüklənir...</p> : (
+      {isLoading ? <p className="text-sm text-[hsl(var(--muted-foreground))]">{t('stagesLoading')}</p> : (
         <div className="grid gap-3 sm:grid-cols-2">
           {([5, 7] as const).map((courseStartTerm) => {
             const terms = courseTerms[courseStartTerm];
             const active = terms.every((term) => activeTerms.includes(term));
             return <article key={courseStartTerm} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.25)] p-4">
               <div className="flex items-start justify-between gap-3">
-                <div><p className="font-serif text-xl text-[hsl(var(--primary))]">{labels[courseStartTerm]}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{terms[0]}–{terms[1]}-ci semestrlər və dərs materialları</p></div>
-                <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>{active ? 'Aktiv' : 'Bağlı'}</span>
+                <div><p className="font-serif text-xl text-[hsl(var(--primary))]">{labels[courseStartTerm]}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{terms[0]}–{terms[1]}. {t('stageTerms')}</p></div>
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>{active ? t('activeState') : t('closedState')}</span>
               </div>
               <button type="button" onClick={() => void toggleTerm(courseStartTerm)} disabled={savingTerm !== null} className={`${active ? 'border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]' : buttonClass} mt-4 w-full`} data-testid={`button-toggle-course-${courseStartTerm}`}>
-                {savingTerm === courseStartTerm ? 'Yadda saxlanır...' : active ? `${labels[courseStartTerm]} deaktiv et` : `${labels[courseStartTerm]} aktiv et`}
+                {savingTerm === courseStartTerm ? t('saving') : active ? `${labels[courseStartTerm]} ${t('deactivate')}` : `${labels[courseStartTerm]} ${t('activate')}`}
               </button>
             </article>;
           })}
         </div>
       )}
-      {notice && <FormNotice text={notice} error={notice.includes('yüklənmədi') || notice.includes('dəyişdirilə bilmədi')} />}
+      {notice && <FormNotice text={notice} error={notice.includes(t('stagesLoadFail')) || notice.includes(t('stageToggleFail')) || notice.includes('yüklənmədi') || notice.includes('dəyişdirilə bilmədi')} />}
     </section>
   );
 }
@@ -3171,6 +3172,8 @@ const adminTileClass = (_value: string, active: boolean) =>
   `focus-ring relative flex min-h-[64px] flex-col items-start justify-center gap-1.5 rounded-xl border px-2.5 py-2 text-left text-[11px] font-bold leading-4 text-[hsl(var(--primary))] transition hover:-translate-y-0.5 ${active ? 'border-[hsl(var(--primary))] bg-[hsl(var(--accent)/.55)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] hover:bg-[hsl(var(--muted))]'}`;
 
 function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: boolean }) {
+  const { t } = useI18n();
+  const roleName = (role: AdminUser['role']) => role === 'owner' ? t('systemOwner') : role === 'owner_assistant' ? t('roleBoard') : role === 'teacher' || role === 'admin' ? t('roleTeacher') : role === 'supervisor' ? t('roleSupervisor') : role === 'none' ? t('plainUser') : roleLabels[role];
   const usersQuery = useGetAdminUsers({ query: { queryKey: getGetAdminUsersQueryKey() } });
   const updateRole = useUpdateAdminUserRole();
   const deleteUser = useDeleteAdminUser();
@@ -3249,9 +3252,9 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
          current?.map((item) => item.id === updatedUser.id ? updatedUser : item),
        );
        await queryClient.invalidateQueries({ queryKey: getGetAdminUsersQueryKey(), refetchType: 'none' });
-       setNotice(`${user.firstName || user.username || user.email} üçün rol yeniləndi. Yeni rol istifadəçi səhifəni yenilədikdə aktiv olacaq.`);
+       setNotice(`${user.firstName || user.username || user.email}: ${t('roleUpdated')}`);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'İstifadəçi rolu yenilənə bilmədi.');
+      setNotice(error instanceof Error ? error.message : t('roleNotUpdated'));
     } finally {
       setBusyUserId(null);
     }
@@ -3287,30 +3290,30 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
   return (
     <div className="space-y-4" data-testid="owner-role-management">
       <div className="rounded-2xl bg-[hsl(var(--accent)/.35)] p-4 text-sm leading-6 text-[hsl(var(--primary))]">
-        Buradan qeydiyyatdan keçmiş istifadəçilərə müəllim, nəzarətçi və ya idarə heyəti rolu verə bilərsiniz. Sistem sahibi sabitdir və bu bölmədən dəyişdirilə bilməz.
+        {t('roleIntro')}
       </div>
          <div className="grid gap-4 md:grid-cols-3" data-testid="staff-role-summary">
          <section className="order-2 rounded-2xl border border-[hsl(var(--primary))] bg-[hsl(var(--primary))] p-5 text-[hsl(var(--primary-foreground))]" data-testid="teacher-summary">
-           <button type="button" onClick={() => setExpandedSummaryRole((current) => current === 'teacher' ? null : 'teacher')} aria-expanded={expandedSummaryRole === 'teacher'} className="focus-ring flex w-full items-start justify-between gap-4 rounded-xl text-left"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--accent))]">Müəllim heyəti</p><h3 className="mt-2 font-serif text-3xl">{teachers.length}</h3><p className="mt-1 text-xs text-[hsl(var(--primary-foreground)/.65)]">{expandedSummaryRole === 'teacher' ? 'adları gizlət' : 'adları görmək üçün basın'}</p></div><UsersRound className="text-[hsl(var(--accent))]" size={24} /></button>
-            {expandedSummaryRole === 'teacher' && (teachers.length ? <div className="mt-5 flex flex-wrap gap-2">{teachers.map((teacher, index) => <button type="button" key={teacher.id} onClick={() => setViewingUser(teacher)} className="focus-ring rounded-full bg-[hsl(var(--primary-foreground)/.12)] px-3 py-1.5 text-xs font-semibold hover:bg-[hsl(var(--primary-foreground)/.22)]">{teacher.role === 'owner' ? 'Sahib' : formatTeacherNumber(index)} · {adminUserName(teacher)}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--primary-foreground)/.65)]">Hələ müəllim təyin edilməyib.</p>)}
+           <button type="button" onClick={() => setExpandedSummaryRole((current) => current === 'teacher' ? null : 'teacher')} aria-expanded={expandedSummaryRole === 'teacher'} className="focus-ring flex w-full items-start justify-between gap-4 rounded-xl text-left"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--accent))]">{t('teacherStaff')}</p><h3 className="mt-2 font-serif text-3xl">{teachers.length}</h3><p className="mt-1 text-xs text-[hsl(var(--primary-foreground)/.65)]">{expandedSummaryRole === 'teacher' ? t('hideNames') : t('showNames')}</p></div><UsersRound className="text-[hsl(var(--accent))]" size={24} /></button>
+            {expandedSummaryRole === 'teacher' && (teachers.length ? <div className="mt-5 flex flex-wrap gap-2">{teachers.map((teacher, index) => <button type="button" key={teacher.id} onClick={() => setViewingUser(teacher)} className="focus-ring rounded-full bg-[hsl(var(--primary-foreground)/.12)] px-3 py-1.5 text-xs font-semibold hover:bg-[hsl(var(--primary-foreground)/.22)]">{teacher.role === 'owner' ? t('systemOwner') : formatTeacherNumber(index)} · {adminUserName(teacher)}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--primary-foreground)/.65)]">{t('noTeachersYet')}</p>)}
          </section>
           <section className="order-1 rounded-2xl border border-[hsl(var(--secondary)/.75)] bg-[hsl(var(--secondary)/.48)] p-5 shadow-[var(--shadow-xs)]" data-testid="owner-assistant-summary">
-           <button type="button" onClick={() => setExpandedSummaryRole((current) => current === 'assistant' ? null : 'assistant')} aria-expanded={expandedSummaryRole === 'assistant'} className="focus-ring flex w-full items-start justify-between gap-4 rounded-xl text-left"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">İdarə heyəti</p><h3 className="mt-2 font-serif text-3xl text-[hsl(var(--primary))]">{ownerAssistants.length}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{expandedSummaryRole === 'assistant' ? 'adları gizlət' : 'adları görmək üçün basın'}</p></div><UserCog className="text-[hsl(var(--secondary-foreground))]" size={24} /></button>
-            {expandedSummaryRole === 'assistant' && (ownerAssistants.length ? <div className="mt-5 flex flex-wrap gap-2">{ownerAssistants.map((assistant, index) => <button type="button" key={assistant.id} onClick={() => setViewingUser(assistant)} className="focus-ring rounded-full bg-[hsl(var(--muted))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--border))]">{formatOwnerAssistantNumber(index)} · {adminUserName(assistant)}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--muted-foreground))]">Hələ idarə heyəti təyin edilməyib.</p>)}
+           <button type="button" onClick={() => setExpandedSummaryRole((current) => current === 'assistant' ? null : 'assistant')} aria-expanded={expandedSummaryRole === 'assistant'} className="focus-ring flex w-full items-start justify-between gap-4 rounded-xl text-left"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('roleBoard')}</p><h3 className="mt-2 font-serif text-3xl text-[hsl(var(--primary))]">{ownerAssistants.length}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{expandedSummaryRole === 'assistant' ? t('hideNames') : t('showNames')}</p></div><UserCog className="text-[hsl(var(--secondary-foreground))]" size={24} /></button>
+            {expandedSummaryRole === 'assistant' && (ownerAssistants.length ? <div className="mt-5 flex flex-wrap gap-2">{ownerAssistants.map((assistant, index) => <button type="button" key={assistant.id} onClick={() => setViewingUser(assistant)} className="focus-ring rounded-full bg-[hsl(var(--muted))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--border))]">{formatOwnerAssistantNumber(index)} · {adminUserName(assistant)}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--muted-foreground))]">{t('noBoardYet')}</p>)}
          </section>
           <section className="order-3 rounded-2xl border border-[hsl(var(--accent)/.8)] bg-[hsl(var(--accent)/.22)] p-5 shadow-[var(--shadow-xs)]" data-testid="supervisor-summary">
-           <button type="button" onClick={() => setExpandedSummaryRole((current) => current === 'supervisor' ? null : 'supervisor')} aria-expanded={expandedSummaryRole === 'supervisor'} className="focus-ring flex w-full items-start justify-between gap-4 rounded-xl text-left"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Nəzarətçilər</p><h3 className="mt-2 font-serif text-3xl text-[hsl(var(--primary))]">{supervisors.length}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{expandedSummaryRole === 'supervisor' ? 'adları gizlət' : 'adları görmək üçün basın'}</p></div><ShieldCheck className="text-[hsl(var(--secondary-foreground))]" size={24} /></button>
-            {expandedSummaryRole === 'supervisor' && (supervisors.length ? <div className="mt-5 flex flex-wrap gap-2">{supervisors.map((supervisor, index) => <button type="button" key={supervisor.id} onClick={() => setViewingUser(supervisor)} className="focus-ring rounded-full bg-[hsl(var(--muted))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--border))]">{formatSupervisorNumber(index)} · {adminUserName(supervisor)}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--muted-foreground))]">Hələ nəzarətçi təyin edilməyib.</p>)}
+           <button type="button" onClick={() => setExpandedSummaryRole((current) => current === 'supervisor' ? null : 'supervisor')} aria-expanded={expandedSummaryRole === 'supervisor'} className="focus-ring flex w-full items-start justify-between gap-4 rounded-xl text-left"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('roleSupervisor')}</p><h3 className="mt-2 font-serif text-3xl text-[hsl(var(--primary))]">{supervisors.length}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{expandedSummaryRole === 'supervisor' ? t('hideNames') : t('showNames')}</p></div><ShieldCheck className="text-[hsl(var(--secondary-foreground))]" size={24} /></button>
+            {expandedSummaryRole === 'supervisor' && (supervisors.length ? <div className="mt-5 flex flex-wrap gap-2">{supervisors.map((supervisor, index) => <button type="button" key={supervisor.id} onClick={() => setViewingUser(supervisor)} className="focus-ring rounded-full bg-[hsl(var(--muted))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--border))]">{formatSupervisorNumber(index)} · {adminUserName(supervisor)}</button>)}</div> : <p className="mt-5 text-xs text-[hsl(var(--muted-foreground))]">{t('noSupervisorsYet')}</p>)}
          </section>
        </div>
-      <h3 id="user-role-management-list" className="pt-2 font-serif text-2xl text-[hsl(var(--primary))]">İstifadəçi rollarını idarə et</h3>
+      <h3 id="user-role-management-list" className="pt-2 font-serif text-2xl text-[hsl(var(--primary))]">{t('manageRoles')}</h3>
        {canConfigurePermissions && <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => setPermissionRole('teacher')} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-configure-teacher-permissions">Müəllim rollarını təyin et</button>
-        <button type="button" onClick={() => setPermissionRole('supervisor')} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-configure-supervisor-permissions">Nəzarətçi rollarını təyin et</button>
+        <button type="button" onClick={() => setPermissionRole('teacher')} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-configure-teacher-permissions">{t('setTeacherRoles')}</button>
+        <button type="button" onClick={() => setPermissionRole('supervisor')} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]" data-testid="button-configure-supervisor-permissions">{t('setSupervisorRoles')}</button>
        </div>}
-      <button type="button" disabled={!canConfigurePermissions} onClick={() => setPermissionRole('owner_assistant')} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-manage-owner-assistant-roles">İdarə heyətinin ümumi icazələri</button>
+      <button type="button" disabled={!canConfigurePermissions} onClick={() => setPermissionRole('owner_assistant')} className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-manage-owner-assistant-roles">{t('boardPerms')}</button>
       {users.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-7 text-center text-sm text-[hsl(var(--muted-foreground))]">Hələ qeydiyyatdan keçən istifadəçi yoxdur.</p>
+        <p className="rounded-xl border border-dashed border-[hsl(var(--border))] p-7 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noUsersYet')}</p>
       ) : (
         <div className="space-y-3">
           {sortedUsers.map((user) => {
@@ -3325,27 +3328,27 @@ function RoleManagement({ canConfigurePermissions }: { canConfigurePermissions: 
                     <p className="truncate font-bold text-[hsl(var(--primary))]">{adminUserName(user)}</p>
                     <p className="mt-1 truncate text-xs text-[hsl(var(--muted-foreground))]">{user.email}{user.username ? ` · @${user.username}` : ''}</p>
                   </div>
-                 <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${roleBadgeClass(user.role)}`}>{isOwner ? 'N1 · Sistem sahibi' : user.role === 'owner_assistant' ? `${formatOwnerAssistantNumber(ownerAssistants.findIndex((assistant) => assistant.id === user.id))} · ${roleLabels[user.role]}` : user.role === 'teacher' || user.role === 'admin' ? `${formatTeacherNumber(teachers.findIndex((teacher) => teacher.id === user.id))} · ${roleLabels[user.role]}` : user.role === 'supervisor' ? `${formatSupervisorNumber(supervisors.findIndex((supervisor) => supervisor.id === user.id))} · ${roleLabels[user.role]}` : roleLabels[user.role]}</span>
+                 <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${roleBadgeClass(user.role)}`}>{isOwner ? `N1 · ${t('systemOwner')}` : user.role === 'owner_assistant' ? `${formatOwnerAssistantNumber(ownerAssistants.findIndex((assistant) => assistant.id === user.id))} · ${roleName(user.role)}` : user.role === 'teacher' || user.role === 'admin' ? `${formatTeacherNumber(teachers.findIndex((teacher) => teacher.id === user.id))} · ${roleName(user.role)}` : user.role === 'supervisor' ? `${formatSupervisorNumber(supervisors.findIndex((supervisor) => supervisor.id === user.id))} · ${roleName(user.role)}` : roleName(user.role)}</span>
                 </div>
                 {isOwner ? (
-                  <p className="mt-4 text-xs font-semibold text-[hsl(var(--muted-foreground))]">Bu hesab sistem sahibidir; rolunu dəyişmək mümkün deyil.</p>
+                  <p className="mt-4 text-xs font-semibold text-[hsl(var(--muted-foreground))]">{t('ownerLocked')}</p>
                 ) : (
                   <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-[hsl(var(--border))] pt-4">
                     <label className="min-w-48 flex-1">
-                      <span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Səlahiyyət</span>
+                      <span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('authority')}</span>
                       <select value={role} onChange={(event) => setDraftRoles((current) => ({ ...current, [user.id]: event.target.value as typeof role }))} className={inputClass} data-testid={`select-user-role-${user.id}`}>
-                        <option value={UserRoleUpdateInputRole.owner_assistant} data-testid="option-role-owner-assistant">İdarə heyəti</option>
-                        <option value={UserRoleUpdateInputRole.teacher}>Müəllim</option>
-                        <option value={UserRoleUpdateInputRole.supervisor}>Nəzarətçi</option>
-                        <option value={UserRoleUpdateInputRole.none}>Adi istifadəçi</option>
+                        <option value={UserRoleUpdateInputRole.owner_assistant} data-testid="option-role-owner-assistant">{t('roleBoard')}</option>
+                        <option value={UserRoleUpdateInputRole.teacher}>{t('roleTeacher')}</option>
+                        <option value={UserRoleUpdateInputRole.supervisor}>{t('roleSupervisor')}</option>
+                        <option value={UserRoleUpdateInputRole.none}>{t('plainUser')}</option>
                       </select>
                     </label>
                      <div className="flex flex-wrap gap-2">
                        <button type="button" className={buttonClass} disabled={!hasChange || busyUserId === user.id} onClick={() => void saveRole(user)} data-testid={`button-save-user-role-${user.id}`}>
-                         {busyUserId === user.id ? 'Yadda saxlanılır...' : 'Rolu yadda saxla'}
+                         {busyUserId === user.id ? t('saving') : t('saveRole')}
                        </button>
-                        {canConfigurePermissions && individualPermissionRole(user) && <button type="button" className="focus-ring rounded-xl border border-[hsl(var(--secondary)/.65)] px-3 py-2 text-xs font-bold text-[hsl(var(--secondary-foreground))] hover:bg-[hsl(var(--secondary)/.2)]" onClick={() => { setPermissionUser(user); setIndividualPermissions([]); }} data-testid={`button-edit-individual-permissions-${user.id}`}>Fərdi icazələr</button>}
-                        <button type="button" className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))]" onClick={() => setEditingUser(user)} data-testid={`button-edit-user-${user.id}`}>Məlumatları düzəlt</button>
+                        {canConfigurePermissions && individualPermissionRole(user) && <button type="button" className="focus-ring rounded-xl border border-[hsl(var(--secondary)/.65)] px-3 py-2 text-xs font-bold text-[hsl(var(--secondary-foreground))] hover:bg-[hsl(var(--secondary)/.2)]" onClick={() => { setPermissionUser(user); setIndividualPermissions([]); }} data-testid={`button-edit-individual-permissions-${user.id}`}>{t('individualPerms')}</button>}
+                        <button type="button" className="focus-ring rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--card))]" onClick={() => setEditingUser(user)} data-testid={`button-edit-user-${user.id}`}>{t('editDetails')}</button>
                          {canConfigurePermissions && user.role === 'none' && <button type="button" className="focus-ring rounded-xl border border-[hsl(var(--destructive)/.28)] px-3 py-2 text-xs font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.08)] disabled:opacity-50" disabled={deletingUserId === user.id} onClick={() => void removeUser(user)} data-testid={`button-delete-user-${user.id}`}>{deletingUserId === user.id ? 'Silinir...' : 'Hesabı sil'}</button>}
                      </div>
                     {studentNote && <p className={`w-full rounded-lg px-3 py-2 text-[11px] leading-5 ${hasChange && user.role === 'none' ? 'bg-amber-50 text-amber-900' : 'bg-[hsl(var(--muted)/.6)] text-[hsl(var(--muted-foreground))]'}`} data-testid={`note-user-student-record-${user.id}`}>{studentNote}</p>}

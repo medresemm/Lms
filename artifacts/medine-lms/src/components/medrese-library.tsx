@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BookOpen, Download, FileText, Library, Loader2, Pencil, Plus, RotateCcw, SearchX, Trash2 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useAuth, useUser } from '@clerk/react';
+import { useI18n } from '@/lib/i18n';
 import { LibraryBookForm } from '@/components/library-book-form';
 import {
   arabicBookFont,
@@ -48,6 +49,7 @@ function BookCard({ book, token, userId, manage, onEdit, onDeleted }: {
   onEdit: () => void;
   onDeleted: () => void;
 }) {
+  const { t } = useI18n();
   const { getToken } = useAuth();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -65,14 +67,14 @@ function BookCard({ book, token, userId, manage, onEdit, onDeleted }: {
       await deleteUploadedBook(getToken, book.slug);
       onDeleted();
     } catch (caught) {
-      setDeleteError(caught instanceof Error ? caught.message : 'Silinmədi.');
+      setDeleteError(caught instanceof Error ? caught.message : t('notDeleted'));
       setDeleting(false);
     }
   }
 
   return (
     <article className="group flex gap-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-[var(--shadow-xs)] transition hover:shadow-[var(--shadow-md)] sm:p-5" data-testid={`library-book-${book.slug}`}>
-      <Link href={libraryReaderHref(book.slug, continuePage ?? undefined)} className="focus-ring relative block w-24 shrink-0 self-start overflow-hidden rounded-r-lg rounded-l-sm shadow-[0_8px_18px_-8px_rgba(60,40,10,.55)] sm:w-28" aria-label={`${book.title} — oxu`}>
+      <Link href={libraryReaderHref(book.slug, continuePage ?? undefined)} className="focus-ring relative block w-24 shrink-0 self-start overflow-hidden rounded-r-lg rounded-l-sm shadow-[0_8px_18px_-8px_rgba(60,40,10,.55)] sm:w-28" aria-label={book.title}>
         {cover && !coverFailed
           ? <img src={cover} alt="" className="aspect-[0.72] w-full object-cover transition duration-300 group-hover:scale-[1.03]" loading="lazy" onError={() => setCoverFailed(true)} />
           : <CoverPlaceholder book={book} />}
@@ -82,7 +84,7 @@ function BookCard({ book, token, userId, manage, onEdit, onDeleted }: {
         <p className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--accent))]">
           {book.subject}
           {uploaded && book.hasText === false && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--muted))] px-2 py-0.5 text-[9px] tracking-normal normal-case text-[hsl(var(--muted-foreground))]" title="Skan PDF: mətn qatı yoxdur"><SearchX size={10} /> axtarış yoxdur</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--muted))] px-2 py-0.5 text-[9px] tracking-normal normal-case text-[hsl(var(--muted-foreground))]" title={t('noSearch')}><SearchX size={10} /> {t('noSearch')}</span>
           )}
         </p>
         <h4 dir="auto" lang="ar" className="mt-1 text-start text-xl leading-9 text-[hsl(var(--primary))]" style={{ fontFamily: arabicBookFont }}>{book.title}</h4>
@@ -91,31 +93,31 @@ function BookCard({ book, token, userId, manage, onEdit, onDeleted }: {
           {book.commentator && <div><dt className="sr-only">Şərh edən</dt><dd>شرح: {book.commentator}</dd></div>}
           {(book.publisher || book.year) && <div className="text-[hsl(var(--muted-foreground))]"><dt className="sr-only">Nəşriyyat</dt><dd>{[book.publisher, book.year].filter(Boolean).join(' · ')}</dd></div>}
         </dl>
-        <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{book.pageCount} səhifə · {book.chapters.length} bölmə</p>
+        <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{book.pageCount} {t('pageWord')} · {book.chapters.length} {t('chapterWord')}</p>
         <div className="mt-auto flex flex-wrap gap-2 pt-3">
           <Link href={libraryReaderHref(book.slug, continuePage ?? undefined)} className="focus-ring inline-flex items-center gap-2 rounded-full bg-[hsl(var(--primary))] px-4 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] transition hover:opacity-90" data-testid={`button-open-book-${book.slug}`}>
-            <BookOpen size={14} /> {continuePage ? `Davam et · s. ${continuePage - book.pageOffset > 0 ? continuePage - book.pageOffset : continuePage}` : 'Oxu'}
+            <BookOpen size={14} /> {continuePage ? `${t('continueAt')} · ${continuePage - book.pageOffset > 0 ? continuePage - book.pageOffset : continuePage}` : t('readBook')}
           </Link>
           {continuePage && (
             <Link href={libraryReaderHref(book.slug, 1)} className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--border))] px-3 py-2 text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]">
-              Əvvəldən
+              {t('fromStart')}
             </Link>
           )}
           <PdfDownloadLink book={book} token={token} />
           {manage && uploaded && !confirming && (
             <>
-              <button type="button" onClick={onEdit} className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--border))] px-3 py-2 text-xs font-semibold hover:bg-[hsl(var(--muted))]" data-testid={`button-edit-book-${book.slug}`}><Pencil size={13} /> Redaktə</button>
-              <button type="button" onClick={() => setConfirming(true)} className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50" data-testid={`button-delete-book-${book.slug}`}><Trash2 size={13} /> Sil</button>
+              <button type="button" onClick={onEdit} className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--border))] px-3 py-2 text-xs font-semibold hover:bg-[hsl(var(--muted))]" data-testid={`button-edit-book-${book.slug}`}><Pencil size={13} /> {t('edit')}</button>
+              <button type="button" onClick={() => setConfirming(true)} className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50" data-testid={`button-delete-book-${book.slug}`}><Trash2 size={13} /> {t('delete')}</button>
             </>
           )}
         </div>
         {confirming && (
-          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900" role="alertdialog" aria-label="Silməni təsdiqlə">
-            <p className="font-semibold">Bu kitab və PDF faylı birdəfəlik silinsin?</p>
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900" role="alertdialog" aria-label={t('delete')}>
+            <p className="font-semibold">{t('deleteBookAsk')}</p>
             {deleteError && <p className="mt-1">{deleteError}</p>}
             <div className="mt-2 flex gap-2">
-              <button type="button" disabled={deleting} onClick={() => void remove()} className="focus-ring inline-flex items-center gap-1 rounded-full bg-red-700 px-3 py-1.5 font-bold text-white disabled:opacity-60" data-testid={`button-confirm-delete-${book.slug}`}>{deleting && <Loader2 size={12} className="animate-spin" />} Bəli, sil</button>
-              <button type="button" disabled={deleting} onClick={() => { setConfirming(false); setDeleteError(null); }} className="focus-ring rounded-full border border-red-200 bg-white px-3 py-1.5 font-semibold">Xeyr</button>
+              <button type="button" disabled={deleting} onClick={() => void remove()} className="focus-ring inline-flex items-center gap-1 rounded-full bg-red-700 px-3 py-1.5 font-bold text-white disabled:opacity-60" data-testid={`button-confirm-delete-${book.slug}`}>{deleting && <Loader2 size={12} className="animate-spin" />} {t('yesDelete')}</button>
+              <button type="button" disabled={deleting} onClick={() => { setConfirming(false); setDeleteError(null); }} className="focus-ring rounded-full border border-red-200 bg-white px-3 py-1.5 font-semibold">{t('noWord')}</button>
             </div>
           </div>
         )}
@@ -135,6 +137,7 @@ function UploadsNotice({ uploads }: { uploads: LibraryUploadsInfo }) {
 }
 
 export function MedreseLibrary({ canManage = false }: { canManage?: boolean }) {
+  const { t } = useI18n();
   const { user } = useUser();
   const { books, token, error, loading, reload, canManage: serverCanManage, uploads } = useLibraryCatalog();
   const manage = canManage && serverCanManage && uploads !== null;
@@ -144,8 +147,8 @@ export function MedreseLibrary({ canManage = false }: { canManage?: boolean }) {
       <header className="mb-5 flex flex-wrap items-center gap-3">
         <span className="grid size-10 place-items-center rounded-xl bg-[hsl(var(--card))] text-[hsl(var(--primary))] shadow-[var(--shadow-xs)]"><Library size={20} /></span>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{canManage ? 'Kitabxana idarəsi' : 'Kitabxana'}</p>
-          <h3 className="font-serif text-2xl text-[hsl(var(--primary))]">Mədrəsə Kitabxanası</h3>
+          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">{canManage ? t('libraryManage') : t('library')}</p>
+          <h3 className="font-serif text-2xl text-[hsl(var(--primary))]">{t('libraryTitle')}</h3>
         </div>
         {manage && (
           <button
@@ -156,18 +159,18 @@ export function MedreseLibrary({ canManage = false }: { canManage?: boolean }) {
             className="focus-ring inline-flex items-center gap-2 rounded-full bg-[hsl(var(--primary))] px-4 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
             data-testid="button-library-add-book"
           >
-            <Plus size={14} /> Kitab əlavə et (PDF)
+            <Plus size={14} /> {t('addBook')}
           </button>
         )}
       </header>
       {manage && uploads && <UploadsNotice uploads={uploads} />}
       {!books && loading && (
-        <p className="flex items-center gap-2 py-8 text-sm text-[hsl(var(--muted-foreground))]"><Loader2 size={16} className="animate-spin" /> Kitablar yüklənir…</p>
+        <p className="flex items-center gap-2 py-8 text-sm text-[hsl(var(--muted-foreground))]"><Loader2 size={16} className="animate-spin" /> {t('booksLoading')}</p>
       )}
       {!books && !loading && error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
-          <button type="button" onClick={() => void reload()} className="ml-2 inline-flex items-center gap-1 font-semibold underline"><RotateCcw size={13} /> Yenidən</button>
+          <button type="button" onClick={() => void reload()} className="ms-2 inline-flex items-center gap-1 font-semibold underline"><RotateCcw size={13} /> {t('retry')}</button>
         </div>
       )}
       {books && token && (
@@ -187,10 +190,10 @@ export function MedreseLibrary({ canManage = false }: { canManage?: boolean }) {
               ))}
             </div>
           )
-          : <p className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">Hələ kitab əlavə edilməyib.</p>
+          : <p className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noBooks')}</p>
       )}
       {books && books.length > 0 && (
-        <p className="mt-4 text-[11px] text-[hsl(var(--muted-foreground))]">Mədinə AI-də «Kitabxanada axtar: …» yazaraq kitabların mətnində axtarış edə bilərsiniz. Mətn qatı olmayan (skan) yüklənmiş PDF-lərdə axtarış mümkün deyil.</p>
+        <p className="mt-4 text-[11px] text-[hsl(var(--muted-foreground))]">{t('librarySearchHint')}</p>
       )}
       {form && uploads && (
         <LibraryBookForm

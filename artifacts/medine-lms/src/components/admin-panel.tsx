@@ -1193,6 +1193,7 @@ function StudentManagementSection({
   assignmentTeacherClerkUserId?: string;
   focusStudentId?: number | null;
 }) {
+  const { t } = useI18n();
   const [activeSection, setActiveSection] = useState<StudentManagementTab | null>('subject-requests');
   const [isPromotionDirectoryOpen, setIsPromotionDirectoryOpen] = useState(false);
   const scrollSectionRef = useRef<StudentManagementTab | null>(null);
@@ -1214,29 +1215,29 @@ function StudentManagementSection({
     }
   }, [focusStudentId]);
   const sections: Array<{ value: StudentManagementTab; label: string; description: string; Icon: typeof Send }> = [
-    { value: 'subject-requests', label: 'Dərs silinməsi', description: 'Tələbələrin dərs dəyişiklik müraciətləri', Icon: Send },
-    { value: 'grading', label: 'Qiymətləndirmə', description: 'Qiymətləri tələbə və semestr üzrə idarə et', Icon: GraduationCap },
-    { value: 'attendance', label: 'Davamiyyət', description: 'Dərs seçin, tələbələri işarələyin və təsdiq edin', Icon: CalendarDays },
-    { value: 'excuses', label: 'Üzr müraciətləri', description: 'Tələbələrin üzr və izahat müraciətləri', Icon: FileText },
-    { value: 'teacher-choices', label: 'Müəllim seçimləri', description: 'Tələbələrin müəllim seçimi müraciətləri', Icon: UsersRound },
-    { value: 'promotion', label: 'Semestr keçidini təsdiqlə', description: 'Tələbəni seç və növbəti semestrə keçidini təsdiqlə', Icon: GraduationCap },
-    { value: 'schedule-access', label: 'Cədvələ giriş təsdiqi', description: 'Tələbələrin dərs cədvəlinə girişini təsdiqlə', Icon: CalendarDays },
-    ...(canManageAssignments ? [{ value: 'assignments' as const, label: 'Ev tapşırıqları', description: 'Tapşırıqları və tələbə təhvilini idarə et', Icon: ClipboardCheck }] : []),
-    ...(canGraduate ? [{ value: 'graduation' as const, label: 'Təxərrüc et', description: '4, 6 və ya 8-ci semestr tələbələrini məzun et', Icon: GraduationCap }] : []),
-    ...(canViewDeletedStudents ? [{ value: 'deleted-students' as const, label: 'Silinmiş hesablar', description: 'Silinmiş tələbə hesablarının tarixçəsi', Icon: Trash2 }] : []),
+    { value: 'subject-requests', label: t('tabDrop'), description: t('tabDropHint'), Icon: Send },
+    { value: 'grading', label: t('tabGrades'), description: t('tabGradesHint'), Icon: GraduationCap },
+    { value: 'attendance', label: t('tabAttendance'), description: t('tabAttendanceHint'), Icon: CalendarDays },
+    { value: 'excuses', label: t('tabExcuses'), description: t('tabExcusesHint'), Icon: FileText },
+    { value: 'teacher-choices', label: t('tabChoices'), description: t('tabChoicesHint'), Icon: UsersRound },
+    { value: 'promotion', label: t('tabPromotion'), description: t('tabPromotionHint'), Icon: GraduationCap },
+    { value: 'schedule-access', label: t('tabAccess'), description: t('tabAccessHint'), Icon: CalendarDays },
+    ...(canManageAssignments ? [{ value: 'assignments' as const, label: t('tabHomework'), description: t('tabHomeworkHint'), Icon: ClipboardCheck }] : []),
+    ...(canGraduate ? [{ value: 'graduation' as const, label: t('tabGraduate'), description: t('tabGraduateHint'), Icon: GraduationCap }] : []),
+    ...(canViewDeletedStudents ? [{ value: 'deleted-students' as const, label: t('tabDeleted'), description: t('tabDeletedHint'), Icon: Trash2 }] : []),
   ];
 
-  const renderSection = (t: StudentManagementTab): ReactNode => [
-    t === 'subject-requests' && <SubjectRemovalRequests />,
-    t === 'grading' && <AcademicManagement mode="grades" />,
-    t === 'attendance' && <RollCallAttendance />,
-    t === 'excuses' && <AttendanceExcuses onRead={onReadExcuses} />,
-    t === 'teacher-choices' && <TeacherChoiceRequests />,
-    t === 'promotion' && <div className="rounded-2xl border border-[hsl(var(--accent)/.55)] bg-[hsl(var(--accent)/.12)] p-5" data-testid="section-semester-promotion-entry"><p className="text-sm font-bold text-[hsl(var(--primary))]">Tələbənin növbəti semestrə keçidini təsdiqləyin</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Tələbəni seçdikdən sonra cari semestri və əsas nəticələri görünəcək. Təsdiq düyməsi tələbə məlumatlarında yerləşir.</p><button type="button" onClick={() => setIsPromotionDirectoryOpen(true)} className={`${buttonClass} mt-4`} data-testid="button-open-semester-promotion"><GraduationCap size={16} /> Tələbə seç və keçidi təsdiqlə</button>{isPromotionDirectoryOpen && <StudentDirectory filter="all" onClose={() => setIsPromotionDirectoryOpen(false)} canEdit={canGraduate} focusStudentId={focusStudentId} />}</div>,
-    t === 'schedule-access' && <div className="space-y-4" data-testid="section-schedule-access-entry"><div className="rounded-2xl border border-[hsl(var(--accent)/.55)] bg-[hsl(var(--accent)/.12)] p-5"><p className="text-sm font-bold text-[hsl(var(--primary))]">Tələbələrin cədvəl girişini təsdiqləyin</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Aşağıdakı siyahıdan tələbəni seçin və dərs cədvəlinə giriş icazəsini verin.</p></div><StudentDirectory filter="all" onClose={() => undefined} canEdit={false} embedded /></div>,
-    t === 'assignments' && canManageAssignments && <AdminAssignmentsSection resources={resources} teacherClerkUserId={assignmentTeacherClerkUserId} />,
-    t === 'graduation' && <GraduationSection />,
-    t === 'deleted-students' && canViewDeletedStudents && <StudentDeletionAudit />,
+  const renderSection = (tab: StudentManagementTab): ReactNode => [
+    tab === 'subject-requests' && <SubjectRemovalRequests />,
+    tab === 'grading' && <AcademicManagement mode="grades" />,
+    tab === 'attendance' && <RollCallAttendance />,
+    tab === 'excuses' && <AttendanceExcuses onRead={onReadExcuses} />,
+    tab === 'teacher-choices' && <TeacherChoiceRequests />,
+    tab === 'promotion' && <div className="rounded-2xl border border-[hsl(var(--accent)/.55)] bg-[hsl(var(--accent)/.12)] p-5" data-testid="section-semester-promotion-entry"><p className="text-sm font-bold text-[hsl(var(--primary))]">{t('promotionLead')}</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('promotionBody')}</p><button type="button" onClick={() => setIsPromotionDirectoryOpen(true)} className={`${buttonClass} mt-4`} data-testid="button-open-semester-promotion"><GraduationCap size={16} /> {t('pickAndPromote')}</button>{isPromotionDirectoryOpen && <StudentDirectory filter="all" onClose={() => setIsPromotionDirectoryOpen(false)} canEdit={canGraduate} focusStudentId={focusStudentId} />}</div>,
+    tab === 'schedule-access' && <div className="space-y-4" data-testid="section-schedule-access-entry"><div className="rounded-2xl border border-[hsl(var(--accent)/.55)] bg-[hsl(var(--accent)/.12)] p-5"><p className="text-sm font-bold text-[hsl(var(--primary))]">{t('accessLead')}</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('accessBody')}</p></div><StudentDirectory filter="all" onClose={() => undefined} canEdit={false} embedded /></div>,
+    tab === 'assignments' && canManageAssignments && <AdminAssignmentsSection resources={resources} teacherClerkUserId={assignmentTeacherClerkUserId} />,
+    tab === 'graduation' && <GraduationSection />,
+    tab === 'deleted-students' && canViewDeletedStudents && <StudentDeletionAudit />,
   ].find(Boolean) || null;
   const sectionPanel = (value: StudentManagementTab) => {
     if (activeSection !== value) return null;
@@ -1249,13 +1250,13 @@ function StudentManagementSection({
       <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.22)] p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--secondary-foreground))]">Tələbə əməliyyatları</p>
-            <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">Tələbələri idarə et</h3>
-            <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Tələbələrin akademik məlumatlarını və müraciətlərini bir yerdən idarə edin.</p>
+            <p className="text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--secondary-foreground))]">{t('studentOps')}</p>
+            <h3 className="mt-1 font-serif text-2xl text-[hsl(var(--primary))]">{t('tileStudents')}</h3>
+            <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('studentOpsHint')}</p>
           </div>
-          <span className="rounded-full bg-[hsl(var(--card))] px-3 py-1.5 text-[10px] font-bold text-[hsl(var(--muted-foreground))]">{sections.length} bölmə</span>
+          <span className="rounded-full bg-[hsl(var(--card))] px-3 py-1.5 text-[10px] font-bold text-[hsl(var(--muted-foreground))]">{sections.length} {t('sectionCount')}</span>
         </div>
-        <div className="mt-5 grid grid-flow-row-dense gap-2 sm:grid-cols-2" aria-label="Tələbə idarəetmə bölmələri">
+        <div className="mt-5 grid grid-flow-row-dense gap-2 sm:grid-cols-2" aria-label={t('studentTabs')}>
           {sections.map(({ value, label, description, Icon }) => <Fragment key={value}>
             <button
               aria-controls={activeSection === value ? `panel-student-management-${value}` : undefined}

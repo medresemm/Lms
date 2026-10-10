@@ -45,6 +45,7 @@ import { createPortal } from 'react-dom';
 import type { AcademicProfile, Announcement, AssignmentAttachment, AssignmentUploadInput, Course, Dashboard, LearningResource } from '@workspace/api-client-react';
 import { getGetCourseQueryKey, getGetResourcesQueryKey, getGetStudentAssignmentQueryKey, getGetStudentAssignmentsQueryKey, useGetCourse, useGetResources, useGetStudentAssignment, useGetStudentAssignments, useRequestStudentAssignmentUploadUrl, useSubmitAssignment } from '@workspace/api-client-react';
 import { ArticlesLink, HomeLink } from '@/components/home-link';
+import { LanguageSwitch, useI18n } from '@/lib/i18n';
 import { MessageCenter } from '@/components/message-center';
 import { loadUnansweredQuestionCount, QaCenter } from '@/components/qa-center';
 import { StudentExamsLauncher, StudentExamsSection } from '@/components/exam-module';
@@ -78,27 +79,17 @@ type StudentNotification = {
 };
 
 const navItems = [
-  { label: 'İcmal', href: '#icmal', icon: LayoutDashboard },
-  { label: 'Profilim', href: '#profil', icon: GraduationCap },
-  { label: 'Dərs Cədvəlim', href: '#ders-cedvelim', icon: BookOpen },
-  { label: 'Yeniliklər', href: '#yenilikler', icon: Bell },
-  { label: 'İmtahan və testlər', href: '#imtahanlar', icon: ClipboardList },
-  { label: 'Məsləhətləşmə / Əlaqə', href: '#mesajlar', icon: Send },
-  { label: 'Sual-cavab', href: '#sual-cavab', icon: HelpCircle },
-];
+  { id: 'overview', labelKey: 'navOverview', href: '#icmal', icon: LayoutDashboard, testId: 'link-nav-icmal' },
+  { id: 'profile', labelKey: 'navProfile', href: '#profil', icon: GraduationCap, testId: 'link-nav-profilim' },
+  { id: 'schedule', labelKey: 'navSchedule', href: '#ders-cedvelim', icon: BookOpen, testId: 'link-nav-ders cedvelim' },
+  { id: 'news', labelKey: 'navNews', href: '#yenilikler', icon: Bell, testId: 'link-nav-yenilikler' },
+  { id: 'exams', labelKey: 'navExams', href: '#imtahanlar', icon: ClipboardList, testId: 'link-nav-imtahan ve testler' },
+  { id: 'messages', labelKey: 'navMessages', href: '#mesajlar', icon: Send, testId: 'link-nav-meslehetlesme / elaqe' },
+  { id: 'qa', labelKey: 'navQa', href: '#sual-cavab', icon: HelpCircle, testId: 'link-nav-sual-cavab' },
+] as const;
 
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat('az-AZ', { day: 'numeric', month: 'long' }).format(new Date(value));
-
-const lessonDayLabels: Record<string, string> = {
-  monday: 'Bazar ertəsi',
-  tuesday: 'Çərşənbə axşamı',
-  wednesday: 'Çərşənbə',
-  thursday: 'Cümə axşamı',
-  friday: 'Cümə',
-  saturday: 'Şənbə',
-  sunday: 'Bazar',
-};
 
 const assignmentInputClass = 'focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm text-[hsl(var(--foreground))] outline-none transition placeholder:text-[hsl(var(--muted-foreground)/.65)]';
 const assignmentButtonClass = 'focus-ring inline-flex items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50';
@@ -182,6 +173,7 @@ function lessonIsLive(resource: LearningResource, now = new Date()) {
 }
 
 function BrandMark({ dark = false }: { dark?: boolean }) {
+  const { t } = useI18n();
   return (
     <div className="flex items-center gap-3" data-testid="brand-academy">
       <div className="relative flex h-10 w-10 items-center justify-center rounded-[13px] bg-[hsl(var(--accent))] text-[hsl(var(--primary))] shadow-[0_7px_0_hsl(37_83%_52%)]">
@@ -189,14 +181,15 @@ function BrandMark({ dark = false }: { dark?: boolean }) {
         <span className="absolute bottom-[7px] right-[7px] h-1.5 w-1.5 rounded-full bg-[hsl(var(--primary))]" />
       </div>
       <div>
-        <p className={`text-[11px] font-bold uppercase tracking-[0.18em] ${dark ? 'text-[hsl(var(--sidebar-foreground)/.58)]' : 'text-black'}`}>Mədinə</p>
-        <p className={`font-serif text-[17px] font-bold leading-none ${dark ? 'text-[hsl(var(--sidebar-foreground))]' : 'text-black'}`}>Tədris Akademiyası</p>
+        <p className={`text-[11px] font-bold uppercase tracking-[0.18em] ${dark ? 'text-[hsl(var(--sidebar-foreground)/.58)]' : 'text-black'}`}>{t('academyShort')}</p>
+        <p className={`font-serif text-[17px] font-bold leading-none ${dark ? 'text-[hsl(var(--sidebar-foreground))]' : 'text-black'}`}>{t('academyLine')}</p>
       </div>
     </div>
   );
 }
 
 function Sidebar({ onClose, currentSemester, unansweredQuestionCount = 0, onOpenPasswordChange, onOpenMessages, onOpenQuestions, onOpenExams, onOpenProfileEdit, onOpenTranscript, onOpenLibrary }: { onClose?: () => void; currentSemester?: string; unansweredQuestionCount?: number; onOpenPasswordChange: () => void; onOpenMessages: () => void; onOpenQuestions: () => void; onOpenExams: () => void; onOpenProfileEdit: () => void; onOpenTranscript: () => void; onOpenLibrary: () => void }) {
+  const { t } = useI18n();
   const [activeNavHref, setActiveNavHref] = useState('#icmal');
   return (
     <aside className="flex h-full w-screen max-w-none shrink-0 flex-col overflow-y-auto bg-[hsl(var(--sidebar))] px-6 py-7 text-[hsl(var(--sidebar-foreground))] lg:w-[264px]">
@@ -206,7 +199,7 @@ function Sidebar({ onClose, currentSemester, unansweredQuestionCount = 0, onOpen
           <button
             type="button"
             onClick={onClose}
-            aria-label="Menyunu bağla"
+            aria-label={t('closeMenu')}
             className="focus-ring rounded-lg p-2 text-[hsl(var(--sidebar-foreground)/.7)] hover:bg-[hsl(var(--sidebar-accent))] lg:hidden"
             data-testid="button-close-menu"
           >
@@ -221,26 +214,26 @@ function Sidebar({ onClose, currentSemester, unansweredQuestionCount = 0, onOpen
 
       {currentSemester && (
         <div className="mt-5 rounded-xl border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-accent)/.48)] px-3 py-3" data-testid="sidebar-current-semester">
-          <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--sidebar-foreground)/.45)]">Cari semestr</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--sidebar-foreground)/.45)]">{t('currentSemester')}</p>
           <p className="mt-1 text-sm font-bold text-[hsl(var(--accent))]">{currentSemester}</p>
         </div>
       )}
 
-      <div className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.19em] text-[hsl(var(--sidebar-foreground)/.42)]">Menyu</div>
-      <nav className="space-y-1" aria-label="Əsas menyu">
-        {navItems.map(({ label, href, icon: Icon }, index) => (
+      <div className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.19em] text-[hsl(var(--sidebar-foreground)/.42)]">{t('menu')}</div>
+      <nav className="space-y-1" aria-label={t('mainMenu')}>
+        {navItems.map(({ id, labelKey, href, icon: Icon, testId }) => (
           <a
-            key={label}
+            key={id}
             href={href}
             onClick={(event) => {
               event.preventDefault();
               setActiveNavHref(href);
-              if (label === 'İmtahan və testlər') {
+              if (id === 'exams') {
                 onOpenExams();
-              } else if (label === 'Məsləhətləşmə / Əlaqə') {
+              } else if (id === 'messages') {
                 onOpenMessages();
                 window.setTimeout(() => document.getElementById('mesajlar')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
-              } else if (label === 'Sual-cavab') {
+              } else if (id === 'qa') {
                 onOpenQuestions();
                 window.setTimeout(() => document.getElementById('sual-cavab')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
               } else {
@@ -253,12 +246,12 @@ function Sidebar({ onClose, currentSemester, unansweredQuestionCount = 0, onOpen
                 ? 'bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))] shadow-[inset_3px_0_0_hsl(var(--accent))]'
                 : 'text-[hsl(var(--sidebar-foreground)/.68)] hover:bg-[hsl(var(--sidebar-accent)/.7)] hover:text-[hsl(var(--sidebar-foreground))]'
             }`}
-            data-testid={`link-nav-${label.toLowerCase().replace('ı', 'i').replace('ə', 'e')}`}
+            data-testid={testId}
           >
             <Icon size={18} strokeWidth={activeNavHref === href ? 2.4 : 1.8} />
-            <span>{label}</span>
-            {label === 'Sual-cavab' && unansweredQuestionCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unansweredQuestionCount}</span>}
-            {activeNavHref === href && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[hsl(var(--accent))]" />}
+            <span>{t(labelKey)}</span>
+            {id === 'qa' && unansweredQuestionCount > 0 && <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">{unansweredQuestionCount}</span>}
+            {activeNavHref === href && <span className="ms-auto h-1.5 w-1.5 rounded-full bg-[hsl(var(--accent))]" />}
           </a>
         ))}
       </nav>
@@ -273,7 +266,7 @@ function Sidebar({ onClose, currentSemester, unansweredQuestionCount = 0, onOpen
         data-testid="button-open-transcript-sidebar"
       >
         <Award size={18} strokeWidth={activeNavHref === '#netice-karti' ? 2.4 : 1.8} />
-        <span>Nəticə kartı</span>
+        <span>{t('navTranscript')}</span>
         {activeNavHref === '#netice-karti' && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[hsl(var(--accent))]" />}
       </button>
       <button
@@ -287,7 +280,7 @@ function Sidebar({ onClose, currentSemester, unansweredQuestionCount = 0, onOpen
         data-testid="button-open-library-sidebar"
       >
         <Library size={18} strokeWidth={activeNavHref === '#kitabxana' ? 2.4 : 1.8} />
-        <span>Mədrəsə Kitabxanası</span>
+        <span>{t('navLibrary')}</span>
         {activeNavHref === '#kitabxana' && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[hsl(var(--accent))]" />}
       </button>
       <button
@@ -297,7 +290,7 @@ function Sidebar({ onClose, currentSemester, unansweredQuestionCount = 0, onOpen
         data-testid="button-open-profile-edit"
       >
         <Settings2 size={18} />
-        <span>Məlumatlarımı düzəlt</span>
+        <span>{t('editProfile')}</span>
       </button>
       <button
         type="button"
@@ -306,15 +299,15 @@ function Sidebar({ onClose, currentSemester, unansweredQuestionCount = 0, onOpen
         data-testid="button-open-password-change"
       >
         <Settings2 size={18} />
-        <span>Şifrəni dəyiş</span>
+        <span>{t('changePassword')}</span>
       </button>
 
       <div className="mt-auto rounded-2xl border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-accent)/.48)] p-4">
         <div className="mb-4 flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--accent)/.16)] text-[hsl(var(--accent))]">
           <Sparkles size={16} />
         </div>
-        <p className="mb-1 text-sm font-semibold">Kiçik addımlar.</p>
-        <p className="text-[12px] leading-5 text-[hsl(var(--sidebar-foreground)/.58)]">Hər gün bir dərs — böyük nəticələrə doğru.</p>
+        <p className="mb-1 text-sm font-semibold">{t('smallSteps')}</p>
+        <p className="text-[12px] leading-5 text-[hsl(var(--sidebar-foreground)/.58)]">{t('smallStepsBody')}</p>
       </div>
       <div className="mt-6 border-t border-[hsl(var(--sidebar-border))] pt-5 text-[11px] text-[hsl(var(--sidebar-foreground)/.42)]">
         © 2024 Mədinə Akademiyası
@@ -324,6 +317,7 @@ function Sidebar({ onClose, currentSemester, unansweredQuestionCount = 0, onOpen
 }
 
 function HeaderActions({ studentName, onNotifications, onLogout, hasNewNotification }: { studentName: string; onNotifications: () => void; onLogout?: () => void; hasNewNotification?: boolean }) {
+  const { t } = useI18n();
   const initials = studentName
     .split(' ')
     .slice(0, 2)
@@ -336,7 +330,7 @@ function HeaderActions({ studentName, onNotifications, onLogout, hasNewNotificat
       <button
         type="button"
         onClick={onNotifications}
-        aria-label="Bildirişləri göstər"
+        aria-label={t('showNotifications')}
         className="focus-ring relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl p-3 text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--primary))]"
         data-testid="button-notifications"
       >
@@ -357,7 +351,8 @@ function HeaderActions({ studentName, onNotifications, onLogout, hasNewNotificat
           className="focus-ring hidden items-center gap-1.5 rounded-xl border border-[hsl(var(--destructive)/.35)] bg-[hsl(var(--destructive)/.08)] px-3.5 py-2.5 text-sm font-bold text-[hsl(var(--destructive))] transition hover:bg-[hsl(var(--destructive)/.16)] sm:inline-flex"
           data-testid="button-logout"
         >
-          <LogOut size={16} strokeWidth={2.2} /> Çıxış
+          <LanguageSwitch />
+          <LogOut size={16} strokeWidth={2.2} /> {t('logout')}
         </button>
       )}
     </div>
@@ -365,6 +360,7 @@ function HeaderActions({ studentName, onNotifications, onLogout, hasNewNotificat
 }
 
 function MobileHeader({ studentName, onOpen, onNotifications, onLogout, hasNewNotification }: { studentName: string; onOpen: () => void; onNotifications: () => void; onLogout?: () => void; hasNewNotification?: boolean }) {
+  const { t } = useI18n();
   return (
     <header className="flex items-center justify-between gap-3 border-b border-[hsl(var(--border))] bg-[hsl(var(--card)/.88)] px-5 py-4 backdrop-blur md:px-8 lg:hidden">
       <BrandMark />
@@ -374,7 +370,7 @@ function MobileHeader({ studentName, onOpen, onNotifications, onLogout, hasNewNo
         <button
           type="button"
           onClick={onOpen}
-          aria-label="Menyunu aç"
+          aria-label={t('openMenu')}
           className="focus-ring flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[hsl(var(--border))] p-3 text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]"
           data-testid="button-open-menu"
         >
@@ -567,6 +563,7 @@ function UpcomingLessons({ resources, courseNames, onJoin }: { resources: Learni
 }
 
 function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingRequired, onboardingExamId, onOpenOnboardingExam, onOpenCourse }: { profile?: AcademicProfile; scheduleAccessApproved: boolean; onboardingRequired?: boolean; onboardingExamId?: number | null; onOpenOnboardingExam?: (examId?: number) => void; onOpenCourse?: (courseId: number, teacherName?: string | null) => void }) {
+  const { t } = useI18n();
   const [showAttendance, setShowAttendance] = useState(false);
   const [showExcuses, setShowExcuses] = useState(false);
   const [excuses, setExcuses] = useState<Array<{ id: number; courseTitle: string; attendanceDate: string; teacherName: string; reason: string; status: string }>>([]);
@@ -583,6 +580,15 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
   const courseNames = new Map(semester.subjects.map((subject) => [subject.courseId, subject.title]));
   const termResources = resourcesQuery.data ?? [];
   const todayKey = academyDateParts().weekday;
+  const lessonDayLabels: Record<string, string> = {
+    monday: t('dayMon'),
+    tuesday: t('dayTue'),
+    wednesday: t('dayWed'),
+    thursday: t('dayThu'),
+    friday: t('dayFri'),
+    saturday: t('daySat'),
+    sunday: t('daySun'),
+  };
   const scheduleByDay = Object.entries(lessonDayLabels).map(([day, label]) => ({
     day, label,
     lessons: termResources
@@ -638,7 +644,7 @@ function AcademicProfileSection({ profile, scheduleAccessApproved, onboardingReq
             )}
             {scheduleAccessApproved && (
               <div className="mb-6 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.25)] p-4" data-testid="section-daily-schedule">
-             <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="break-words text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{currentSemesterLabel}</p><h3 className="mt-1 font-serif text-xl text-[hsl(var(--primary))]">Dərs Cədvəlim</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Yalnız sizə təyin olunmuş müəllim qrupunun gün və saatı</p></div><div className="flex shrink-0 items-center gap-2 pt-1"><SchedulePdfButton apiPath="/student/schedule.pdf" fileName={`Ders-cedveli-T${String(profile.studentNumber).padStart(4, '0')}.pdf`} testId="button-download-schedule-pdf" /><CalendarDays className="hidden shrink-0 text-[hsl(var(--secondary-foreground))] sm:block" size={19} /></div></div>
+             <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="break-words text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{currentSemesterLabel}</p><h3 className="mt-1 font-serif text-xl text-[hsl(var(--primary))]">{t('navSchedule')}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('scheduleHint')}</p></div><div className="flex shrink-0 items-center gap-2 pt-1"><SchedulePdfButton apiPath="/student/schedule.pdf" fileName={`Ders-cedveli-T${String(profile.studentNumber).padStart(4, '0')}.pdf`} testId="button-download-schedule-pdf" /><CalendarDays className="hidden shrink-0 text-[hsl(var(--secondary-foreground))] sm:block" size={19} /></div></div>
               {resourcesQuery.isLoading ? <div className="mt-4 h-20 animate-pulse rounded-xl bg-[hsl(var(--muted))]" /> : <div className="mt-4">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-7">
                   {scheduleByDay.map(({ day, label, lessons }) => { const live = lessons.some((lesson) => lessonIsLive(lesson)); return <button key={day} type="button" onClick={() => setSelectedScheduleDay(day)} className={`focus-ring relative rounded-xl border px-2 py-3 text-center transition hover:-translate-y-0.5 ${day === (selectedScheduleDay ?? todayKey) ? 'border-[hsl(var(--accent))] bg-[hsl(var(--accent))] text-[hsl(var(--primary))] shadow-[0_4px_0_hsl(37_83%_52%)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--primary))]'}`} aria-expanded={day === (selectedScheduleDay ?? todayKey)} data-testid={`button-schedule-day-${day}`}><span className="block text-xs font-black">{label}</span><span className="mt-1 block text-[10px] font-semibold opacity-70">{lessons.length ? `${lessons.length} dərs` : 'Dərs yoxdur'}</span>{live && <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[hsl(var(--destructive))] px-1.5 py-0.5 text-[9px] font-black text-white"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> CANLI</span>}</button>; })}
@@ -965,12 +971,13 @@ function AnnouncementItem({ announcement }: { announcement: Announcement }) {
 }
 
 function AnnouncementsSection({ announcements }: { announcements: Announcement[] }) {
+  const { t } = useI18n();
   return (
     <section id="yenilikler" className="animate-rise-in delay-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)] md:p-6" data-testid="section-announcements">
       <div className="mb-5 flex items-start justify-between">
         <div>
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--muted-foreground))]">Akademiyadan</p>
-          <h2 className="font-serif text-[25px] leading-none tracking-[-0.035em] text-[hsl(var(--primary))]">Yeniliklər</h2>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--muted-foreground))]">{t('fromAcademy')}</p>
+          <h2 className="font-serif text-[25px] leading-none tracking-[-0.035em] text-[hsl(var(--primary))]">{t('news')}</h2>
         </div>
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]">
           <Bell size={15} />
@@ -979,7 +986,7 @@ function AnnouncementsSection({ announcements }: { announcements: Announcement[]
       {announcements.length ? (
         <div>{announcements.slice(0, 4).map((announcement) => <AnnouncementItem key={announcement.id} announcement={announcement} />)}</div>
       ) : (
-        <EmptyState icon={<Bell size={19} />} title="Yenilik yoxdur" body="Akademiyadan gələn xəbərlər burada görünəcək." />
+        <EmptyState icon={<Bell size={19} />} title={t('noNews')} body={t('noNewsBody')} />
       )}
     </section>
   );
@@ -1183,14 +1190,15 @@ function LoadingState() {
 }
 
 function ErrorState({ onRetry }: { onRetry: () => void }) {
+  const { t } = useI18n();
   return (
     <main className="flex min-h-[70dvh] items-center justify-center px-6 py-12" data-testid="state-error">
       <div className="max-w-md text-center">
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[hsl(var(--destructive)/.12)] text-[hsl(var(--destructive))]"><AlertCircle size={25} /></div>
-        <h1 className="font-serif text-3xl tracking-[-0.03em] text-[hsl(var(--primary))]">Məlumatları yükləmək alınmadı</h1>
-        <p className="mt-3 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Əlaqəni yoxla və yenidən cəhd et. Sənin öyrənmə məkanını geri qaytaracağıq.</p>
+        <h1 className="font-serif text-3xl tracking-[-0.03em] text-[hsl(var(--primary))]">{t('loadFailed')}</h1>
+        <p className="mt-3 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('loadFailedBody')}</p>
         <button type="button" onClick={onRetry} className="focus-ring mt-6 inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-bold text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5" data-testid="button-retry">
-          <RefreshCw size={16} /> Yenidən cəhd et
+          <RefreshCw size={16} /> {t('retry')}
         </button>
       </div>
     </main>
@@ -1198,6 +1206,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
 }
 
 export function StudentDashboard({ dashboard, courses, announcements, academicProfile, initialScheduleAccess, isLoading, hasError, onRetry, onLogout }: DashboardProps) {
+  const { t, locale, dir } = useI18n();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
@@ -1219,7 +1228,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
   }, []);
   const resolvedCourses = courses ?? dashboard?.courses ?? [];
   const resolvedAnnouncements = announcements ?? dashboard?.announcements ?? [];
-  const studentName = dashboard?.studentName || 'Tələbə';
+  const studentName = dashboard?.studentName || t('studentFallback');
   const currentSemester = academicProfile?.semesters.find((item) => item.termNumber === academicProfile.currentTermNumber)?.label;
   const apiBase = import.meta.env.BASE_URL.replace(/\/$/, '');
   const hasNewNotification = Boolean(activeNotification) && !showNotifications;
@@ -1305,7 +1314,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
 
   if (isLoading && !dashboard && !courses && !announcements) {
     return (
-      <div className="grain min-h-[100dvh] bg-[hsl(var(--background))]">
+      <div dir={dir} className={`grain min-h-[100dvh] bg-[hsl(var(--background))]${locale === 'ar' ? ' font-ar' : ''}`}>
          <div className="hidden min-h-[100dvh] lg:flex"><Sidebar currentSemester={currentSemester} unansweredQuestionCount={unansweredQuestionCount} onOpenPasswordChange={() => setShowPasswordChange(true)} onOpenMessages={() => setShowMessages((current) => !current)} onOpenQuestions={() => setShowQuestions((current) => !current)} onOpenExams={() => setShowExams((current) => !current)} onOpenProfileEdit={() => setShowProfileEdit((current) => !current)} onOpenTranscript={() => setShowTranscript(true)} onOpenLibrary={() => setShowLibrary(true)} /></div>
         <div className="lg:hidden"><MobileHeader studentName={studentName} onOpen={() => setMenuOpen(true)} onNotifications={() => setShowNotifications((value) => !value)} onLogout={onLogout} hasNewNotification={hasNewNotification} /></div>
         <LoadingState />
@@ -1315,7 +1324,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
 
   if (hasError && !dashboard && !courses && !announcements) {
     return (
-      <div className="grain min-h-[100dvh] bg-[hsl(var(--background))]">
+      <div dir={dir} className={`grain min-h-[100dvh] bg-[hsl(var(--background))]${locale === 'ar' ? ' font-ar' : ''}`}>
          <div className="hidden min-h-[100dvh] lg:flex"><Sidebar currentSemester={currentSemester} unansweredQuestionCount={unansweredQuestionCount} onOpenPasswordChange={() => setShowPasswordChange(true)} onOpenMessages={() => setShowMessages((current) => !current)} onOpenQuestions={() => setShowQuestions((current) => !current)} onOpenExams={() => setShowExams((current) => !current)} onOpenProfileEdit={() => setShowProfileEdit((current) => !current)} onOpenTranscript={() => setShowTranscript(true)} onOpenLibrary={() => setShowLibrary(true)} /></div>
         <div className="lg:hidden"><MobileHeader studentName={studentName} onOpen={() => setMenuOpen(true)} onNotifications={() => setShowNotifications((value) => !value)} onLogout={onLogout} hasNewNotification={hasNewNotification} /></div>
         <ErrorState onRetry={onRetry} />
@@ -1324,15 +1333,15 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
   }
 
   return (
-    <div className="grain min-h-[100dvh] bg-[hsl(var(--background))]">
-        <div className="fixed inset-y-0 left-0 z-40 hidden lg:block"><Sidebar unansweredQuestionCount={unansweredQuestionCount} onOpenPasswordChange={() => setShowPasswordChange(true)} onOpenMessages={() => setShowMessages((current) => !current)} onOpenQuestions={() => setShowQuestions((current) => !current)} onOpenExams={() => setShowExams((current) => !current)} onOpenProfileEdit={() => setShowProfileEdit((current) => !current)} onOpenTranscript={() => setShowTranscript(true)} onOpenLibrary={() => setShowLibrary(true)} /></div>
+    <div dir={dir} className={`grain min-h-[100dvh] bg-[hsl(var(--background))]${locale === 'ar' ? ' font-ar' : ''}`}>
+        <div className="fixed inset-y-0 start-0 z-40 hidden lg:block"><Sidebar unansweredQuestionCount={unansweredQuestionCount} onOpenPasswordChange={() => setShowPasswordChange(true)} onOpenMessages={() => setShowMessages((current) => !current)} onOpenQuestions={() => setShowQuestions((current) => !current)} onOpenExams={() => setShowExams((current) => !current)} onOpenProfileEdit={() => setShowProfileEdit((current) => !current)} onOpenTranscript={() => setShowTranscript(true)} onOpenLibrary={() => setShowLibrary(true)} /></div>
       {menuOpen && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
           <div className="absolute inset-0 bg-[hsl(var(--primary)/.42)] backdrop-blur-sm" onClick={() => setMenuOpen(false)} />
             <div className="relative h-full shadow-[var(--shadow-xl)]"><Sidebar onClose={() => setMenuOpen(false)} currentSemester={currentSemester} unansweredQuestionCount={unansweredQuestionCount} onOpenPasswordChange={() => setShowPasswordChange(true)} onOpenMessages={() => setShowMessages((current) => !current)} onOpenQuestions={() => setShowQuestions((current) => !current)} onOpenExams={() => setShowExams((current) => !current)} onOpenProfileEdit={() => setShowProfileEdit((current) => !current)} onOpenTranscript={() => setShowTranscript(true)} onOpenLibrary={() => setShowLibrary(true)} /></div>
         </div>
       )}
-      <div className="lg:pl-[264px]">
+      <div className="lg:ps-[264px]">
          <MobileHeader studentName={studentName} onOpen={() => setMenuOpen(true)} onNotifications={() => setShowNotifications((value) => !value)} onLogout={onLogout} hasNewNotification={hasNewNotification} />
         <div className="hidden lg:block">
            <Header studentName={studentName} onNotifications={() => setShowNotifications((value) => !value)} onLogout={onLogout} hasNewNotification={hasNewNotification} />
@@ -1340,21 +1349,21 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
         {showNotifications && (
           <div className="fixed right-5 top-[74px] z-30 w-[min(340px,calc(100vw-40px))] rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-[var(--shadow-lg)] md:right-10 md:top-[92px]" data-testid="panel-notifications">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-bold text-[hsl(var(--primary))]">Bildirişlər</p>
+              <p className="text-sm font-bold text-[hsl(var(--primary))]">{t('notifications')}</p>
               <Check size={16} className="text-[hsl(var(--secondary-foreground))]" />
             </div>
             <div className="mt-3 space-y-2">
-              {notificationResourcesQuery.data?.map((resource) => ({ resource, date: upcomingLessonDate(resource) })).filter((item): item is { resource: LearningResource; date: Date } => Boolean(item.date)).sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 2).map(({ resource, date }) => <div key={`notice-lesson-${resource.id}`} className="rounded-xl bg-[hsl(var(--accent)/.2)] px-3 py-2.5"><p className="text-xs font-bold text-[hsl(var(--primary))]">Yaxınlaşan dərs</p><p className="mt-1 text-xs text-[hsl(var(--primary))]">{date.toLocaleDateString('az-AZ', { weekday: 'short', day: 'numeric', month: 'short' })}, {date.toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' })} · {notificationCourseNames.get(resource.courseId) ?? resource.title}</p></div>)}
-              <div className="rounded-xl bg-[hsl(var(--muted)/.55)] px-3 py-2.5"><p className="text-xs font-bold text-[hsl(var(--primary))]">Tapşırıq son tarixləri</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hazırda son tarixli tapşırıq yoxdur.</p></div>
-              {resolvedAnnouncements.slice(0, 3).map((announcement) => <div key={`notice-announcement-${announcement.id}`} className="rounded-xl bg-[hsl(var(--muted)/.55)] px-3 py-2.5"><p className="text-xs font-bold text-[hsl(var(--primary))]">Akademiya elanı</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{announcement.title}</p></div>)}
-              {!notificationResourcesQuery.data?.length && !resolvedAnnouncements.length && <p className="text-xs leading-5 text-[hsl(var(--muted-foreground))]">Hazırda yeni bildiriş yoxdur.</p>}
+              {notificationResourcesQuery.data?.map((resource) => ({ resource, date: upcomingLessonDate(resource) })).filter((item): item is { resource: LearningResource; date: Date } => Boolean(item.date)).sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 2).map(({ resource, date }) => <div key={`notice-lesson-${resource.id}`} className="rounded-xl bg-[hsl(var(--accent)/.2)] px-3 py-2.5"><p className="text-xs font-bold text-[hsl(var(--primary))]">{t('upcomingLesson')}</p><p className="mt-1 text-xs text-[hsl(var(--primary))]">{date.toLocaleDateString('az-AZ', { weekday: 'short', day: 'numeric', month: 'short' })}, {date.toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' })} · {notificationCourseNames.get(resource.courseId) ?? resource.title}</p></div>)}
+              <div className="rounded-xl bg-[hsl(var(--muted)/.55)] px-3 py-2.5"><p className="text-xs font-bold text-[hsl(var(--primary))]">{t('assignmentDeadlines')}</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('noDeadlineTasks')}</p></div>
+              {resolvedAnnouncements.slice(0, 3).map((announcement) => <div key={`notice-announcement-${announcement.id}`} className="rounded-xl bg-[hsl(var(--muted)/.55)] px-3 py-2.5"><p className="text-xs font-bold text-[hsl(var(--primary))]">{t('academyNotice')}</p><p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">{announcement.title}</p></div>)}
+              {!notificationResourcesQuery.data?.length && !resolvedAnnouncements.length && <p className="text-xs leading-5 text-[hsl(var(--muted-foreground))]">{t('noNotifications')}</p>}
             </div>
           </div>
         )}
          {activeNotification && (
            <div className="fixed inset-0 z-[65] flex items-center justify-center bg-[hsl(var(--primary)/.48)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="student-notification-title" data-testid="modal-student-notification">
              <article className="relative w-full max-w-lg rounded-[24px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-[var(--shadow-xl)]">
-               <button type="button" onClick={() => void dismissNotification()} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label="Bildirişi bağla" data-testid="button-dismiss-student-notification"><X size={19} /></button>
+               <button type="button" onClick={() => void dismissNotification()} className="focus-ring absolute right-4 top-4 rounded-full p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={t('closeNotice')} data-testid="button-dismiss-student-notification"><X size={19} /></button>
                <div className="pr-10"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Akademiyadan bildiriş</p><h2 id="student-notification-title" className="mt-2 font-serif text-3xl leading-tight text-[hsl(var(--primary))]">{activeNotification.title}</h2><p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-[hsl(var(--muted-foreground))]">{activeNotification.body}</p><p className="mt-5 text-[10px] font-bold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{new Date(activeNotification.createdAt).toLocaleDateString('az-AZ')}</p></div>
              </article>
            </div>

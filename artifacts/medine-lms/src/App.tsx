@@ -34,6 +34,7 @@ import { AiAssistantPage } from '@/components/ai-assistant';
 import { CertificateVerificationPage } from '@/components/graduate-certificate';
 import { Toaster } from '@/components/ui/toaster';
 import { HomeLink } from '@/components/home-link';
+import { LanguageSwitch, useI18n } from '@/lib/i18n';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { LibraryReader } from '@/components/library-reader';
@@ -241,6 +242,7 @@ function isStaffRole(role: unknown) {
 }
 
 function BrandMark() {
+  const { t } = useI18n();
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-[hsl(var(--primary)/.12)] bg-white px-2.5 py-2 shadow-[0_5px_18px_hsl(var(--primary)/.08)]" data-testid="brand-academy">
       <div className="relative flex h-11 w-11 items-center justify-center rounded-[13px] bg-[hsl(var(--accent))] text-[hsl(var(--primary))] shadow-[0_5px_0_hsl(37_83%_52%)]">
@@ -248,8 +250,8 @@ function BrandMark() {
         <span className="absolute bottom-[7px] right-[7px] h-1.5 w-1.5 rounded-full bg-[hsl(var(--primary))]" />
       </div>
       <div>
-        <p className="text-[12px] font-black uppercase tracking-[0.16em] text-black">Mədinə</p>
-        <p className="font-serif text-[19px] font-black leading-none text-black">Tədris Akademiyası</p>
+        <p className="text-[12px] font-black uppercase tracking-[0.16em] text-black">{t('academyShort')}</p>
+        <p className="font-serif text-[19px] font-black leading-none text-black">{t('academyLine')}</p>
       </div>
     </div>
   );
@@ -263,13 +265,14 @@ type PublicSystemStatistics = {
 };
 
 function PublicStatistics({ statistics }: { statistics: PublicSystemStatistics }) {
+  const { t } = useI18n();
   const items = [
-    { label: 'Müəllim', value: statistics.teachers, className: 'bg-sky-100 text-sky-900' },
-    { label: 'Hazırkı tələbə', value: statistics.currentStudents, className: 'bg-emerald-100 text-emerald-900' },
-    { label: 'Bitirmiş tələbə', value: statistics.graduatedStudents, className: 'bg-amber-100 text-amber-950' },
+    { label: t('teachers'), value: statistics.teachers, className: 'bg-sky-100 text-sky-900' },
+    { label: t('currentStudents'), value: statistics.currentStudents, className: 'bg-emerald-100 text-emerald-900' },
+    { label: t('graduates'), value: statistics.graduatedStudents, className: 'bg-amber-100 text-amber-950' },
   ];
   return <section className="mt-8 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-5 py-5 shadow-[var(--shadow-sm)] md:px-6" data-testid="section-public-statistics">
-    <p className="text-center text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Akademiyamız rəqəmlərlə</p>
+    <p className="text-center text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('statsTitle')}</p>
     <div className="mt-4 grid grid-cols-3 gap-3">
       {items.map((item) => <div key={item.label} className="flex flex-col items-center gap-1.5 text-center">
         <div className={`flex h-14 w-14 items-center justify-center rounded-full text-lg font-black sm:h-16 sm:w-16 sm:text-xl ${item.className}`}>{item.value}</div>
@@ -280,16 +283,18 @@ function PublicStatistics({ statistics }: { statistics: PublicSystemStatistics }
 }
 
 function SiteFooter({ className = 'mt-12' }: { className?: string }) {
+  const { t } = useI18n();
   return (
     <footer className={`${className} border-t border-[hsl(var(--border))] py-5 text-center`} data-testid="site-footer">
-      <p className="text-sm font-semibold text-[hsl(var(--primary))]">Mədinə Tədris Akademiyası</p>
-      <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">© 2026. Bütün hüquqlar qorunur.</p>
-      <p className="mt-2"><Link href="/istifade-sertleri" className="text-xs font-semibold text-[hsl(var(--primary))] underline-offset-2 hover:underline">İstifadə şərtləri</Link></p>
+      <p className="text-sm font-semibold text-[hsl(var(--primary))]">{t('academy')}</p>
+      <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('rights')}</p>
+      <p className="mt-2"><Link href="/istifade-sertleri" className="text-xs font-semibold text-[hsl(var(--primary))] underline-offset-2 hover:underline">{t('terms')}</Link></p>
     </footer>
   );
 }
 
 function HomePage() {
+  const { t, locale, dir } = useI18n();
   const dailyBenefitQuery = useGetDailyBenefit({ query: { queryKey: getGetDailyBenefitQueryKey() } });
   const articlesQuery = useGetArticles({ query: { queryKey: getGetArticlesQueryKey() } });
   const announcementsQuery = useGetAnnouncements({ query: { queryKey: getGetAnnouncementsQueryKey() } });
@@ -303,25 +308,25 @@ function HomePage() {
   }, []);
 
   return (
-    <main className="grain flex min-h-[100dvh] flex-col bg-[hsl(var(--background))] px-5 py-5 md:px-8 md:py-6">
+    <main dir={dir} className={`grain flex min-h-[100dvh] flex-col bg-[hsl(var(--background))] px-5 py-5 md:px-8 md:py-6${locale === 'ar' ? ' font-ar' : ''}`}>
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col">
-         <div className="flex items-center justify-between gap-4"><BrandMark /><div className="flex items-center gap-2"><HomeLink /><Link href="/articles" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" data-testid="link-home-articles"><BookOpenText size={15} /> Məqalələr</Link><Link href="/sign-in" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" data-testid="link-home-sign-in"><LogIn size={15} /> Giriş</Link><Link href="/sign-up" className="focus-ring hidden rounded-xl bg-[hsl(var(--primary))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))] sm:inline-flex">Müraciət et</Link></div></div>
+         <div className="flex items-center justify-between gap-4"><BrandMark /><div className="flex items-center gap-2"><LanguageSwitch /><HomeLink /><Link href="/articles" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" data-testid="link-home-articles"><BookOpenText size={15} /> {t('articles')}</Link><Link href="/sign-in" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" data-testid="link-home-sign-in"><LogIn size={15} /> {t('signIn')}</Link><Link href="/sign-up" className="focus-ring hidden rounded-xl bg-[hsl(var(--primary))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))] sm:inline-flex">{t('apply')}</Link></div></div>
         <section className="mt-6 grid gap-4 lg:grid-cols-[1.15fr_.85fr] lg:items-start">
            <div className="rounded-2xl bg-[hsl(var(--primary))] p-5 text-[hsl(var(--primary-foreground))] shadow-[0_12px_32px_hsl(203_55%_18%/.12)] sm:p-6">
-            <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--accent))]">Mədinə Tədris Akademiyası</p>
-            <h1 className="mt-3 max-w-xl font-serif text-2xl leading-snug tracking-[-.03em] sm:text-3xl">Bu elm sizin dininizdir; dininizi kimdən öyrəndiyinizə diqqət edin.</h1>
-            <p className="mt-2 text-xs leading-5 text-[hsl(var(--primary-foreground)/.72)]">— İbn Sirin</p>
+            <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--accent))]">{t('academy')}</p>
+            <h1 className="mt-3 max-w-xl font-serif text-2xl leading-snug tracking-[-.03em] sm:text-3xl">{t('heroQuote')}</h1>
+            <p className="mt-2 text-xs leading-5 text-[hsl(var(--primary-foreground)/.72)]">{t('heroSource')}</p>
              <div className="mt-5 flex flex-wrap items-center gap-2">
                <Link href="/sign-in" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--primary-foreground)/.28)] bg-[hsl(var(--primary-foreground)/.08)] px-4 py-2.5 text-sm font-bold text-[hsl(var(--primary-foreground))] transition hover:bg-[hsl(var(--primary-foreground)/.14)]" data-testid="link-home-app-entry">
-                 <LogIn size={16} /> Tətbiqə giriş
+                 <LogIn size={16} /> {t('appEntry')}
                </Link>
-               <Link href="/sign-up" className="focus-ring inline-flex items-center rounded-xl bg-[hsl(var(--accent))] px-4 py-2.5 text-sm font-bold text-[hsl(var(--primary))]" data-testid="link-home-application">Müraciət et</Link>
+               <Link href="/sign-up" className="focus-ring inline-flex items-center rounded-xl bg-[hsl(var(--accent))] px-4 py-2.5 text-sm font-bold text-[hsl(var(--primary))]" data-testid="link-home-application">{t('apply')}</Link>
              </div>
           </div>
           <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-sm)]">
-            <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Tədris istiqamətləri</p>
-            <div className="mt-3 flex flex-wrap gap-2">{['Quran', 'Hədis', 'Əqidə', 'Fiqh', 'Ərəb dili'].map((course) => <div key={course} className="rounded-lg bg-[hsl(var(--muted)/.55)] px-3 py-1.5 text-sm font-semibold text-[hsl(var(--primary))]">{course}</div>)}</div>
-            <p className="mt-4 text-sm leading-5 text-[hsl(var(--muted-foreground))]">Müraciətinizi göndərin, müəllim heyətimiz məlumatlarınızı nəzərdən keçirsin.</p>
+            <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('tracks')}</p>
+            <div className="mt-3 flex flex-wrap gap-2">{[t('trackQuran'), t('trackHadith'), t('trackAqeedah'), t('trackFiqh'), t('trackArabic')].map((course) => <div key={course} className="rounded-lg bg-[hsl(var(--muted)/.55)] px-3 py-1.5 text-sm font-semibold text-[hsl(var(--primary))]">{course}</div>)}</div>
+            <p className="mt-4 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{t('applyHint')}</p>
           </div>
         </section>
          <section className="mt-6 max-w-3xl">
@@ -330,26 +335,26 @@ function HomePage() {
          <section className="mt-10 max-w-3xl" data-testid="section-articles">
            <div className="flex items-end justify-between gap-4">
              <div>
-               <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]"><BookOpenText size={15} /> Akademiyadan</p>
-               <h2 className="mt-1 font-serif text-3xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]">Məqalələr</h2>
+               <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]"><BookOpenText size={15} /> {t('fromAcademy')}</p>
+               <h2 className="mt-1 font-serif text-3xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]">{t('articles')}</h2>
              </div>
-             <Link href="/articles" className="focus-ring shrink-0 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" data-testid="link-home-articles-more">Hamısına bax</Link>
+             <Link href="/articles" className="focus-ring shrink-0 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" data-testid="link-home-articles-more">{t('seeAll')}</Link>
            </div>
-           {articlesQuery.isLoading && <p className="mt-6 text-sm text-[hsl(var(--muted-foreground))]">Məqalələr yüklənir...</p>}
-           {articlesQuery.isError && <p className="mt-6 rounded-xl bg-[hsl(var(--destructive)/.06)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">Məqalələr hazırda yüklənmədi.</p>}
-           {!articlesQuery.isLoading && !articlesQuery.isError && !articlesQuery.data?.length && <p className="mt-6 rounded-2xl border border-dashed border-[hsl(var(--border))] p-7 text-center text-sm text-[hsl(var(--muted-foreground))]">Hələ məqalə yayımlanmayıb.</p>}
+           {articlesQuery.isLoading && <p className="mt-6 text-sm text-[hsl(var(--muted-foreground))]">{t('articlesLoading')}</p>}
+           {articlesQuery.isError && <p className="mt-6 rounded-xl bg-[hsl(var(--destructive)/.06)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">{t('articlesError')}</p>}
+           {!articlesQuery.isLoading && !articlesQuery.isError && !articlesQuery.data?.length && <p className="mt-6 rounded-2xl border border-dashed border-[hsl(var(--border))] p-7 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('articlesEmpty')}</p>}
            {!articlesQuery.isLoading && !articlesQuery.isError && Boolean(articlesQuery.data?.length) && <div className="mt-6 space-y-3">{articlesQuery.data?.slice(0, 3).map((article) => <ArticleCard key={article.id} article={article} />)}</div>}
          </section>
           <section className="mt-10 max-w-3xl" data-testid="section-home-announcements">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]"><Megaphone size={15} /> Akademiyadan</p>
-                <h2 className="mt-1 font-serif text-3xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]">Yeniliklər</h2>
+                <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]"><Megaphone size={15} /> {t('fromAcademy')}</p>
+                <h2 className="mt-1 font-serif text-3xl leading-none tracking-[-.03em] text-[hsl(var(--primary))]">{t('news')}</h2>
               </div>
             </div>
-            {announcementsQuery.isLoading && <p className="mt-6 text-sm text-[hsl(var(--muted-foreground))]">Yeniliklər yüklənir...</p>}
-            {announcementsQuery.isError && <p className="mt-6 rounded-xl bg-[hsl(var(--destructive)/.06)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">Yeniliklər hazırda yüklənmədi.</p>}
-            {!announcementsQuery.isLoading && !announcementsQuery.isError && !announcementsQuery.data?.length && <p className="mt-6 rounded-2xl border border-dashed border-[hsl(var(--border))] p-7 text-center text-sm text-[hsl(var(--muted-foreground))]">Hələ yenilik yayımlanmayıb.</p>}
+            {announcementsQuery.isLoading && <p className="mt-6 text-sm text-[hsl(var(--muted-foreground))]">{t('newsLoading')}</p>}
+            {announcementsQuery.isError && <p className="mt-6 rounded-xl bg-[hsl(var(--destructive)/.06)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">{t('newsError')}</p>}
+            {!announcementsQuery.isLoading && !announcementsQuery.isError && !announcementsQuery.data?.length && <p className="mt-6 rounded-2xl border border-dashed border-[hsl(var(--border))] p-7 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('newsEmpty')}</p>}
             {!announcementsQuery.isLoading && !announcementsQuery.isError && Boolean(announcementsQuery.data?.length) && <div className="mt-6 space-y-3">{announcementsQuery.data?.slice(0, 3).map((announcement) => <AnnouncementCard key={announcement.id} announcement={announcement} />)}</div>}
           </section>
         {statistics && <PublicStatistics statistics={statistics} />}
@@ -372,34 +377,36 @@ function AnnouncementCard({ announcement }: { announcement: Announcement }) {
 }
 
 function ArticlesPage() {
+  const { t, locale, dir } = useI18n();
   const articlesQuery = useGetArticles({ query: { queryKey: getGetArticlesQueryKey() } });
   const { user, isLoaded } = useUser();
   const articles = articlesQuery.data ?? [];
 
   return (
-    <main className="grain min-h-[100dvh] bg-[hsl(var(--background))] px-5 py-7 md:px-10">
+    <main dir={dir} className={`grain min-h-[100dvh] bg-[hsl(var(--background))] px-5 py-7 md:px-10${locale === 'ar' ? ' font-ar' : ''}`}>
       <div className="mx-auto max-w-5xl">
         <div className="flex items-center justify-between gap-4">
           <BrandMark />
           <div className="flex items-center gap-2">
+            <LanguageSwitch />
             <HomeLink />
             {isLoaded && (user ? (
-              <Link href={isTeacherAccount(user) ? '/admin' : '/user-portal'} className="focus-ring inline-flex items-center rounded-xl bg-[hsl(var(--primary))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))]" data-testid="link-articles-portal">Panelə qayıt</Link>
+              <Link href={isTeacherAccount(user) ? '/admin' : '/user-portal'} className="focus-ring inline-flex items-center rounded-xl bg-[hsl(var(--primary))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))]" data-testid="link-articles-portal">{t('panelBack')}</Link>
             ) : (
               <>
-                <Link href="/sign-in" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" data-testid="link-articles-sign-in"><LogIn size={15} /> Giriş</Link>
-                <Link href="/sign-up" className="focus-ring hidden rounded-xl bg-[hsl(var(--primary))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))] sm:inline-flex">Müraciət et</Link>
+                <Link href="/sign-in" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]" data-testid="link-articles-sign-in"><LogIn size={15} /> {t('signIn')}</Link>
+                <Link href="/sign-up" className="focus-ring hidden rounded-xl bg-[hsl(var(--primary))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))] sm:inline-flex">{t('apply')}</Link>
               </>
             ))}
           </div>
         </div>
         <section className="mt-12 max-w-3xl" data-testid="page-articles">
-          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]"><BookOpenText size={15} /> Mədinə Tədris Akademiyası</p>
-          <h1 className="mt-3 font-serif text-5xl leading-none tracking-[-.04em] text-[hsl(var(--primary))] md:text-6xl">Məqalələr</h1>
-          <p className="mt-5 max-w-2xl text-sm leading-7 text-[hsl(var(--muted-foreground))]">Elm, tərbiyə və davamlı öyrənmə haqqında müəllimlərimizin paylaşdığı yazıları oxuyun.</p>
-          {articlesQuery.isLoading && <p className="mt-10 text-sm text-[hsl(var(--muted-foreground))]">Məqalələr yüklənir...</p>}
-          {articlesQuery.isError && <p className="mt-10 rounded-xl bg-[hsl(var(--destructive)/.06)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">Məqalələr yüklənə bilmədi.</p>}
-          {!articlesQuery.isLoading && !articlesQuery.isError && !articles.length && <p className="mt-10 rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">Hələ məqalə yayımlanmayıb.</p>}
+          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]"><BookOpenText size={15} /> {t('academy')}</p>
+          <h1 className="mt-3 font-serif text-5xl leading-none tracking-[-.04em] text-[hsl(var(--primary))] md:text-6xl">{t('articles')}</h1>
+          <p className="mt-5 max-w-2xl text-sm leading-7 text-[hsl(var(--muted-foreground))]">{t('articlesIntro')}</p>
+          {articlesQuery.isLoading && <p className="mt-10 text-sm text-[hsl(var(--muted-foreground))]">{t('articlesLoading')}</p>}
+          {articlesQuery.isError && <p className="mt-10 rounded-xl bg-[hsl(var(--destructive)/.06)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">{t('articlesError')}</p>}
+          {!articlesQuery.isLoading && !articlesQuery.isError && !articles.length && <p className="mt-10 rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('articlesEmpty')}</p>}
           {!articlesQuery.isLoading && !articlesQuery.isError && articles.length > 0 && <div className="mt-9 space-y-4">{articles.map((article) => <ArticleCard key={article.id} article={article} />)}</div>}
         </section>
         <SiteFooter />
@@ -409,31 +416,33 @@ function ArticlesPage() {
 }
 
 function PublicArticlesPage() {
+  const { t, locale, dir } = useI18n();
   const articlesQuery = useGetArticles({ query: { queryKey: getGetArticlesQueryKey() } });
   const articles = articlesQuery.data ?? [];
 
   return (
-    <main className="grain min-h-[100dvh] bg-[hsl(var(--background))] px-5 py-7 md:px-10">
+    <main dir={dir} className={`grain min-h-[100dvh] bg-[hsl(var(--background))] px-5 py-7 md:px-10${locale === 'ar' ? ' font-ar' : ''}`}>
       <div className="mx-auto max-w-5xl">
         <div className="flex items-center justify-between gap-4">
           <BrandMark />
           <div className="flex items-center gap-2">
+            <LanguageSwitch />
             <HomeLink />
             <Link href="/sign-in" className="focus-ring inline-flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--muted))]">
-              <LogIn size={15} /> Giriş
+              <LogIn size={15} /> {t('signIn')}
             </Link>
             <Link href="/sign-up" className="focus-ring hidden rounded-xl bg-[hsl(var(--primary))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))] sm:inline-flex">
-              Müraciət et
+              {t('apply')}
             </Link>
           </div>
         </div>
         <section className="mt-12 max-w-3xl" data-testid="page-articles">
-          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]"><BookOpenText size={15} /> Mədinə Tədris Akademiyası</p>
-          <h1 className="mt-3 font-serif text-5xl leading-none tracking-[-.04em] text-[hsl(var(--primary))] md:text-6xl">Məqalələr</h1>
-          <p className="mt-5 max-w-2xl text-sm leading-7 text-[hsl(var(--muted-foreground))]">Elm, tərbiyə və davamlı öyrənmə haqqında müəllimlərimizin paylaşdığı yazıları oxuyun.</p>
-          {articlesQuery.isLoading && <p className="mt-10 text-sm text-[hsl(var(--muted-foreground))]">Məqalələr yüklənir...</p>}
-          {articlesQuery.isError && <p className="mt-10 rounded-xl bg-[hsl(var(--destructive)/.06)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">Məqalələr hazırda yüklənmədi.</p>}
-          {!articlesQuery.isLoading && !articlesQuery.isError && !articles.length && <p className="mt-10 rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">Hələ məqalə yayımlanmayıb.</p>}
+          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]"><BookOpenText size={15} /> {t('academy')}</p>
+          <h1 className="mt-3 font-serif text-5xl leading-none tracking-[-.04em] text-[hsl(var(--primary))] md:text-6xl">{t('articles')}</h1>
+          <p className="mt-5 max-w-2xl text-sm leading-7 text-[hsl(var(--muted-foreground))]">{t('articlesIntro')}</p>
+          {articlesQuery.isLoading && <p className="mt-10 text-sm text-[hsl(var(--muted-foreground))]">{t('articlesLoading')}</p>}
+          {articlesQuery.isError && <p className="mt-10 rounded-xl bg-[hsl(var(--destructive)/.06)] p-4 text-sm font-semibold text-[hsl(var(--destructive))]">{t('articlesError')}</p>}
+          {!articlesQuery.isLoading && !articlesQuery.isError && !articles.length && <p className="mt-10 rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('articlesEmpty')}</p>}
           {!articlesQuery.isLoading && !articlesQuery.isError && articles.length > 0 && <div className="mt-9 space-y-4">{articles.map((article) => <ArticleCard key={article.id} article={article} />)}</div>}
         </section>
         <SiteFooter />
@@ -443,33 +452,35 @@ function PublicArticlesPage() {
 }
 
 function DailyBenefitCard({ benefit, isLoading, hasError }: { benefit?: DailyBenefit; isLoading: boolean; hasError: boolean }) {
+  const { t } = useI18n();
   return (
     <section className="relative overflow-hidden rounded-2xl border border-[hsl(37_70%_42%/.18)] bg-[hsl(var(--accent))] px-5 py-4 text-[hsl(var(--primary))] shadow-[var(--shadow-xs)] sm:px-6" data-testid="section-daily-benefit">
       <Quote className="pointer-events-none absolute -right-1 -top-2 h-16 w-16 rotate-12 text-[hsl(var(--primary)/.08)]" strokeWidth={1.25} />
       <div className="relative">
-        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--primary)/.72)]"><Quote size={13} /> Günün faydası</div>
-        {isLoading && <p className="mt-3 text-sm font-semibold text-[hsl(var(--primary)/.65)]">Yüklənir...</p>}
-        {hasError && <p className="mt-3 text-sm font-semibold text-[hsl(var(--primary)/.65)]">Günün faydası hazırda yüklənmədi.</p>}
+        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--primary)/.72)]"><Quote size={13} /> {t('dailyBenefit')}</div>
+        {isLoading && <p className="mt-3 text-sm font-semibold text-[hsl(var(--primary)/.65)]">{t('loading')}</p>}
+        {hasError && <p className="mt-3 text-sm font-semibold text-[hsl(var(--primary)/.65)]">{t('dailyBenefitError')}</p>}
         {!isLoading && !hasError && benefit && (
           <>
             <blockquote className="mt-2.5 font-serif text-lg leading-snug tracking-[-.02em] sm:text-xl">“{benefit.body}”</blockquote>
             <p className="mt-3 text-xs font-bold text-[hsl(var(--primary)/.7)]">— {benefit.source}</p>
           </>
         )}
-        {!isLoading && !hasError && !benefit && <p className="mt-3 text-sm font-semibold text-[hsl(var(--primary)/.65)]">Günün faydası hələ əlavə edilməyib.</p>}
+        {!isLoading && !hasError && !benefit && <p className="mt-3 text-sm font-semibold text-[hsl(var(--primary)/.65)]">{t('dailyBenefitEmpty')}</p>}
       </div>
     </section>
   );
 }
 
 function ArticleCard({ article }: { article: Article }) {
+  const { locale } = useI18n();
   return (
     <details className="group rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.32)] p-4 open:bg-[hsl(var(--muted)/.55)]" data-testid={`article-${article.id}`}>
       <summary className="flex cursor-pointer list-none items-start justify-between gap-4 [&::-webkit-details-marker]:hidden">
         <span className="min-w-0">
           <span className="block text-base font-bold text-[hsl(var(--primary))]">{article.title}</span>
           <span className="mt-1 block text-sm leading-5 text-[hsl(var(--muted-foreground))]">{article.excerpt}</span>
-          <span className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase tracking-[.1em] text-[hsl(var(--secondary-foreground))]"><UserRound size={12} /> {formatPersonName(article.author)} <CalendarDays size={12} /> {new Date(article.createdAt).toLocaleDateString('az-AZ')}</span>
+          <span className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase tracking-[.1em] text-[hsl(var(--secondary-foreground))]"><UserRound size={12} /> {formatPersonName(article.author)} <CalendarDays size={12} /> {new Date(article.createdAt).toLocaleDateString(locale === 'ar' ? 'ar' : 'az-AZ')}</span>
         </span>
         <ChevronDown className="mt-1 shrink-0 text-[hsl(var(--secondary-foreground))] transition group-open:rotate-180" size={19} />
       </summary>
@@ -479,6 +490,7 @@ function ArticleCard({ article }: { article: Article }) {
 }
 
 function SignInForm() {
+  const { t, locale, dir } = useI18n();
   const { signIn } = useModernSignIn();
   const [, setLocation] = useLocation();
   const [stage, setStage] = useState<'credentials' | 'device-trust'>('credentials');
@@ -494,7 +506,7 @@ function SignInForm() {
       navigate: ({ session, decorateUrl }) => {
         if (session?.currentTask) {
           setIsNoticeError(false);
-          setNotice('Hesabınız üçün əlavə təsdiq tamamlanmalıdır.');
+          setNotice(t('extraConfirm'));
           return;
         }
         const destination = decorateUrl('/user-portal');
@@ -523,7 +535,7 @@ function SignInForm() {
         const resolved = await resolveResponse.json().catch(() => ({})) as { email?: string; error?: string };
         if (!resolveResponse.ok || !resolved.email) {
           setIsNoticeError(true);
-          setNotice(resolveResponse.status === 429 && resolved.error ? resolved.error : 'Email və ya şifrə düzgün deyil.');
+          setNotice(resolveResponse.status === 429 && resolved.error ? resolved.error : t('badCredentials'));
           return;
         }
         emailAddress = resolved.email;
@@ -534,30 +546,30 @@ function SignInForm() {
       });
       if (error) {
         setIsNoticeError(true);
-        setNotice('Email və ya şifrə düzgün deyil.');
+        setNotice(t('badCredentials'));
         return;
       }
       if (signIn.status === 'needs_client_trust') {
         const emailCodeFactor = signIn.supportedSecondFactors.find((factor) => factor.strategy === 'email_code');
         if (!emailCodeFactor) {
           setIsNoticeError(true);
-          setNotice('Bu hesab üçün cihaz təsdiq üsulu əlçatan deyil.');
+          setNotice(t('deviceMethodMissing'));
           return;
         }
         await signIn.mfa.sendEmailCode();
         setStage('device-trust');
-        setNotice('Təhlükəsizlik kodu email ünvanınıza göndərildi.');
+        setNotice(t('codeSent'));
         return;
       }
       if (signIn.status !== 'complete') {
         setIsNoticeError(true);
-        setNotice('Giriş hazırda tamamlana bilmədi. Yenidən cəhd edin.');
+        setNotice(t('signInFailed'));
         return;
       }
       await finalizeSignIn();
     } catch {
       setIsNoticeError(true);
-      setNotice('Email və ya şifrə düzgün deyil.');
+      setNotice(t('badCredentials'));
     } finally {
       setIsSubmitting(false);
     }
@@ -572,13 +584,13 @@ function SignInForm() {
       const { error } = await signIn.mfa.verifyEmailCode({ code: trustCode.trim() });
       if (error || signIn.status !== 'complete') {
         setIsNoticeError(true);
-        setNotice('Kod düzgün deyil və ya müddəti bitib. Yenidən yoxlayın.');
+        setNotice(t('badCode'));
         return;
       }
       await finalizeSignIn();
     } catch {
       setIsNoticeError(true);
-      setNotice('Kod düzgün deyil və ya müddəti bitib. Yenidən yoxlayın.');
+      setNotice(t('badCode'));
     } finally {
       setIsSubmitting(false);
     }
@@ -590,10 +602,10 @@ function SignInForm() {
     setIsNoticeError(false);
     try {
       await signIn.mfa.sendEmailCode();
-      setNotice('Yeni təhlükəsizlik kodu email ünvanınıza göndərildi.');
+      setNotice(t('codeResent'));
     } catch {
       setIsNoticeError(true);
-      setNotice('Kod yenidən göndərilə bilmədi. Bir qədər sonra cəhd edin.');
+      setNotice(t('resendFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -608,34 +620,34 @@ function SignInForm() {
   };
 
   return (
-    <main className="grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5 py-7 md:px-10">
+    <main dir={dir} className={`grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5 py-7 md:px-10${locale === 'ar' ? ' font-ar' : ''}`}>
       <div className="w-full max-w-md">
-        <div className="flex items-center justify-between gap-4"><BrandMark /><HomeLink /></div>
+        <div className="flex items-center justify-between gap-4"><BrandMark /><div className="flex items-center gap-2"><LanguageSwitch /><HomeLink /></div></div>
         <section className="mt-10 rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-[var(--shadow-sm)] md:p-8">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[hsl(var(--accent)/.35)] text-[hsl(var(--primary))]"><KeyRound size={21} /></div>
-          <p className="mt-7 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{stage === 'device-trust' ? 'Cihaz təsdiqi' : 'Tələbə kabineti'}</p>
+          <p className="mt-7 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{stage === 'device-trust' ? t('deviceTrust') : t('studentCabinet')}</p>
           {stage === 'device-trust' && (
             <>
-              <h1 className="mt-2 font-serif text-4xl leading-none text-[hsl(var(--primary))]">Email kodunu yazın.</h1>
-              <p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Yeni cihazdan giriş etdiyiniz üçün email ünvanınıza göndərilən birdəfəlik təhlükəsizlik kodunu daxil edin.</p>
+              <h1 className="mt-2 font-serif text-4xl leading-none text-[hsl(var(--primary))]">{t('emailCodeTitle')}</h1>
+              <p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('emailCodeHint')}</p>
             </>
           )}
           {stage === 'credentials' ? (
             <form className="mt-7 space-y-5" onSubmit={submit} data-testid="form-sign-in">
-              <label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Email və ya tələbə nömrəsi</span><input required type="text" inputMode="email" autoComplete="username" placeholder="email@example.com və ya T0001" value={identifier} onChange={(event) => setIdentifier(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm text-[hsl(var(--foreground))] outline-none transition" data-testid="input-sign-in-identifier" /></label>
-              <label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Şifrə</span><input required type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm text-[hsl(var(--foreground))] outline-none transition" data-testid="input-sign-in-password" /></label>
-              <div className="-mt-2 text-right"><Link href="/forgot-password" className="focus-ring text-xs font-bold text-[hsl(var(--secondary-foreground))] hover:underline" data-testid="link-forgot-password">Şifrəni unutmusunuz?</Link></div>
-              <button type="submit" disabled={isSubmitting} className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-sign-in">{isSubmitting ? <LoaderCircle className="animate-spin" size={17} /> : <LogIn size={17} />}{isSubmitting ? 'Daxil olunur...' : 'Giriş et'}</button>
+              <label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('emailOrNumber')}</span><input required type="text" inputMode="email" autoComplete="username" placeholder={t('emailPlaceholder')} value={identifier} onChange={(event) => setIdentifier(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm text-[hsl(var(--foreground))] outline-none transition" data-testid="input-sign-in-identifier" /></label>
+              <label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('password')}</span><input required type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm text-[hsl(var(--foreground))] outline-none transition" data-testid="input-sign-in-password" /></label>
+              <div className="-mt-2 text-end"><Link href="/forgot-password" className="focus-ring text-xs font-bold text-[hsl(var(--secondary-foreground))] hover:underline" data-testid="link-forgot-password">{t('forgotPassword')}</Link></div>
+              <button type="submit" disabled={isSubmitting} className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-sign-in">{isSubmitting ? <LoaderCircle className="animate-spin" size={17} /> : <LogIn size={17} />}{isSubmitting ? t('signingIn') : t('signInAction')}</button>
             </form>
           ) : (
             <form className="mt-7 space-y-5" onSubmit={verifyDeviceTrust} data-testid="form-device-trust">
-              <label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Təhlükəsizlik kodu</span><input required autoComplete="one-time-code" inputMode="numeric" value={trustCode} onChange={(event) => setTrustCode(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm text-[hsl(var(--foreground))] outline-none transition" data-testid="input-device-trust-code" /></label>
-              <button type="submit" disabled={isSubmitting} className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-verify-device-trust">{isSubmitting ? <LoaderCircle className="animate-spin" size={17} /> : <KeyRound size={17} />}{isSubmitting ? 'Yoxlanılır...' : 'Kodu təsdiqlə'}</button>
-              <div className="flex items-center justify-between gap-3 text-xs"><button type="button" onClick={() => void startOver()} className="focus-ring font-bold text-[hsl(var(--secondary-foreground))] hover:underline">Geri qayıt</button><button type="button" onClick={() => void resendDeviceTrustCode()} disabled={isSubmitting} className="focus-ring font-bold text-[hsl(var(--secondary-foreground))] hover:underline disabled:opacity-50" data-testid="button-resend-device-trust">Kodu yenidən göndər</button></div>
+              <label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('securityCode')}</span><input required autoComplete="one-time-code" inputMode="numeric" value={trustCode} onChange={(event) => setTrustCode(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm text-[hsl(var(--foreground))] outline-none transition" data-testid="input-device-trust-code" /></label>
+              <button type="submit" disabled={isSubmitting} className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-verify-device-trust">{isSubmitting ? <LoaderCircle className="animate-spin" size={17} /> : <KeyRound size={17} />}{isSubmitting ? t('checking') : t('confirmCode')}</button>
+              <div className="flex items-center justify-between gap-3 text-xs"><button type="button" onClick={() => void startOver()} className="focus-ring font-bold text-[hsl(var(--secondary-foreground))] hover:underline">{t('back')}</button><button type="button" onClick={() => void resendDeviceTrustCode()} disabled={isSubmitting} className="focus-ring font-bold text-[hsl(var(--secondary-foreground))] hover:underline disabled:opacity-50" data-testid="button-resend-device-trust">{t('resendCode')}</button></div>
             </form>
           )}
           {notice && <p className={`mt-4 rounded-xl px-3.5 py-3 text-sm font-semibold ${isNoticeError ? 'bg-[hsl(var(--destructive)/.08)] text-[hsl(var(--destructive))]' : 'bg-[hsl(var(--secondary)/.45)] text-[hsl(var(--secondary-foreground))]'}`} role={isNoticeError ? 'alert' : 'status'} data-testid="text-sign-in-notice">{notice}</p>}
-          {stage === 'credentials' && <p className="mt-6 border-t border-[hsl(var(--border))] pt-5 text-center text-xs text-[hsl(var(--muted-foreground))]">Hesabınız yoxdur? <Link href="/sign-up" className="font-bold text-[hsl(var(--secondary-foreground))]">Müraciət edin</Link></p>}
+          {stage === 'credentials' && <p className="mt-6 border-t border-[hsl(var(--border))] pt-5 text-center text-xs text-[hsl(var(--muted-foreground))]">{t('noAccount')} <Link href="/sign-up" className="font-bold text-[hsl(var(--secondary-foreground))]">{t('applyLink')}</Link></p>}
         </section>
         <SiteFooter />
       </div>
@@ -644,6 +656,7 @@ function SignInForm() {
 }
 
 function PasswordResetForm() {
+  const { t, locale, dir } = useI18n();
   const { signIn, isLoaded, setActive } = useLegacySignIn();
   const [, setLocation] = useLocation();
   const [stage, setStage] = useState<'email' | 'code' | 'password' | 'success'>('email');
@@ -666,9 +679,9 @@ function PasswordResetForm() {
       if (!resetFactor || !('emailAddressId' in resetFactor)) throw new Error();
       await signIn.prepareFirstFactor({ strategy: 'reset_password_email_code', emailAddressId: resetFactor.emailAddressId });
       setStage('code');
-      setNotice('Əgər bu email ilə hesab varsa, Clerk həmin ünvana birdəfəlik bərpa kodu göndərdi.');
+      setNotice(t('resetSent'));
     } catch {
-      setNotice('Əgər bu email ilə hesab varsa, Clerk həmin ünvana birdəfəlik bərpa kodu göndərdi.');
+      setNotice(t('resetSent'));
       setStage('code');
     } finally {
       setIsSubmitting(false);
@@ -687,7 +700,7 @@ function PasswordResetForm() {
       setStage('password');
     } catch {
       setIsError(true);
-      setNotice('Kod düzgün deyil və ya müddəti bitib. Yenidən yoxlayın.');
+      setNotice(t('badCode'));
     } finally {
       setIsSubmitting(false);
     }
@@ -704,28 +717,28 @@ function PasswordResetForm() {
       if (result.status !== 'complete') throw new Error();
       if (result.createdSessionId && setActive) await setActive({ session: result.createdSessionId });
       setStage('success');
-      setNotice('Şifrəniz yeniləndi. Hesab statusunuz yoxlanıldıqdan sonra kabinetə keçə bilərsiniz.');
+      setNotice(t('passwordUpdatedNotice'));
     } catch {
       setIsError(true);
-      setNotice('Şifrə yenilənmədi. Ən azı 8 simvol seçin və yenidən yoxlayın.');
+      setNotice(t('passwordUpdateFailed'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <main className="grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5 py-7 md:px-10">
-      <div className="w-full max-w-md"><div className="flex items-center justify-between gap-4"><BrandMark /><HomeLink /></div>
+    <main dir={dir} className={`grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5 py-7 md:px-10${locale === 'ar' ? ' font-ar' : ''}`}>
+      <div className="w-full max-w-md"><div className="flex items-center justify-between gap-4"><BrandMark /><div className="flex items-center gap-2"><LanguageSwitch /><HomeLink /></div></div>
         <section className="mt-10 rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-[var(--shadow-sm)] md:p-8">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[hsl(var(--accent)/.35)] text-[hsl(var(--primary))]"><KeyRound size={21} /></div>
-          <p className="mt-7 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Hesab bərpası</p>
-          <h1 className="mt-2 font-serif text-4xl leading-none text-[hsl(var(--primary))]">{stage === 'password' ? 'Yeni şifrə seçin.' : stage === 'success' ? 'Şifrə yeniləndi.' : 'Şifrənizi bərpa edin.'}</h1>
-          {stage === 'email' && <><p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Qeydiyyat email ünvanınızı yazın. Clerk təhlükəsiz, birdəfəlik bərpa kodunu həmin ünvana göndərəcək.</p><form className="mt-7 space-y-5" onSubmit={sendReset}><label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Email ünvanı</span><input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" data-testid="input-reset-email" /></label><button type="submit" disabled={!isLoaded || isSubmitting} className="focus-ring w-full rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" data-testid="button-send-reset">{isSubmitting ? 'Göndərilir...' : 'Bərpa kodunu göndər'}</button></form></>}
-          {stage === 'code' && <><p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Email ünvanınıza göndərilən birdəfəlik kodu daxil edin.</p><form className="mt-7 space-y-5" onSubmit={verifyCode}><label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Bərpa kodu</span><input required autoComplete="one-time-code" inputMode="numeric" value={code} onChange={(event) => setCode(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" data-testid="input-reset-code" /></label><button type="submit" disabled={isSubmitting} className="focus-ring w-full rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" data-testid="button-verify-reset-code">{isSubmitting ? 'Yoxlanılır...' : 'Kodu təsdiqlə'}</button></form></>}
-          {stage === 'password' && <><p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Yeni, güclü şifrə təyin edin.</p><form className="mt-7 space-y-5" onSubmit={resetPassword}><label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Yeni şifrə</span><input required minLength={8} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" data-testid="input-reset-password" /></label><button type="submit" disabled={isSubmitting} className="focus-ring w-full rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" data-testid="button-complete-reset">{isSubmitting ? 'Yenilənir...' : 'Şifrəni yenilə'}</button></form></>}
-          {stage === 'success' && <button type="button" onClick={() => setLocation('/user-portal')} className="focus-ring mt-7 w-full rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))]" data-testid="button-reset-continue">Kabinetə keç</button>}
+          <p className="mt-7 text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('accountRecovery')}</p>
+          <h1 className="mt-2 font-serif text-4xl leading-none text-[hsl(var(--primary))]">{stage === 'password' ? t('chooseNewPassword') : stage === 'success' ? t('passwordUpdatedTitle') : t('recoverTitle')}</h1>
+          {stage === 'email' && <><p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('resetHint')}</p><form className="mt-7 space-y-5" onSubmit={sendReset}><label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('email')}</span><input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" data-testid="input-reset-email" /></label><button type="submit" disabled={!isLoaded || isSubmitting} className="focus-ring w-full rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" data-testid="button-send-reset">{isSubmitting ? t('sending') : t('sendResetCode')}</button></form></>}
+          {stage === 'code' && <><p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('codeHint')}</p><form className="mt-7 space-y-5" onSubmit={verifyCode}><label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('resetCode')}</span><input required autoComplete="one-time-code" inputMode="numeric" value={code} onChange={(event) => setCode(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" data-testid="input-reset-code" /></label><button type="submit" disabled={isSubmitting} className="focus-ring w-full rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" data-testid="button-verify-reset-code">{isSubmitting ? t('checking') : t('confirmCode')}</button></form></>}
+          {stage === 'password' && <><p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('newPasswordHint')}</p><form className="mt-7 space-y-5" onSubmit={resetPassword}><label className="block"><span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('newPassword')}</span><input required minLength={8} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="focus-ring w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-3 text-sm outline-none" data-testid="input-reset-password" /></label><button type="submit" disabled={isSubmitting} className="focus-ring w-full rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50" data-testid="button-complete-reset">{isSubmitting ? t('updating') : t('updatePassword')}</button></form></>}
+          {stage === 'success' && <button type="button" onClick={() => setLocation('/user-portal')} className="focus-ring mt-7 w-full rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))]" data-testid="button-reset-continue">{t('goToCabinet')}</button>}
           {notice && <p className={`mt-4 rounded-xl px-3.5 py-3 text-sm font-semibold ${isError ? 'bg-[hsl(var(--destructive)/.08)] text-[hsl(var(--destructive))]' : 'bg-[hsl(var(--secondary)/.45)] text-[hsl(var(--secondary-foreground))]'}`} role="status">{notice}</p>}
-          {stage !== 'success' && <p className="mt-6 border-t border-[hsl(var(--border))] pt-5 text-center text-xs text-[hsl(var(--muted-foreground))]">Şifrənizi xatırladınız? <Link href="/sign-in" className="font-bold text-[hsl(var(--secondary-foreground))]">Giriş edin</Link></p>}
+          {stage !== 'success' && <p className="mt-6 border-t border-[hsl(var(--border))] pt-5 text-center text-xs text-[hsl(var(--muted-foreground))]">{t('remembered')} <Link href="/sign-in" className="font-bold text-[hsl(var(--secondary-foreground))]">{t('signInLink')}</Link></p>}
         </section>
         <SiteFooter />
       </div>
@@ -883,26 +896,27 @@ function ClerkQueryClientCacheInvalidator() {
 }
 
 function TermsPage() {
+  const { t, locale, dir } = useI18n();
   return (
-    <main className="grain min-h-[100dvh] bg-[hsl(var(--background))] px-5 py-7 md:px-10">
+    <main dir={dir} className={`grain min-h-[100dvh] bg-[hsl(var(--background))] px-5 py-7 md:px-10${locale === 'ar' ? ' font-ar' : ''}`}>
       <div className="mx-auto max-w-3xl">
-        <div className="flex items-center justify-between gap-4"><BrandMark /><HomeLink /></div>
+        <div className="flex items-center justify-between gap-4"><BrandMark /><div className="flex items-center gap-2"><LanguageSwitch /><HomeLink /></div></div>
         <article className="mt-8 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-xs)] md:p-6" data-testid="page-terms">
-          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Mədinə Tədris Akademiyası</p>
-          <h1 className="mt-2 font-serif text-3xl leading-tight text-[hsl(var(--primary))]">Məxfilik siyasəti və istifadə şərtləri</h1>
+          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('academy')}</p>
+          <h1 className="mt-2 font-serif text-3xl leading-tight text-[hsl(var(--primary))]">{t('termsTitle')}</h1>
           <div className="mt-5 space-y-4 text-sm leading-6 text-[hsl(var(--foreground)/.86)]">
-            <p>Müraciət edən və dərsə qəbul olunan hər kəs bu şərtlərlə razılaşır.</p>
+            <p>{t('termsIntro')}</p>
             <section>
-              <h2 className="text-sm font-bold text-[hsl(var(--primary))]">Dərslərə ciddi yanaşın</h2>
-              <p className="mt-1 text-[hsl(var(--muted-foreground))]">Dərslərə vaxtında qoşulun. Tapşırıq və testləri özünüz, vaxtında yerinə yetirin. Müəllimə və dərsə hörmətlə yanaşın. Dərs linkini başqası ilə paylaşmayın.</p>
+              <h2 className="text-sm font-bold text-[hsl(var(--primary))]">{t('termsSerious')}</h2>
+              <p className="mt-1 text-[hsl(var(--muted-foreground))]">{t('termsSeriousBody')}</p>
             </section>
             <section>
-              <h2 className="text-sm font-bold text-[hsl(var(--primary))]">Məlumatları düzgün doldurun</h2>
-              <p className="mt-1 text-[hsl(var(--muted-foreground))]">Ad, soyad, telefon, e-poçt və doğum tarixini düzgün yazın. Tövsiyə məktubunu özünüzə aid fayl kimi yükləyin. Yanlış və ya başqasına məxsus məlumat yazmayın.</p>
+              <h2 className="text-sm font-bold text-[hsl(var(--primary))]">{t('termsData')}</h2>
+              <p className="mt-1 text-[hsl(var(--muted-foreground))]">{t('termsDataBody')}</p>
             </section>
             <section>
-              <h2 className="text-sm font-bold text-[hsl(var(--primary))]">Məxfilik</h2>
-              <p className="mt-1 text-[hsl(var(--muted-foreground))]">Məlumatlar yalnız qəbul, tədris və əlaqə üçün istifadə olunur. Şifrə işçilərə göstərilmir və reklam üçün paylaşılmır. Hesab yalnız sizə məxsusdur.</p>
+              <h2 className="text-sm font-bold text-[hsl(var(--primary))]">{t('termsPrivacy')}</h2>
+              <p className="mt-1 text-[hsl(var(--muted-foreground))]">{t('termsPrivacyBody')}</p>
             </section>
           </div>
         </article>

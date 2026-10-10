@@ -1,5 +1,6 @@
 import { BookOpenText, Home } from 'lucide-react';
 import { Link } from 'wouter';
+import { useI18n } from '@/lib/i18n';
 
 const linkClass = (dark: boolean, compact: boolean) => `focus-ring inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold transition ${
   dark
@@ -10,19 +11,21 @@ const linkClass = (dark: boolean, compact: boolean) => `focus-ring inline-flex i
 }`;
 
 export function HomeLink({ dark = false, compact = false }: { dark?: boolean; compact?: boolean }) {
+  const { t } = useI18n();
   return (
-    <Link href="/" aria-label="Ana səhifə" className={linkClass(dark, compact)} data-testid="link-home">
+    <Link href="/" aria-label={t('home')} className={linkClass(dark, compact)} data-testid="link-home">
       <Home size={15} />
-      <span className={compact ? 'hidden sm:inline' : undefined}>Ana səhifə</span>
+      <span className={compact ? 'hidden sm:inline' : undefined}>{t('home')}</span>
     </Link>
   );
 }
 
 export function ArticlesLink({ dark = false, compact = false }: { dark?: boolean; compact?: boolean }) {
+  const { t } = useI18n();
   return (
-    <Link href="/articles" aria-label="Məqalələr" className={linkClass(dark, compact)} data-testid="link-articles">
+    <Link href="/articles" aria-label={t('articles')} className={linkClass(dark, compact)} data-testid="link-articles">
       <BookOpenText size={15} />
-      <span className={compact ? 'hidden sm:inline' : undefined}>Məqalələr</span>
+      <span className={compact ? 'hidden sm:inline' : undefined}>{t('articles')}</span>
     </Link>
   );
 }

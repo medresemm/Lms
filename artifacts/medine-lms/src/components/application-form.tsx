@@ -3,6 +3,7 @@ import { CheckCircle2, Eye, EyeOff, FileText, LoaderCircle, Send, ShieldCheck, U
 import { useClerk } from '@clerk/react';
 import { useSignUp } from '@clerk/react/legacy';
 import { HomeLink } from '@/components/home-link';
+import { LanguageSwitch, useI18n } from '@/lib/i18n';
 import { Link } from 'wouter';
 
 type FormValues = {
@@ -104,16 +105,19 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function ApplicationFooter() {
+  const { t } = useI18n();
   return (
     <footer className="mt-8 border-t border-[hsl(var(--border))] py-4 text-center">
-      <p className="text-sm font-semibold text-[hsl(var(--primary))]">Mədinə Tədris Akademiyası</p>
-      <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">© 2026. Bütün hüquqlar qorunur.</p>
-      <p className="mt-2"><Link href="/istifade-sertleri" className="text-xs font-semibold text-[hsl(var(--primary))] underline-offset-2 hover:underline">İstifadə şərtləri</Link></p>
+      <p className="text-sm font-semibold text-[hsl(var(--primary))]">{t('academy')}</p>
+      <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('rights')}</p>
+      <p className="mt-2"><Link href="/istifade-sertleri" className="text-xs font-semibold text-[hsl(var(--primary))] underline-offset-2 hover:underline">{t('terms')}</Link></p>
     </footer>
   );
 }
 
 export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
+  const { t, locale, dir } = useI18n();
+  const pageClass = (extra: string) => `${extra}${locale === 'ar' ? ' font-ar' : ''}`;
   const { signUp, isLoaded, setActive } = useSignUp();
   const { signOut } = useClerk();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -195,17 +199,17 @@ export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
     setIsError(false);
     if (applicationWindow && !applicationWindow.isOpen) {
       setIsError(true);
-      setNotice(applicationWindow.status === 'not_started' ? 'Müraciət qəbulu hələ açılmayıb.' : 'Müraciət qəbulu artıq bağlanıb.');
+      setNotice(applicationWindow.status === 'not_started' ? t('applicationsNotOpen') : t('applicationsClosed'));
       return;
     }
     if (files.length !== 2) {
       setIsError(true);
-      setNotice('Zəhmət olmasa, 2 ədəd tövsiyə məktubu seçin.');
+      setNotice(t('needTwoLetters'));
       return;
     }
     if (!isLoaded || !signUp) {
       setIsError(true);
-      setNotice('Qeydiyyat xidməti hələ hazır deyil. Bir az sonra yenidən cəhd edin.');
+      setNotice(t('signupNotReady'));
       return;
     }
 
@@ -230,7 +234,7 @@ export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
       await createdSignUp.prepareEmailAddressVerification({ strategy: 'email_code' });
       setPendingFiles(pending);
       setVerificationNeeded(true);
-      setNotice('Müraciəti göndərmək üçün e-poçtunuza göndərilən təsdiq kodunu daxil edin.');
+      setNotice(t('needVerifyCode'));
     } catch (error) {
       setIsError(true);
       setNotice(clerkErrorMessage(error));
@@ -256,7 +260,7 @@ export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
       await signOut({ redirectUrl: applicationRouteUrl });
     } catch {
       setIsError(true);
-      setNotice('Təsdiq kodu düzgün deyil. Yenidən yoxlayın.');
+      setNotice(t('badVerifyCode'));
     } finally {
       setIsSubmitting(false);
     }
@@ -264,13 +268,13 @@ export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
 
   if (applicationSubmitted) {
     return (
-      <main className="grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5 py-7 md:px-10">
-        <div className="w-full max-w-lg"><div className="flex items-center justify-between gap-4">{brand}<HomeLink /></div>
+      <main dir={dir} className={pageClass('grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5 py-7 md:px-10')}>
+        <div className="w-full max-w-lg"><div className="flex items-center justify-between gap-4">{brand}<div className="flex items-center gap-2"><LanguageSwitch /><HomeLink /></div></div>
           <section className="mt-10 rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 shadow-[var(--shadow-sm)] md:p-9">
             <CheckCircle2 className="text-[hsl(var(--secondary-foreground))]" size={32} />
-            <h1 className="mt-5 font-serif text-4xl leading-none text-[hsl(var(--primary))]">Müraciət göndərildi.</h1>
-            <p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Müraciətiniz indi yoxlamadadır. Müəllim heyəti məlumatlarınızı nəzərdən keçirəcək.</p>
-            <div className="mt-6 rounded-xl bg-[hsl(var(--secondary)/.4)] p-4 text-sm font-semibold text-[hsl(var(--secondary-foreground))]">Müraciət təsdiqləndikdən sonra hesabınıza daxil ola biləcəksiniz.</div>
+            <h1 className="mt-5 font-serif text-4xl leading-none text-[hsl(var(--primary))]">{t('applicationSent')}</h1>
+            <p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('applicationSentBody')}</p>
+            <div className="mt-6 rounded-xl bg-[hsl(var(--secondary)/.4)] p-4 text-sm font-semibold text-[hsl(var(--secondary-foreground))]">{t('applicationSentNote')}</div>
           </section>
         </div>
       </main>
@@ -279,15 +283,15 @@ export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
 
   if (verificationNeeded) {
     return (
-      <main className="grain min-h-[100dvh] bg-[hsl(var(--background))] px-5 py-7 md:px-10">
-        <div className="mx-auto max-w-lg"><div className="flex items-center justify-between gap-4">{brand}<HomeLink /></div>
+      <main dir={dir} className={pageClass('grain min-h-[100dvh] bg-[hsl(var(--background))] px-5 py-7 md:px-10')}>
+        <div className="mx-auto max-w-lg"><div className="flex items-center justify-between gap-4">{brand}<div className="flex items-center gap-2"><LanguageSwitch /><HomeLink /></div></div>
           <section className="mt-10 rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-[var(--shadow-sm)] md:p-8">
             <CheckCircle2 className="text-[hsl(var(--secondary-foreground))]" size={30} />
-            <h1 className="mt-5 font-serif text-4xl leading-none text-[hsl(var(--primary))]">E-poçt ünvanınızı təsdiqləyin.</h1>
-            <p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">E-poçt təsdiqindən sonra müraciətiniz müəllim heyətinə göndəriləcək. E-poçtunuza gələn kodu daxil edin.</p>
+            <h1 className="mt-5 font-serif text-4xl leading-none text-[hsl(var(--primary))]">{t('verifyEmail')}</h1>
+            <p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('verifyEmailBody')}</p>
             <form className="mt-7 space-y-5" onSubmit={verify}>
-              <Field label="Təsdiq kodu"><input required autoComplete="one-time-code" className={inputClass} value={verificationCode} onChange={(event) => setVerificationCode(event.target.value)} inputMode="numeric" /></Field>
-              <button type="submit" disabled={isSubmitting} className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50">{isSubmitting ? <LoaderCircle className="animate-spin" size={17} /> : <ShieldCheck size={17} />}{isSubmitting ? 'Təsdiqlənir...' : 'Təsdiqlə'}</button>
+              <Field label={t('verifyCode')}><input required autoComplete="one-time-code" className={inputClass} value={verificationCode} onChange={(event) => setVerificationCode(event.target.value)} inputMode="numeric" /></Field>
+              <button type="submit" disabled={isSubmitting} className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50">{isSubmitting ? <LoaderCircle className="animate-spin" size={17} /> : <ShieldCheck size={17} />}{isSubmitting ? t('verifying') : t('verify')}</button>
             </form>
             {notice && <p className={`mt-4 text-sm font-semibold ${isError ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--secondary-foreground))]'}`}>{notice}</p>}
           </section>
@@ -298,19 +302,19 @@ export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
 
   if (applicationWindow && !applicationWindow.isOpen) {
     return (
-      <main className="grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5 py-7 md:px-10">
-        <div className="w-full max-w-lg"><div className="flex items-center justify-between gap-4">{brand}<HomeLink /></div>
+      <main dir={dir} className={pageClass('grain flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-5 py-7 md:px-10')}>
+        <div className="w-full max-w-lg"><div className="flex items-center justify-between gap-4">{brand}<div className="flex items-center gap-2"><LanguageSwitch /><HomeLink /></div></div>
           <section className="mt-10 rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 shadow-[var(--shadow-sm)] md:p-9">
             <FileText className="text-[hsl(var(--secondary-foreground))]" size={32} />
-            <h1 className="mt-5 font-serif text-4xl leading-none text-[hsl(var(--primary))]">Müraciət qəbulu bağlıdır.</h1>
+            <h1 className="mt-5 font-serif text-4xl leading-none text-[hsl(var(--primary))]">{t('applicationsClosedTitle')}</h1>
             <p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">
               {applicationWindow.status === 'not_started'
-                ? 'Müraciətlər hələ açılmayıb. Müəyyən edilmiş vaxtda yenidən daxil olun.'
-                : 'Hazırda yeni müraciət qəbul edilmir.'}
+                ? t('applicationsNotStartedBody')
+                : t('applicationsClosedBody')}
             </p>
             {applicationWindow.status === 'not_started' && applicationWindow.nextOpenAt && (
               <div className="mt-6 rounded-xl bg-[hsl(var(--secondary)/.4)] p-4 text-sm font-semibold leading-6 text-[hsl(var(--secondary-foreground))]">
-                Açılma vaxtı: {formatWindowDate(applicationWindow.nextOpenAt)}
+                {t('opensAt')}: {formatWindowDate(applicationWindow.nextOpenAt)}
               </div>
             )}
           </section>
@@ -321,42 +325,42 @@ export function ApplicationForm({ brand }: { brand: React.ReactNode }) {
   }
 
   return (
-    <main className="grain min-h-[100dvh] bg-[hsl(var(--background))] px-5 py-7 md:px-10">
-      <div className="mx-auto max-w-5xl"><div className="flex items-center justify-between gap-4">{brand}<div className="flex items-center gap-2"><Link href="/sign-in" className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))]" data-testid="link-application-sign-in">Giriş</Link><HomeLink /></div></div>
+    <main dir={dir} className={pageClass('grain min-h-[100dvh] bg-[hsl(var(--background))] px-5 py-7 md:px-10')}>
+      <div className="mx-auto max-w-5xl"><div className="flex items-center justify-between gap-4">{brand}<div className="flex items-center gap-2"><LanguageSwitch /><Link href="/sign-in" className="focus-ring rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-xs font-bold text-[hsl(var(--primary))]" data-testid="link-application-sign-in">{t('signIn')}</Link><HomeLink /></div></div>
         <div className="mt-9 grid gap-8 lg:grid-cols-[.8fr_1.2fr]">
           <aside className="rounded-[28px] bg-[hsl(var(--primary))] p-7 text-[hsl(var(--primary-foreground))] shadow-[0_24px_60px_hsl(203_55%_18%/.16)] md:p-9">
-            <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--accent))]">Mədinə Tədris Akademiyası</p>
-            <h1 className="mt-6 font-serif text-5xl leading-[.94] tracking-[-.05em]">Tədris üçün müraciət et.</h1>
-            <p className="mt-6 text-sm leading-6 text-[hsl(var(--primary-foreground)/.7)]">Məlumatlarınız müəllim heyəti tərəfindən nəzərdən keçiriləcək. Bütün xanaları diqqətlə doldurun.</p>
+            <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--accent))]">{t('academy')}</p>
+            <h1 className="mt-6 font-serif text-5xl leading-[.94] tracking-[-.05em]">{t('applyTitle')}</h1>
+            <p className="mt-6 text-sm leading-6 text-[hsl(var(--primary-foreground)/.7)]">{t('applyLead')}</p>
           </aside>
           <section className="rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-[var(--shadow-sm)] md:p-8">
-            <div className="mb-7"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">Yeni müraciət</p><h2 className="mt-2 font-serif text-3xl text-[hsl(var(--primary))]">Məlumatlarınızı daxil edin</h2></div>
+            <div className="mb-7"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[hsl(var(--secondary-foreground))]">{t('newApplication')}</p><h2 className="mt-2 font-serif text-3xl text-[hsl(var(--primary))]">{t('enterDetails')}</h2></div>
             <form className="space-y-5" onSubmit={submit} data-testid="form-application">
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Ad"><input required autoComplete="given-name" className={inputClass} value={form.firstName} onChange={(event) => update('firstName', event.target.value)} data-testid="input-application-first-name" /></Field>
-                <Field label="Soyad"><input required autoComplete="family-name" className={inputClass} value={form.lastName} onChange={(event) => update('lastName', event.target.value)} data-testid="input-application-last-name" /></Field>
+                <Field label={t('firstName')}><input required autoComplete="given-name" className={inputClass} value={form.firstName} onChange={(event) => update('firstName', event.target.value)} data-testid="input-application-first-name" /></Field>
+                <Field label={t('lastName')}><input required autoComplete="family-name" className={inputClass} value={form.lastName} onChange={(event) => update('lastName', event.target.value)} data-testid="input-application-last-name" /></Field>
               </div>
-              <Field label="Telefon nömrəsi (+994)"><input required type="tel" autoComplete="tel" pattern="^\+994\d{9}$" className={inputClass} value={form.phone} onChange={(event) => update('phone', event.target.value)} placeholder="+994XXXXXXXXX" data-testid="input-application-phone" /></Field>
-              <Field label="Email adresi"><input required type="email" autoComplete="email" className={inputClass} value={form.email} onChange={(event) => update('email', event.target.value)} data-testid="input-application-email" /></Field>
-              <Field label="Doğum tarixi"><div className="relative"><input required type="date" lang="az" className={`${inputClass} ${form.birthDate ? '' : 'text-transparent'}`} value={form.birthDate} onChange={(event) => update('birthDate', event.target.value)} data-testid="input-application-birth-date" />{!form.birthDate && <span className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-sm text-[hsl(var(--muted-foreground)/.7)]">GG.AA.İİİİ</span>}</div></Field>
-              <Field label="Ərəb dili bilik səviyyəsi"><select required className={inputClass} value={form.arabicLevel} onChange={(event) => update('arabicLevel', event.target.value)} data-testid="select-application-arabic-level"><option value="" disabled>Səviyyənizi seçin</option><option value="Zəif">Zəif</option><option value="Orta">Orta</option><option value="Yaxşı">Yaxşı</option><option value="Əla">Əla</option></select></Field>
+              <Field label={t('phone')}><input required type="tel" autoComplete="tel" pattern="^\+994\d{9}$" className={inputClass} value={form.phone} onChange={(event) => update('phone', event.target.value)} placeholder="+994XXXXXXXXX" data-testid="input-application-phone" /></Field>
+              <Field label={t('email')}><input required type="email" autoComplete="email" className={inputClass} value={form.email} onChange={(event) => update('email', event.target.value)} data-testid="input-application-email" /></Field>
+              <Field label={t('birthDate')}><div className="relative"><input required type="date" lang={locale === 'ar' ? 'ar' : 'az'} className={`${inputClass} ${form.birthDate ? '' : 'text-transparent'}`} value={form.birthDate} onChange={(event) => update('birthDate', event.target.value)} data-testid="input-application-birth-date" />{!form.birthDate && <span className="pointer-events-none absolute inset-y-0 start-3.5 flex items-center text-sm text-[hsl(var(--muted-foreground)/.7)]">{t('birthPlaceholder')}</span>}</div></Field>
+              <Field label={t('arabicLevel')}><select required className={inputClass} value={form.arabicLevel} onChange={(event) => update('arabicLevel', event.target.value)} data-testid="select-application-arabic-level"><option value="" disabled>{t('chooseLevel')}</option><option value="Zəif">{t('levelWeak')}</option><option value="Orta">{t('levelMid')}</option><option value="Yaxşı">{t('levelGood')}</option><option value="Əla">{t('levelExcellent')}</option></select></Field>
               <div>
-                <span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">Tövsiyə məktubu</span>
-                 <input ref={fileInput} required type="file" multiple accept=".pdf,.doc,.docx,image/jpeg,image/png" className="sr-only" onChange={(event) => { const selected = Array.from(event.target.files ?? []).slice(0, 2); if (selected.some((file) => file.size > maxApplicationFileSize)) { setFiles([]); setIsError(true); setNotice('Hər bir faylın ölçüsü 3 MB-dan çox olmamalıdır.'); if (fileInput.current) fileInput.current.value = ''; return; } setIsError(false); setNotice(''); setFiles(selected); }} data-testid="input-application-recommendations" />
-                <button type="button" onClick={() => fileInput.current?.click()} className="focus-ring flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.45)] px-4 py-4 text-sm font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]"><Upload size={16} /> Faylları seçin</button>
-                 <p className="mt-2 text-[11px] leading-4 text-[hsl(var(--muted-foreground))]">Tanınmış elm tələbələri tərəfindən verilmiş (2 ədəd, hər biri maksimum 3 MB)</p>
+                <span className="mb-2 block text-xs font-bold text-[hsl(var(--primary))]">{t('recommendation')}</span>
+                 <input ref={fileInput} required type="file" multiple accept=".pdf,.doc,.docx,image/jpeg,image/png" className="sr-only" onChange={(event) => { const selected = Array.from(event.target.files ?? []).slice(0, 2); if (selected.some((file) => file.size > maxApplicationFileSize)) { setFiles([]); setIsError(true); setNotice(t('fileTooBig')); if (fileInput.current) fileInput.current.value = ''; return; } setIsError(false); setNotice(''); setFiles(selected); }} data-testid="input-application-recommendations" />
+                <button type="button" onClick={() => fileInput.current?.click()} className="focus-ring flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.45)] px-4 py-4 text-sm font-bold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]"><Upload size={16} /> {t('chooseFiles')}</button>
+                 <p className="mt-2 text-[11px] leading-4 text-[hsl(var(--muted-foreground))]">{t('recommendationHint')}</p>
                 {files.length > 0 && <div className="mt-3 space-y-1.5">{files.map((file) => <p key={file.name} className="flex items-center gap-2 text-xs font-semibold text-[hsl(var(--secondary-foreground))]"><FileText size={14} /> {file.name}</p>)}</div>}
               </div>
-               <Field label="Şifrə"><div className="relative"><input required type={showPassword ? 'text' : 'password'} autoComplete="new-password" minLength={8} className={`${inputClass} pr-11`} value={form.password} onChange={(event) => update('password', event.target.value)} data-testid="input-application-password" /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="focus-ring absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={showPassword ? 'Şifrəni gizlət' : 'Şifrəni göstər'} data-testid="button-toggle-application-password">{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div><div className="mt-1.5 flex flex-wrap items-center justify-between gap-2"><span className="text-[11px] text-[hsl(var(--muted-foreground))]">Ən azı 8 simvol yazın.</span><button type="button" onClick={() => { update('password', generateApplicationPassword()); setShowPassword(true); }} className="focus-ring text-[11px] font-bold text-[hsl(var(--secondary-foreground))] hover:underline" data-testid="button-generate-application-password">Asan şifrə yarat</button></div></Field>
+               <Field label={t('password')}><div className="relative"><input required type={showPassword ? 'text' : 'password'} autoComplete="new-password" minLength={8} className={`${inputClass} pe-11`} value={form.password} onChange={(event) => update('password', event.target.value)} data-testid="input-application-password" /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="focus-ring absolute end-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]" aria-label={showPassword ? t('hidePassword') : t('showPassword')} data-testid="button-toggle-application-password">{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div><div className="mt-1.5 flex flex-wrap items-center justify-between gap-2"><span className="text-[11px] text-[hsl(var(--muted-foreground))]">{t('passwordHint')}</span><button type="button" onClick={() => { update('password', generateApplicationPassword()); setShowPassword(true); }} className="focus-ring text-[11px] font-bold text-[hsl(var(--secondary-foreground))] hover:underline" data-testid="button-generate-application-password">{t('generatePassword')}</button></div></Field>
               <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] px-3 py-2.5">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-[11px] font-bold text-[hsl(var(--primary))]">Məxfilik siyasəti və istifadə şərtləri</p>
-                  <Link href="/istifade-sertleri" className="shrink-0 text-[11px] font-bold text-[hsl(var(--secondary-foreground))] underline-offset-2 hover:underline">Oxu</Link>
+                  <p className="text-[11px] font-bold text-[hsl(var(--primary))]">{t('termsTitle')}</p>
+                  <Link href="/istifade-sertleri" className="shrink-0 text-[11px] font-bold text-[hsl(var(--secondary-foreground))] underline-offset-2 hover:underline">{t('read')}</Link>
                 </div>
-                <p className="mt-1 text-[11px] leading-4 text-[hsl(var(--muted-foreground))]">Dərslərə ciddi yanaşın, məlumatları düzgün yazın. Məlumatlar yalnız tədris üçün istifadə olunur.</p>
-                <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-[hsl(var(--foreground))]"><input required type="checkbox" checked={form.acceptedTerms} onChange={(event) => update('acceptedTerms', event.target.checked)} className="h-3.5 w-3.5 accent-[hsl(var(--secondary-foreground))]" data-testid="checkbox-application-terms" />Razıyam</label>
+                <p className="mt-1 text-[11px] leading-4 text-[hsl(var(--muted-foreground))]">{t('termsShort')}</p>
+                <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-[hsl(var(--foreground))]"><input required type="checkbox" checked={form.acceptedTerms} onChange={(event) => update('acceptedTerms', event.target.checked)} className="h-3.5 w-3.5 accent-[hsl(var(--secondary-foreground))]" data-testid="checkbox-application-terms" />{t('agree')}</label>
               </div>
-              <button type="submit" disabled={isSubmitting} className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-submit-application">{isSubmitting ? <LoaderCircle className="animate-spin" size={17} /> : <Send size={17} />}{isSubmitting ? 'Göndərilir...' : 'Göndər'}</button>
+              <button type="submit" disabled={isSubmitting} className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3.5 text-sm font-bold text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50" data-testid="button-submit-application">{isSubmitting ? <LoaderCircle className="animate-spin" size={17} /> : <Send size={17} />}{isSubmitting ? t('sending') : t('submit')}</button>
               {notice && <p className={`rounded-xl px-3.5 py-3 text-sm font-semibold ${isError ? 'bg-[hsl(var(--destructive)/.08)] text-[hsl(var(--destructive))]' : 'bg-[hsl(var(--secondary)/.45)] text-[hsl(var(--secondary-foreground))]'}`}>{notice}</p>}
             </form>
           </section>

@@ -112,26 +112,26 @@ export const LIBRARY_BOOKS: readonly LibraryBook[] = [
       {
         "title": "باب ما يوجب الغسل وصفته",
         "level": 2,
-        "printedPage": 69,
-        "page": 70
+        "printedPage": 59,
+        "page": 60
       },
       {
         "title": "باب التيمم",
         "level": 2,
-        "printedPage": 73,
-        "page": 74
+        "printedPage": 63,
+        "page": 64
       },
       {
         "title": "باب الحيض",
         "level": 2,
-        "printedPage": 80,
-        "page": 81
+        "printedPage": 70,
+        "page": 71
       },
       {
         "title": "كتاب الصلاة",
         "level": 1,
-        "printedPage": 83,
-        "page": 84
+        "printedPage": 73,
+        "page": 74
       },
       {
         "title": "باب صفة الصلاة",
@@ -142,8 +142,8 @@ export const LIBRARY_BOOKS: readonly LibraryBook[] = [
       {
         "title": "باب سجود السهو والتلاوة والشكر",
         "level": 2,
-        "printedPage": 104,
-        "page": 105
+        "printedPage": 102,
+        "page": 103
       },
       {
         "title": "باب مفسدات الصلاة ومكروهاتها",
@@ -160,8 +160,8 @@ export const LIBRARY_BOOKS: readonly LibraryBook[] = [
       {
         "title": "باب صلاة الجماعة والإمامة",
         "level": 2,
-        "printedPage": 117,
-        "page": 118
+        "printedPage": 121,
+        "page": 122
       },
       {
         "title": "باب صلاة أهل الأعذار",
@@ -220,14 +220,14 @@ export const LIBRARY_BOOKS: readonly LibraryBook[] = [
       {
         "title": "باب الهدي والأضحية والعقيقة",
         "level": 2,
-        "printedPage": 232,
-        "page": 233
+        "printedPage": 231,
+        "page": 232
       },
       {
         "title": "كتاب البيوع",
         "level": 1,
-        "printedPage": 237,
-        "page": 238
+        "printedPage": 235,
+        "page": 236
       },
       {
         "title": "باب بيع الأصول والثمار",
@@ -340,8 +340,8 @@ export const LIBRARY_BOOKS: readonly LibraryBook[] = [
       {
         "title": "كتاب النكاح",
         "level": 1,
-        "printedPage": 344,
-        "page": 345
+        "printedPage": 343,
+        "page": 344
       },
       {
         "title": "باب شروط النكاح",

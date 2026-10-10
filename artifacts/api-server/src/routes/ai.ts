@@ -96,6 +96,10 @@ import {
   updateStudentExternalSetting,
   type StudentExternalSetting,
 } from "../lib/ai/studentExternal.js";
+import { builtinCatalog, loadUploadedBooks } from "../lib/library/uploadedBooks.js";
+import { libraryBookTexts } from "../lib/library/search.js";
+import { generateBookTest, NO_TEXT_MESSAGE, TEST_COUNTS, MAX_RANGE_PAGES } from "../lib/library/testGenerator.js";
+import { parseGenerateRequest, resolveRange, testBuilderAllowed, testBuilderSeesAllGroups } from "../lib/library/testBuilder.js";
 import { answerResearch, fetchHadithFull, openShamelaPage, searchShamelaPage, type UpstreamStatusEvent, ResearchUpstreamError, shamelaPageUrl } from "../lib/ai/research.js";
 
 const router: IRouter = Router();
@@ -1226,6 +1230,96 @@ router.put("/ai/admin/student-external", noStore, async (req, res, next) => {
       },
     );
     res.status(result.status).json(result.body);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// «Test hazırla» — Kitabxana kitabından qaydalara əsaslanan test (xarici model yoxdur).
+// GET  /api/ai/test-builder/config   — kitablar (fəsillərlə) və istifadəçinin test yarada biləcəyi qruplar.
+// POST /api/ai/test-builder/generate — sualların önizləməsi (heç nə saxlanmır). Yadda saxlama mövcud
+//      POST /api/admin/exams ilə «bağlı» (qaralama) statusunda edilir — orada qrup icazəsi yenidən yoxlanılır.
+const requireTestBuilder: RequestHandler = (_req, res, next) => {
+  const allowed = testBuilderAllowed({
+    isOwner: res.locals.aiIsOwner === true,
+    role: typeof res.locals.aiRole === "string" ? res.locals.aiRole : null,
+    permissions: res.locals.aiPermissions instanceof Set ? res.locals.aiPermissions : new Set<string>(),
+  });
+  if (!allowed) {
+    res.status(403).json({ error: "«Test hazırla» yalnız müəllim və adminlər üçündür (test yaratmaq icazəsi lazımdır)." });
+    return;
+  }
+  next();
+};
+
+router.get("/ai/test-builder/config", noStore, requireAiStaff, requireTestBuilder, async (req, res, next) => {
+  try {
+    const { userId } = getAuth(req);
+    const uploaded = await loadUploadedBooks().catch(() => ({ books: [] as Awaited<ReturnType<typeof loadUploadedBooks>>["books"] }));
+    const books = [...builtinCatalog(), ...uploaded.books].map((book) => ({
+      slug: book.slug,
+      title: book.title,
+      shortTitle: book.shortTitle,
+      subject: book.subject,
+      pageCount: book.pageCount,
+      pageOffset: book.pageOffset,
+      hasText: book.hasText,
+      chapters: book.chapters.map((chapter) => ({ title: chapter.title, level: chapter.level, page: chapter.page, printedPage: chapter.printedPage })),
+    }));
+    const seesAll = testBuilderSeesAllGroups({ isOwner: res.locals.aiIsOwner === true, role: res.locals.aiRole });
+    const rows = await db.select().from(resourcesTable).orderBy(asc(resourcesTable.termNumber), asc(resourcesTable.id));
+    const own = rows.filter((row) => row.teacherClerkUserId && (seesAll || row.teacherClerkUserId === userId));
+    const views = await resourceViews(own);
+    res.json({
+      books,
+      groups: views.map((view) => ({ id: view.id, title: view.title, termNumber: view.termNumber, teacherName: view.teacherName ?? null })),
+      counts: TEST_COUNTS,
+      maxRangePages: MAX_RANGE_PAGES,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/ai/test-builder/generate", noStore, requireAiStaff, requireTestBuilder, rateLimit, async (req, res, next) => {
+  try {
+    const parsed = parseGenerateRequest(req.body);
+    if (!parsed.ok) { res.status(400).json({ error: parsed.error }); return; }
+    const request = parsed.value;
+    const uploaded = await loadUploadedBooks().catch(() => ({ books: [] as Awaited<ReturnType<typeof loadUploadedBooks>>["books"] }));
+    const book = [...builtinCatalog(), ...uploaded.books].find((item) => item.slug === request.slug);
+    if (!book) { res.status(404).json({ error: "Kitab tapılmadı." }); return; }
+    if (!book.hasText) { res.status(422).json({ error: NO_TEXT_MESSAGE, reason: "no-text" }); return; }
+    if (book.source === "upload") await searchableLibraryBooks(); // yüklənmiş kitabın mətnini yaddaşa qeyd edir
+    const pages = libraryBookTexts(book.slug);
+    if (!pages || !pages.some((page) => page.trim())) { res.status(422).json({ error: NO_TEXT_MESSAGE, reason: "no-text" }); return; }
+    const range = resolveRange(book, request);
+    if (!range.ok) { res.status(400).json({ error: range.error }); return; }
+    const result = generateBookTest({
+      book,
+      pages,
+      fromPage: range.from,
+      toPage: range.to,
+      topicWords: range.topicWords,
+      count: request.count,
+      kinds: request.kinds,
+      excludeKeys: request.excludeKeys,
+      salt: request.salt,
+    });
+    if (!result.ok) { res.status(422).json({ error: result.error }); return; }
+    const printedFrom = range.from - book.pageOffset;
+    const printedTo = range.to - book.pageOffset;
+    const pagesLabel = printedFrom === printedTo ? `s. ${printedFrom}` : `s. ${printedFrom}–${printedTo}`;
+    res.json({
+      book: { slug: book.slug, title: book.title, shortTitle: book.shortTitle },
+      range: { from: range.from, to: range.to, printedFrom, printedTo },
+      chapterTitle: range.chapterTitle,
+      questions: result.questions,
+      warnings: result.warnings,
+      suggestedTitle: `${range.chapterTitle ?? book.title} — test`.slice(0, 160),
+      suggestedDescription: `«${book.title}» (${book.shortTitle}), ${pagesLabel}${request.topic ? `, mövzu: ${request.topic}` : ""}. Suallar kitabın mətnindən hazırlanıb.`.slice(0, 1000),
+    });
   } catch (error) {
     next(error);
   }

@@ -936,3 +936,8 @@ export function answerLibrary(query: string, options: LibrarySearchOptions = {})
     sources: { kind: "library", query, ...result },
   };
 }
+
+/** Kitabın səhifə mətnləri (OCR / yüklənmiş mətn qatı); mətn yoxdursa null. Test hazırlayıcısı üçün. */
+export function libraryBookTexts(slug: string, loader: TextLoader = assetLoader): string[] | null {
+  return loader(slug);
+}

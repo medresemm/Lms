@@ -395,6 +395,7 @@ export const GUIDE_TOPICS: GuideTopic[] = [
       "Testin dilini «Ərəbcə (sağdan sola)» seçsəniz, bütün suallar və variantlar sağdan sola yazılır və göstərilir.",
       "Hər sualda «Seçimli» və ya «Açıq sual» növünü seçin. Açıq sual üçün maksimum bal və istəsəniz yalnız müəllimin gördüyü nümunə cavab yazın.",
       "Açıq cavablar «Yoxlanılır» statusunda gəlir: «Cavablara bax» → «Yoxla» ilə hər açıq cavaba bal (və istəsəniz şərh) verib «Balları yadda saxla» basın. Yekun bal = seçimli suallar + açıq suallar; nəticə tələbəyə yoxlamadan sonra açılır.",
+      "Kitabdan avtomatik test: Mədinə AI-da «Test hazırla» düyməsini basın, kitabı, babı və ya səhifə aralığını (istəsəniz mövzunu), sual sayını və növlərini seçin. Hazır sualları redaktə edib «Testi yadda saxla» basın — test bağlı (qaralama) saxlanılır, yoxlayıb buradan açırsınız.",
       "Ev tapşırığı üçün «Tələbələri idarə et» → «Ev tapşırıqları» → «Yeni tapşırıq».",
     ],
   },

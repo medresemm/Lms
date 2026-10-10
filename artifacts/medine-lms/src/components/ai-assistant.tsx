@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowLeft, BookOpen, BookText, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Compass, Copy, ExternalLink, GraduationCap, HelpCircle, LibraryBig, Loader2, ScrollText, Search, SendHorizontal, Trash2, UsersRound } from 'lucide-react';
+import { ArrowLeft, BookOpen, BookText, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardCheck, ClipboardList, Compass, Copy, ExternalLink, GraduationCap, HelpCircle, LibraryBig, Loader2, ScrollText, Search, SendHorizontal, Trash2, UsersRound } from 'lucide-react';
 import { Link } from 'wouter';
 import { useAuth, useUser } from '@clerk/react';
 import { DidYouMean, LibraryHitList } from '@/components/library-search-results';
@@ -9,6 +9,7 @@ import { readBlocks, type AiBlock } from '@/lib/ai-blocks';
 import { answerScrollTop, initialShown, pagerState, revealMore } from '@/lib/paginate';
 import { courseBookRange, type CourseBookView } from '@/lib/course-books';
 import { courseTermLabel } from '@/components/course-books';
+import { AiTestBuilder, loadTestBuilderConfig, type TestBuilderConfig } from '@/components/ai-test-builder';
 
 // Mədinə AI — saytın daxili köməkçisi.
 // Söhbət tarixçəsi YALNIZ bu brauzerin localStorage-ində saxlanılır (açar: medine-ai-chat:<clerkUserId>).
@@ -65,7 +66,7 @@ type ChatMessage = {
   at: number;
 };
 
-type Tile = { label: string; hint: string; prompt: string; Icon: typeof BookOpen; fill?: boolean };
+type Tile = { label: string; hint: string; prompt: string; Icon: typeof BookOpen; fill?: boolean; action?: 'test-builder' };
 
 const STORAGE_PREFIX = 'medine-ai-chat:';
 const MAX_STORED_MESSAGES = 100;
@@ -590,6 +591,19 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
     return { page: `/api/ai/${scope}/shamela/page`, shamelaMore: `/api/ai/${scope}/shamela/more`, dorarFull: `/api/ai/${scope}/dorar/full` };
   }, [isStaff]);
 
+  // «Test hazırla»: yalnız server icazə verəndə (müəllim/admin + test icazəsi) düymə görünür.
+  const [testBuilder, setTestBuilder] = useState<TestBuilderConfig | null>(null);
+  const [testBuilderOpen, setTestBuilderOpen] = useState(false);
+  useEffect(() => {
+    if (!isStaff) { setTestBuilder(null); return; }
+    let cancelled = false;
+    void loadTestBuilderConfig(() => getToken()).then((config) => { if (!cancelled) setTestBuilder(config); });
+    return () => { cancelled = true; };
+  }, [isStaff, user?.id]);
+  const visibleTiles: Tile[] = !external && testBuilder
+    ? [{ label: 'Test hazırla', hint: 'Kitab, bab/səhifə və mövzu seçin — ərəbcə test hazırlanır', prompt: '', Icon: ClipboardCheck, action: 'test-builder' }, ...tiles]
+    : tiles;
+
   async function loadStudentConfig() {
     if (isStaff) return;
     try {
@@ -651,6 +665,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
   async function send(text: string) {
     const message = text.trim().slice(0, MAX_MESSAGE_LENGTH);
     if (!message || sending) return;
+    if (testBuilder && !external && /^test\s*haz[ıi]rla\.?$/i.test(message)) { setInput(''); setTestBuilderOpen(true); return; }
     const history = messages.slice(-HISTORY_TURNS_SENT).map((item) => ({ role: item.role, text: item.text }));
     const userMessage: ChatMessage = { id: newId(), role: 'user', text: message, at: Date.now() };
     setMessages((current) => [...current, userMessage]);
@@ -856,9 +871,9 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
             {sending ? <Loader2 size={16} className="animate-spin" /> : <SendHorizontal size={16} />}
           </button>
         </form>
-        <div className={`${chipRow} min-[1025px]:grid min-[1025px]:gap-1 min-[1025px]:overflow-visible min-[1025px]:pb-0`} style={{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }} data-testid="ai-tiles">
-          {tiles.map(({ label, hint, prompt, Icon, fill }) => (
-            <button key={label} type="button" onClick={() => (fill ? prefill(prompt) : void send(prompt))} disabled={sending} title={hint}
+        <div className={`${chipRow} min-[1025px]:grid min-[1025px]:gap-1 min-[1025px]:overflow-visible min-[1025px]:pb-0`} style={{ gridTemplateColumns: `repeat(${visibleTiles.length}, minmax(0, 1fr))` }} data-testid="ai-tiles">
+          {visibleTiles.map(({ label, hint, prompt, Icon, fill, action }) => (
+            <button key={label} type="button" onClick={() => (action === 'test-builder' ? setTestBuilderOpen(true) : fill ? prefill(prompt) : void send(prompt))} disabled={sending} title={hint}
               className="group flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-[#e3c27a]/25 bg-white/[.03] px-2 py-0.5 text-center transition hover:border-[#e3c27a]/60 hover:bg-[#e3c27a]/[.06] disabled:opacity-50 min-[1025px]:justify-center min-[1025px]:whitespace-normal min-[1025px]:rounded-lg min-[1025px]:px-1.5 min-[1025px]:py-1"
               data-testid={`button-ai-tile-${label}`}>
               <Icon size={12} style={{ color: gold }} />
@@ -867,6 +882,7 @@ export function AiAssistant({ mode, backHref, backLabel, canReadLms = true }: { 
           ))}
         </div>
       </div>
+      {testBuilderOpen && testBuilder && <AiTestBuilder config={testBuilder} getToken={() => getToken()} onClose={() => setTestBuilderOpen(false)} />}
     </section>
   );
 }

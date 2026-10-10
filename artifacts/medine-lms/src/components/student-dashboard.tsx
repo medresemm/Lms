@@ -35,6 +35,7 @@ import {
   BookMarked,
 } from 'lucide-react';
 import { useUser } from '@clerk/react';
+import { authFetch } from '@/lib/clerk-token';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatFullName } from '@/lib/utils';
 import { MedreseLibrary } from '@/components/medrese-library';
@@ -1286,7 +1287,7 @@ export function StudentDashboard({ dashboard, courses, announcements, academicPr
     let cancelled = false;
     const loadUnreadCount = async () => {
       try {
-        const response = await fetch(`${apiBase}/api/messages/unread-count`, { cache: 'no-store' });
+        const response = await authFetch(`${apiBase}/api/messages/unread-count`, { cache: 'no-store' });
         if (!response.ok) return;
         const data = await response.json() as { count?: number };
         if (!cancelled && typeof data.count === 'number') setUnreadMessageCount(data.count);

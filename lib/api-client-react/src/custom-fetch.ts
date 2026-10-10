@@ -6,7 +6,7 @@ export type ErrorType<T = unknown> = ApiError<T>;
 
 export type BodyType<T> = T;
 
-export type AuthTokenGetter = () => Promise<string | null> | string | null;
+export type AuthTokenGetter = (options?: { forceRefresh?: boolean }) => Promise<string | null> | string | null;
 
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
@@ -352,9 +352,11 @@ export async function customFetch<T = unknown>(
 
   // Attach bearer token when an auth getter is configured and no
   // Authorization header has been explicitly provided.
+  let attachedToken: string | null = null;
   if (_authTokenGetter && !headers.has("authorization")) {
     const token = await _authTokenGetter();
     if (token) {
+      attachedToken = token;
       headers.set("authorization", `Bearer ${token}`);
     }
   }
@@ -376,6 +378,19 @@ export async function customFetch<T = unknown>(
   let response: Response;
   try {
     response = await fetch(input, { ...init, method, headers, signal: timeoutController.signal });
+    // A token that expired between Clerk's background refreshes is answered
+    // with 401. Retry once with a force-refreshed token (only when the body can
+    // be sent again) instead of surfacing a spurious "please sign in" error.
+    const canResend = init.body == null || typeof init.body === "string" || init.body instanceof URLSearchParams
+      || (typeof FormData !== "undefined" && init.body instanceof FormData)
+      || (typeof Blob !== "undefined" && init.body instanceof Blob);
+    if (response.status === 401 && attachedToken && _authTokenGetter && canResend && !isRequest(input)) {
+      const freshToken = await _authTokenGetter({ forceRefresh: true });
+      if (freshToken && freshToken !== attachedToken) {
+        headers.set("authorization", `Bearer ${freshToken}`);
+        response = await fetch(input, { ...init, method, headers, signal: timeoutController.signal });
+      }
+    }
   } finally {
     clearTimeout(timeoutId);
     callerSignal?.removeEventListener("abort", abortFromCaller);

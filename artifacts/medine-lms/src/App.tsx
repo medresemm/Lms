@@ -20,6 +20,7 @@ import {
   setAuthTokenGetter,
 } from '@workspace/api-client-react';
 import { ClerkProvider, Show, useAuth, useClerk, useSignIn as useModernSignIn, useUser } from '@clerk/react';
+import { getFreshClerkToken, registerClerkTokenSource } from '@/lib/clerk-token';
 import { useSignIn as useLegacySignIn } from '@clerk/react/legacy';
 import { BookOpenText, CalendarDays, CheckCircle2, ChevronDown, ClipboardList, KeyRound, LoaderCircle, LogIn, Megaphone, Quote, RefreshCw, UserRound } from 'lucide-react';
 import type { Announcement, Article, DailyBenefit } from '@workspace/api-client-react';
@@ -841,32 +842,20 @@ function AccountGateError({ onRetry }: { onRetry: () => void }) {
 }
 
 /**
- * Attach a fresh Clerk session token to every generated API request. The
- * __session cookie can be stale for a moment right after page load (Clerk
- * refreshes it in the background), which made the first admin requests fail
- * with 401. getToken() always returns a valid (refreshed if needed) token.
+ * Attach a fresh Clerk session token to every generated API request (and to
+ * hand-written ones that use authFetch). See lib/clerk-token.ts for why the
+ * first token of a page load is force-refreshed.
  */
 function ClerkApiAuthBridge() {
   const { getToken, isLoaded, isSignedIn } = useAuth();
-  const getTokenRef = useRef(getToken);
-  getTokenRef.current = getToken;
-  const stateRef = useRef({ isLoaded, isSignedIn });
-  stateRef.current = { isLoaded, isSignedIn };
+  // Register synchronously during render so queries enabled in this same
+  // render pass already see the signed-in state when their effects fire.
+  registerClerkTokenSource(isLoaded && isSignedIn ? (options) => getToken(options) : null, Boolean(isLoaded && isSignedIn));
   useState(() => {
-    setAuthTokenGetter(async () => {
-      if (!stateRef.current.isLoaded || !stateRef.current.isSignedIn) return null;
-      try {
-        return await Promise.race([
-          getTokenRef.current(),
-          new Promise<null>((resolve) => { window.setTimeout(() => resolve(null), 4_000); }),
-        ]);
-      } catch {
-        return null;
-      }
-    });
+    setAuthTokenGetter((options) => getFreshClerkToken(options));
     return null;
   });
-  useEffect(() => () => setAuthTokenGetter(null), []);
+  useEffect(() => () => { setAuthTokenGetter(null); registerClerkTokenSource(null, false); }, []);
   return null;
 }
 

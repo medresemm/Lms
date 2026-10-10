@@ -23,7 +23,8 @@
     "test:schedule-pdf": "tsx --test src/lib/schedulePdf.test.ts",
     "test:test-builder": "tsx --test src/lib/library/testGenerator.test.ts",
     "test:co-teachers": "tsx --test src/lib/resourceTeachers.test.ts ../medine-lms/src/lib/co-teachers.test.ts",
-    "test:student-visibility": "tsx --test src/lib/studentVisibility.test.ts ../medine-lms/src/lib/staff-student-note.test.ts"
+    "test:student-visibility": "tsx --test src/lib/studentVisibility.test.ts ../medine-lms/src/lib/staff-student-note.test.ts",
+    "test:frontend-admin": "tsx --test ../medine-lms/src/lib/clerk-token.test.ts ../medine-lms/src/lib/semester-groups-visibility.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1100.0",

@@ -232,23 +232,6 @@
   cursor: pointer;
 }
 
-/* Keep one primary selected-subjects control in semester management. */
-[data-testid="section-semester-management"] > div.mt-8.border-t > button[data-testid="button-show-selected-subjects"] {
-  display: none;
-}
-
-[data-testid="section-semester-management"] > div.mt-8.border-t > button[data-testid="button-show-selected-subjects"] ~ [data-testid="section-selected-subjects"] {
-  display: none;
-}
-
-[data-testid="section-semester-management"] > div.mt-8.border-t > div.mt-4 > p.rounded-xl.border-dashed {
-  display: none;
-}
-
-[data-testid="section-semester-management"] > div.mt-8.border-t > div.mt-4 {
-  display: none;
-}
-
 [data-testid="section-selected-subjects"][data-focused="true"],
 [data-testid="section-selected-subjects"][data-focused="true"] > div.mt-3 {
   display: contents;
